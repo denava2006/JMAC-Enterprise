@@ -51,7 +51,7 @@ Demo accounts and their passwords are listed in `HRMS/DEMO.md`.
 ## Running the checks
 
 ```bash
-npm test          # vitest        — 445 tests across 31 files
+npm test          # vitest        — 497 tests across 34 files
 npm run build     # tsc -b && vite build
 npm run lint      # oxlint
 ```
@@ -60,10 +60,10 @@ Database contract tests (each runs in one transaction and rolls back):
 
 ```bash
 docker exec -i supabase_db_harmony-suite psql -U postgres -d postgres \
-  -v ON_ERROR_STOP=1 -f - < supabase/tests/pos_audit_logs_rls.sql
+  -v ON_ERROR_STOP=1 -f - < supabase/tests/pos_requests_rls.sql
 ```
 
-There are nine such suites in `HRMS/supabase/tests/` (295 contract checks),
+There are ten such suites in `HRMS/supabase/tests/` (329 contract checks),
 plus two concurrency harnesses in `HRMS/scripts/`. `AI_WORKFLOW.md` §5 has the
 full sequence.
 
@@ -79,6 +79,7 @@ full sequence.
 | POS Manager dashboard and read-only Categories | done (Phase 7A) |
 | POS Reports — Manager operational and Administrator financial | done (Phase 7B) |
 | POS operational audit logs | done (Phase 7C) |
+| POS inventory / product requests | done (Phase 8) |
 | **Next phase** | **none approved — see `AI_HANDOFF.md` §13** |
 | FMS integration | not started |
 
@@ -87,7 +88,7 @@ Managers open Reports at `/pos/reports` and the POS audit log at
 `/dashboard/admin/pos-reports` and `/dashboard/admin/pos-audit-logs` routes.
 Cashiers have neither module.
 
-**Migrations applied: 111.** Migrations are forward-only; an applied migration is
+**Migrations applied: 116.** Migrations are forward-only; an applied migration is
 never edited.
 
 ## Documents
@@ -118,4 +119,8 @@ repository and does not describe this workspace.
 - Migrations are forward-only.
 - No Supabase service-role key in frontend code.
 - Trusted audit data is written by the database, never by the browser.
+- Approving a stock request never changes inventory. Quantity moves only
+  through controlled receiving, which writes the movement ledger.
+- Procurement — suppliers, budgets, purchase orders, payments — belongs to FMS
+  and must not be built into POS.
 - Do not modify `INTEGRATION/POS` or `INTEGRATION/FMS`.

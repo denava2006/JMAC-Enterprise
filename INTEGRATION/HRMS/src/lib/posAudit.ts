@@ -81,6 +81,10 @@ export const POS_AUDIT_EVENT_LABEL: Record<PosAuditEventType, string> = {
   category_restored: 'Category restored',
   category_reordered: 'Categories reordered',
   category_deleted: 'Category deleted',
+  stock_request_created: 'Request submitted',
+  stock_request_cancelled: 'Request withdrawn',
+  stock_request_approved: 'Request approved',
+  stock_request_declined: 'Request declined',
 }
 
 export const POS_AUDIT_ENTITY_LABEL: Record<PosAuditEntityType, string> = {
@@ -90,6 +94,7 @@ export const POS_AUDIT_ENTITY_LABEL: Record<PosAuditEntityType, string> = {
   category: 'Category',
   branch_product: 'Branch product',
   inventory_threshold: 'Low-stock level',
+  inventory_request: 'Inventory request',
 }
 
 /** The event types a manager can ever see. Mirrors
@@ -106,6 +111,12 @@ export const MANAGER_VISIBLE_EVENT_TYPES: PosAuditEventType[] = [
   'product_offered',
   'product_stopped',
   'low_stock_threshold_changed',
+  // A manager's own request at their own branch. A decision they cannot see is
+  // not a decision.
+  'stock_request_created',
+  'stock_request_cancelled',
+  'stock_request_approved',
+  'stock_request_declined',
 ]
 
 export const ALL_EVENT_TYPES = Object.keys(POS_AUDIT_EVENT_LABEL) as PosAuditEventType[]

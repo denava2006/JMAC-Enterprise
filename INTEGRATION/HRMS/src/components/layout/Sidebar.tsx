@@ -103,6 +103,7 @@ const posAdminNav: NavItem[] = [
   { label: 'POS Reports', to: '/dashboard/admin/pos-reports', icon: FileBarChart },
   // Fees and the payment QR, per branch. Its own item rather than a section of
   // Settings: that page is system-wide, this is per-branch trading config.
+  { label: 'POS Requests', to: '/dashboard/admin/pos-requests', icon: ClipboardList },
   { label: 'POS Audit Logs', to: '/dashboard/admin/pos-audit-logs', icon: ScrollText },
   { label: 'POS Settings', to: '/dashboard/admin/pos-settings', icon: Receipt },
 ]

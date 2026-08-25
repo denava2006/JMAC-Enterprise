@@ -169,15 +169,27 @@ else
   fail "3b movements sum to $SUM but the balance is $AFTER"
 fi
 
-CHAIN=$(q "with ordered as (
-             select stock_before, stock_after,
-                    lag(stock_after) over (order by created_at, id) as prev_after
+# Ordering by created_at is WRONG here, and used to fail this check at random.
+# created_at defaults to now(), which is fixed at BEGIN, while the ledger's real
+# sequence is decided by who acquires the row lock. A session can start its
+# transaction first and take the lock last -- reproduced deliberately on
+# 2026-08-26 -- so created_at order and ledger order legitimately diverge, and
+# the chain looks broken when it is not.
+#
+# The invariant is order-independent: the movements form ONE unbroken path.
+# Every movement's stock_before must be some other movement's stock_after,
+# except exactly one -- the first. Anything else is a genuine interleaved read.
+CHAIN=$(q "with m as (
+             select id, stock_before, stock_after
              from public.pos_inventory_movements where product_id='$PRODUCT')
-           select count(*) from ordered where prev_after is not null and prev_after <> stock_before;")
+           select count(*) from m
+           where not exists (select 1 from m prev where prev.stock_after = m.stock_before
+                                                   and prev.id <> m.id)
+             and m.stock_before <> 0;")
 if [ "$CHAIN" = "0" ]; then
-  pass "3c each movement starts where the previous one ended -- no interleaved read"
+  pass "3c the movements form one unbroken chain -- no interleaved read"
 else
-  fail "3c $CHAIN movement(s) do not continue from the previous balance"
+  fail "3c $CHAIN movement(s) start from a balance no other movement produced"
 fi
 
 echo

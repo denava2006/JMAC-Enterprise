@@ -90,6 +90,15 @@ describe('a POS manager', () => {
     )
   })
 
+  it('gains no eighth entry for requests -- they are a tab under Inventory', () => {
+    // The manager sidebar was already seven items before Phase 8, and requests
+    // are about stock. /pos/requests is reached from the Inventory tab strip.
+    state.assignments = [{ branchId: 'b1', role: 'manager' }]
+    show()
+    expect(screen.queryByRole('link', { name: 'Requests' })).toBeNull()
+    expect(labels()).toHaveLength(7)
+  })
+
   it('lands its Dashboard entry on the manager dashboard', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()

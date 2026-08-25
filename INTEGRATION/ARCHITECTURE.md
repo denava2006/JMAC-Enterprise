@@ -147,11 +147,13 @@ choose their own password before first use.
 /pos/categories         PosLayout + PosCategoriesPage  manager, read-only
 /pos/transactions       PosLayout + PosTransactionsPage
 /pos/reports            PosLayout + PosReportsPage     manager
+/pos/requests           PosLayout + PosRequestsPage    manager, Inventory tab
 /pos/audit-logs         PosLayout + PosAuditLogsPage   manager, POS-operational
 /pos/catalogue          → /pos/stock          (retired)
 /dashboard/*            DashboardLayout — ~25 HR routes, each role-gated
 /dashboard/admin/pos    DashboardLayout + PosTillPage  the SAME till component
 /dashboard/admin/pos-transactions
+/dashboard/admin/pos-requests
 /dashboard/admin/pos-audit-logs
 /dashboard/admin/pos-reports      DashboardLayout + AdminPosReportsPage
 ```
@@ -206,7 +208,7 @@ same question.
 
 ### Database
 
-**111 migrations, all applied** to the live local database (verified against
+**116 migrations, all applied** to the live local database (verified against
 `supabase_migrations.schema_migrations`, 2026-08-25). The HR tables:
 
 ```text
@@ -565,6 +567,80 @@ Migrations `20260826040000`, `20260826050000`, `20260826060000`.
 
 ---
 
+### D2c. POS inventory / product requests (Phase 8)
+
+A branch demand signal, and nothing more.
+
+```text
+approved  =  this branch demand is legitimate and may proceed to procurement
+approved  ≠  budget approved · vendor selected · purchase authorized · stock received
+```
+
+```text
+pos_request_type    restock | carry_existing_product
+pos_request_status  pending | approved | declined | cancelled
+
+pos_inventory_requests
+  branch_id, product_id          both NOT NULL -- deferring new_product buys this
+  request_type, requested_quantity, reason
+  status
+  requested_by / requested_at    auth.uid(), never client-supplied
+  reviewed_by / reviewed_at / review_note      GENERIC -- name no authority
+  *_name_snapshot                history survives every rename
+```
+
+**Two decisions, two owners.** `restock` is reviewed by an Administrator *today
+only*: it is ultimately a procurement decision — what to buy, from whom, against
+which budget — and belongs to FMS. `carry_existing_product` is reviewed by an
+Administrator *permanently*: an enterprise catalogue and branch-carrying
+decision with no money in it.
+
+`can_review_pos_request(request_type)` is the **only** place either is decided.
+Both branches read `is_admin()` today and look identical; one is a placeholder
+with a shelf life and the other is the end state, and the function says which is
+which. FMS integration replaces one function body.
+
+The row records no authority — no `review_authority`, no `admin_approved_by`, no
+`fms_approved_by`. When FMS integrates, the link is an explicit bridge (an FMS
+request reference or a bridge table), never an extra column on the reviewer
+fields.
+
+**Why it does not compete with FMS.** `INTEGRATION/FMS` already owns `requests`,
+`request_approvals`, `vendors`, `budgets`, `payments` and `journal_entries`. Its
+request carries `amount`, `vendor_id`, `budget_id`, `category_id` and
+`payment_schedule` through `pending_finance_staff → pending_finance_manager →
+pending_accountant → completed`. That answers *"may we spend this money"*. This
+table answers *"is this branch short of stock"*. Different question, different
+approver, different lifecycle — and they stay separate only while this table has
+**no procurement columns**, which `pos_requests_rls.sql` asserts on every run.
+
+**Approval moves no stock.** The intended flow:
+
+```text
+POS Manager request  →  review  →  [future FMS procurement]  →  receive_pos_stock()
+                                                                        ↓
+                                                            pos_inventory_movements
+```
+
+A carry approval creates `pos_branch_products` with `is_available = false`; the
+existing `trg_create_branch_inventory` makes the inventory row at zero, and the
+Phase 7C trigger emits `branch_product_added`. A restock approval creates
+nothing at all.
+
+**Deliberately absent:** `new_product` (a manager proposing enterprise taxonomy
+and pricing, which Phase 3 made Administrator-only), and `fulfilled` (nothing
+could set it truthfully without a receiving link). Duplicates are blocked only
+while `pending` — with no `fulfilled` state, an approved request would otherwise
+block that branch/product pair forever.
+
+Concurrency follows `approve_change_request`: `SELECT ... FOR UPDATE` plus
+`WHERE status = 'pending'`, so exactly one terminal transition wins. Nobody may
+review their own request.
+
+Migrations `20260827000000` / `000100` / `010000` / `020000` / `030000`.
+
+---
+
 ### D3. FMS boundary
 
 FMS integration has **not** begun. The boundary is defined now so POS does not
@@ -882,7 +958,15 @@ Slice 1 is done and verified. The remaining phases follow
                 are different things. A POS Manager does not inherit the former
                 because the standalone POS had an Audit Logs menu.
 
-       PHASE 8  Merge POS audit into HRMS audit_logs; full security review;
+[DONE] PHASE 8  Inventory / product requests
+                pos_inventory_requests: restock and carry_existing_product.
+                Approval means the demand may proceed to procurement -- never
+                that budget, vendor, purchase or stock are settled. No
+                procurement columns, asserted on every test run. See D2c.
+                new_product and a fulfilled status deferred.
+                Migrations 20260827000000 / 000100 / 010000 / 020000 / 030000.
+
+       PHASE 9  Merge POS audit into HRMS audit_logs; full security review;
                 cross-branch denial testing.
 ```
 
@@ -891,7 +975,7 @@ note. FMS stays out of scope.
 
 ### Testing architecture
 
-HRMS has nine transaction-rolled-back SQL contract suites (295 checks), plus
+HRMS has ten transaction-rolled-back SQL contract suites (329 checks), plus
 unit/component coverage, build, lint, inventory and checkout concurrency
 harnesses, and role-based browser verification. Database-sensitive phases must
 continue to verify the RLS/ACL matrix directly rather than infer it from client

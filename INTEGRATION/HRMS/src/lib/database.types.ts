@@ -1827,6 +1827,84 @@ export type Database = {
           },
         ]
       }
+      pos_inventory_requests: {
+        Row: {
+          branch_id: string
+          branch_name_snapshot: string
+          created_at: string
+          id: string
+          product_id: string
+          product_name_snapshot: string
+          reason: string
+          request_type: Database["public"]["Enums"]["pos_request_type"]
+          requested_at: string
+          requested_by: string
+          requested_quantity: number | null
+          requester_name_snapshot: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_name_snapshot: string | null
+          status: Database["public"]["Enums"]["pos_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          branch_name_snapshot: string
+          created_at?: string
+          id?: string
+          product_id: string
+          product_name_snapshot: string
+          reason: string
+          request_type: Database["public"]["Enums"]["pos_request_type"]
+          requested_at?: string
+          requested_by: string
+          requested_quantity?: number | null
+          requester_name_snapshot: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_name_snapshot?: string | null
+          status?: Database["public"]["Enums"]["pos_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          branch_name_snapshot?: string
+          created_at?: string
+          id?: string
+          product_id?: string
+          product_name_snapshot?: string
+          reason?: string
+          request_type?: Database["public"]["Enums"]["pos_request_type"]
+          requested_at?: string
+          requested_by?: string
+          requested_quantity?: number | null
+          requester_name_snapshot?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_name_snapshot?: string | null
+          status?: Database["public"]["Enums"]["pos_request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_inventory_requests_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_inventory_requests_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_product_categories: {
         Row: {
           color: string | null
@@ -2363,6 +2441,15 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: undefined
       }
+      approve_pos_request: {
+        Args: { _note?: string; _request_id: string }
+        Returns: undefined
+      }
+      can_review_pos_request: {
+        Args: { _request_type: Database["public"]["Enums"]["pos_request_type"] }
+        Returns: boolean
+      }
+      cancel_pos_request: { Args: { _request_id: string }; Returns: undefined }
       checkout_pos_sale: {
         Args: {
           _amount_tendered?: number
@@ -2373,6 +2460,23 @@ export type Database = {
           _payment_reference?: string
         }
         Returns: Json
+      }
+      create_pos_carry_request: {
+        Args: { _branch_id: string; _product_id: string; _reason: string }
+        Returns: string
+      }
+      create_pos_stock_request: {
+        Args: {
+          _branch_id: string
+          _product_id: string
+          _reason: string
+          _requested_quantity: number
+        }
+        Returns: string
+      }
+      decline_pos_request: {
+        Args: { _note: string; _request_id: string }
+        Returns: undefined
       }
       delete_pos_category: {
         Args: { _category_id: string; _replacement_id?: string }
@@ -2614,6 +2718,14 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_pos_carryable_products: {
+        Args: { _branch_id: string }
+        Returns: {
+          category_name: string
+          product_id: string
+          product_name: string
+        }[]
+      }
       get_pos_catalogue: {
         Args: { _branch_id: string }
         Returns: {
@@ -2742,6 +2854,32 @@ export type Database = {
           transaction_count: number
         }[]
       }
+      get_pos_manager_requests: {
+        Args: {
+          _branch_id: string
+          _limit?: number
+          _offset?: number
+          _status?: Database["public"]["Enums"]["pos_request_status"]
+        }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          product_id: string
+          product_name: string
+          reason: string
+          request_id: string
+          request_type: Database["public"]["Enums"]["pos_request_type"]
+          requested_at: string
+          requested_by: string
+          requested_quantity: number
+          requester_name: string
+          review_note: string
+          reviewed_at: string
+          reviewer_name: string
+          status: Database["public"]["Enums"]["pos_request_status"]
+          total_count: number
+        }[]
+      }
       get_pos_report_presets: {
         Args: never
         Returns: {
@@ -2749,6 +2887,34 @@ export type Database = {
           date_to: string
           preset: string
           sort_order: number
+        }[]
+      }
+      get_pos_request_queue: {
+        Args: {
+          _branch_id?: string
+          _limit?: number
+          _offset?: number
+          _status?: Database["public"]["Enums"]["pos_request_status"]
+        }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          can_review: boolean
+          product_id: string
+          product_name: string
+          reason: string
+          request_id: string
+          request_type: Database["public"]["Enums"]["pos_request_type"]
+          requested_at: string
+          requested_by: string
+          requested_quantity: number
+          requester_enterprise_role: Database["public"]["Enums"]["user_role"]
+          requester_name: string
+          review_note: string
+          reviewed_at: string
+          reviewer_name: string
+          status: Database["public"]["Enums"]["pos_request_status"]
+          total_count: number
         }[]
       }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
@@ -2877,6 +3043,16 @@ export type Database = {
           period_end: string
           period_start: string
         }[]
+      }
+      pos_request_audit: {
+        Args: {
+          _admin_description: string
+          _event_type: Database["public"]["Enums"]["pos_audit_event_type"]
+          _new: string
+          _old: string
+          _request: Database["public"]["Tables"]["pos_inventory_requests"]["Row"]
+        }
+        Returns: undefined
       }
       pos_sale_receipt: { Args: { _sale_id: string }; Returns: Json }
       receive_pos_stock: {
@@ -3042,6 +3218,7 @@ export type Database = {
         | "category"
         | "branch_product"
         | "inventory_threshold"
+        | "inventory_request"
       pos_audit_event_type:
         | "fees_changed"
         | "payment_qr_updated"
@@ -3064,8 +3241,14 @@ export type Database = {
         | "category_restored"
         | "category_reordered"
         | "category_deleted"
+        | "stock_request_created"
+        | "stock_request_cancelled"
+        | "stock_request_approved"
+        | "stock_request_declined"
       pos_movement_type: "receipt" | "adjustment_in" | "adjustment_out" | "sale"
       pos_product_status: "draft" | "active" | "archived"
+      pos_request_status: "pending" | "approved" | "declined" | "cancelled"
+      pos_request_type: "restock" | "carry_existing_product"
       pos_role: "manager" | "cashier"
       pos_sale_status: "completed"
       report_format: "pdf" | "docx" | "excel"
@@ -3259,6 +3442,7 @@ export const Constants = {
         "category",
         "branch_product",
         "inventory_threshold",
+        "inventory_request",
       ],
       pos_audit_event_type: [
         "fees_changed",
@@ -3282,9 +3466,15 @@ export const Constants = {
         "category_restored",
         "category_reordered",
         "category_deleted",
+        "stock_request_created",
+        "stock_request_cancelled",
+        "stock_request_approved",
+        "stock_request_declined",
       ],
       pos_movement_type: ["receipt", "adjustment_in", "adjustment_out", "sale"],
       pos_product_status: ["draft", "active", "archived"],
+      pos_request_status: ["pending", "approved", "declined", "cancelled"],
+      pos_request_type: ["restock", "carry_existing_product"],
       pos_role: ["manager", "cashier"],
       pos_sale_status: ["completed"],
       report_format: ["pdf", "docx", "excel"],

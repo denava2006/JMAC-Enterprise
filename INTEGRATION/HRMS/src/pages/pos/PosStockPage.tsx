@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { PosInventoryTabs } from '@/components/pos/PosInventoryTabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranches } from '@/hooks/useBranches'
 import { useBranchInventory, useBranchMovements, useSetLowStockThreshold } from '@/hooks/usePosInventory'
@@ -87,7 +88,7 @@ export default function PosStockPage() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">Stock</h2>
+          <h2 className="font-display text-xl font-semibold text-foreground">Inventory</h2>
           <p className="text-sm text-muted-foreground">
             What this branch is holding, and the level at which it counts as low.
           </p>
@@ -116,6 +117,8 @@ export default function PosStockPage() {
             {showHistory ? 'Hide history' : 'History'}
           </button>
         </div>
+
+      {!isAdministrator && <PosInventoryTabs />}
       </div>
 
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">

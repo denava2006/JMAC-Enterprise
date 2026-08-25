@@ -32,6 +32,7 @@ import PosSettingsPage from '@/pages/admin/PosSettingsPage'
 import PosProductsPage from '@/pages/admin/PosProductsPage'
 import AdminPosCategoriesPage from '@/pages/admin/PosCategoriesPage'
 import PosAuditLogsPage from '@/pages/pos/PosAuditLogsPage'
+import PosRequestsPage from '@/pages/pos/PosRequestsPage'
 import PosCategoriesPage from '@/pages/pos/PosCategoriesPage'
 import PosDashboardPage from '@/pages/pos/PosDashboardPage'
 import PosStockPage from '@/pages/pos/PosStockPage'
@@ -39,6 +40,7 @@ import PosTillPage from '@/pages/pos/PosTillPage'
 import PosTransactionsPage from '@/pages/pos/PosTransactionsPage'
 import AdminPosTransactionsPage from '@/pages/admin/PosTransactionsPage'
 import AdminPosAuditLogsPage from '@/pages/admin/PosAuditLogsPage'
+import AdminPosRequestsPage from '@/pages/admin/PosRequestsPage'
 import { PosIndexRedirect } from '@/components/pos/PosIndexRedirect'
 import { PosManagerRoute } from '@/components/pos/PosManagerRoute'
 import PosReportsPage from '@/pages/pos/PosReportsPage'
@@ -170,6 +172,17 @@ export default function App() {
                   Manager. Receiving and adjusting stay with an Administrator in
                   this phase, so nothing here creates inventory. */}
               <Route path="stock" element={<PosStockPage />} />
+              {/* The other half of Inventory: what this branch has asked the
+                  business for. A request moves no stock, and neither does
+                  approving one -- quantity changes only through receiving. */}
+              <Route
+                path="requests"
+                element={
+                  <PosManagerRoute>
+                    <PosRequestsPage />
+                  </PosManagerRoute>
+                }
+              />
             </Route>
 
             <Route
@@ -456,6 +469,17 @@ export default function App() {
               {/* The POS audit log for the Administrator: branch operations,
                   POS access administration and enterprise catalogue changes,
                   in the back office rather than the POS portal. */}
+              {/* The POS request review queue. Carry requests are permanently
+                  reviewed here -- they are catalogue decisions. Restock demand
+                  is reviewed here only until FMS owns procurement. */}
+              <Route
+                path="admin/pos-requests"
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminPosRequestsPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="admin/pos-audit-logs"
                 element={

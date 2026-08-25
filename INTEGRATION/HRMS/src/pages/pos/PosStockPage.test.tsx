@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import type { UserRole } from '@/lib/enums'
 import type { Branch } from '@/hooks/useBranches'
 import type { Movement } from '@/hooks/usePosInventory'
@@ -80,6 +81,14 @@ vi.mock('@/hooks/usePosInventory', () => ({
 
 const { default: PosStockPage } = await import('@/pages/pos/PosStockPage')
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <PosStockPage />
+    </MemoryRouter>
+  )
+}
+
 afterEach(() => {
   cleanup()
   state.role = 'employee'
@@ -94,7 +103,7 @@ afterEach(() => {
 describe('what a POS manager sees', () => {
   it('shows quantity and the low-stock level', () => {
     state.rows = [row()]
-    render(<PosStockPage />)
+    renderPage()
 
     expect(screen.getByText('Cola 1.5L')).toBeTruthy()
     expect(screen.getByText('12')).toBeTruthy()
@@ -118,7 +127,7 @@ describe('what a POS manager sees', () => {
         created_at: '2026-08-25T00:00:00Z',
       },
     ]
-    const { container } = render(<PosStockPage />)
+    const { container } = renderPage()
     fireEvent.click(screen.getByRole('button', { name: /History/ }))
 
     const text = container.textContent ?? ''
@@ -130,20 +139,20 @@ describe('what a POS manager sees', () => {
 
   it('says receiving and adjusting belong to an Administrator', () => {
     state.rows = [row()]
-    render(<PosStockPage />)
+    renderPage()
     expect(screen.getByText(/done by an Administrator/)).toBeTruthy()
   })
 
   it('offers no way to receive or adjust', () => {
     state.rows = [row()]
-    render(<PosStockPage />)
+    renderPage()
     expect(screen.queryByRole('button', { name: /Receive/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Adjust/ })).toBeNull()
   })
 
   it('saves a changed low-stock level', () => {
     state.rows = [row({ low_stock_threshold: 5 })]
-    render(<PosStockPage />)
+    renderPage()
 
     const field = screen.getByLabelText('Low-stock level for Cola 1.5L')
     fireEvent.change(field, { target: { value: '20' } })
@@ -157,7 +166,7 @@ describe('what a POS manager sees', () => {
     // branch's operational product surface, so two screens listing the same
     // products invited the question of which one was authoritative.
     state.rows = [row({ is_available: true })]
-    render(<PosStockPage />)
+    renderPage()
 
     const toggle = screen.getByRole('switch', { name: 'Offer Cola 1.5L at this branch' })
     fireEvent.click(toggle)
@@ -170,13 +179,13 @@ describe('what a POS manager sees', () => {
 
   it('marks a stopped product', () => {
     state.rows = [row({ is_available: false })]
-    render(<PosStockPage />)
+    renderPage()
     expect(screen.getByText('Stopped')).toBeTruthy()
   })
 
   it('will not offer a product that is not active enterprise-wide', () => {
     state.rows = [row({ product_status: 'archived' })]
-    render(<PosStockPage />)
+    renderPage()
     const toggle = screen.getByRole('switch', { name: 'Offer Cola 1.5L at this branch' })
     expect((toggle as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('Not active enterprise-wide')).toBeTruthy()
@@ -190,7 +199,7 @@ describe('what a cashier sees', () => {
     // (A cashier has no nav item for this page either -- this is the
     // typed-the-URL case.)
     state.rows = []
-    render(<PosStockPage />)
+    renderPage()
 
     expect(screen.getByText(/shown on the POS screen/)).toBeTruthy()
     expect(screen.queryByText('Cola 1.5L')).toBeNull()
@@ -200,7 +209,7 @@ describe('what a cashier sees', () => {
 describe('branch scoping', () => {
   it('offers no picker for a single assignment', () => {
     state.rows = [row()]
-    render(<PosStockPage />)
+    renderPage()
     expect(screen.queryByLabelText('Branch')).toBeNull()
   })
 
@@ -208,13 +217,13 @@ describe('branch scoping', () => {
     state.role = 'admin'
     state.branchIds = []
     state.rows = [row()]
-    render(<PosStockPage />)
+    renderPage()
     expect(screen.getByLabelText('Branch')).toBeTruthy()
   })
 
   it('says so when the account is assigned to no branch', () => {
     state.branchIds = []
-    render(<PosStockPage />)
+    renderPage()
     expect(screen.getByText(/not assigned to a branch/)).toBeTruthy()
   })
 })

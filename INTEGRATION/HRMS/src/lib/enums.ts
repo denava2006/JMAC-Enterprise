@@ -55,5 +55,7 @@ export type ChangeRequestStatus = Enums<'change_request_status'>
 /* ----------------------------------------------------------------- POS */
 
 export type PosProductStatus = Enums<'pos_product_status'>
+export type PosRequestType = Enums<'pos_request_type'>
+export type PosRequestStatus = Enums<'pos_request_status'>
 export type PosAuditEventType = Enums<'pos_audit_event_type'>
 export type PosAuditEntityType = Enums<'pos_audit_entity_type'>
