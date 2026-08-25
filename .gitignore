@@ -1,0 +1,12 @@
+# AI agent working documents - local only
+INTEGRATION/AI_*.md
+INTEGRATION/POS_TO_HRMS_MIGRATION_CLAUDE(1).md
+
+# Root / accidental dependencies
+node_modules/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
