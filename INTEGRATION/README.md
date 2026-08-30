@@ -67,6 +67,10 @@ There are eleven such suites in `HRMS/supabase/tests/` (364 contract checks),
 plus two concurrency harnesses in `HRMS/scripts/`. `AI_WORKFLOW.md` §5 has the
 full sequence.
 
+Production: **https://jmac-enterprise.vercel.app** — auto-deploys `main` from
+this repository (Root Directory `INTEGRATION/HRMS`), against the hosted Supabase
+project `JMAC-Enterprise`.
+
 ## Integration status
 
 | Area | State |
