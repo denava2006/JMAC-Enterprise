@@ -21,10 +21,150 @@
 
 begin;
 
+-- ---------------------------------------------------------------------------
+-- Phase 9A test fixture helper.
+--
+-- POS access now requires: an active profile with role 'employee', linked to an
+-- active employee, whose position belongs to its department and is configured
+-- in position_system_roles for the role being granted.
+--
+-- The demo accounts do not satisfy that (IT Support, Sales Associate, and an
+-- hr_staff account that can never hold an operational POS role), which is the
+-- whole point of this phase. So each suite builds the people it needs.
+--
+-- pg_temp: session-local. Rolled back with everything else, and it cannot ship.
+create function pg_temp.make_pos_eligible(_profile_id uuid, _position_title text)
+returns void
+language plpgsql
+as $helper$
+declare
+  _dept uuid;
+  _position uuid;
+  _employee uuid;
+  _saved text := current_setting('request.jwt.claims', true);
+  _admin uuid;
+begin
+  select d.id into _dept from public.departments d where d.name = 'Store Operations';
+  select po.id into _position from public.positions po
+   where po.department_id = _dept and po.title = _position_title;
+  if _position is null then
+    raise exception 'fixture: no % position in Store Operations', _position_title;
+  end if;
+
+  select p.employee_id into _employee from public.profiles p where p.id = _profile_id;
+
+  if _employee is null then
+    insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                  employment_status, hire_date)
+    select coalesce(split_part(p.full_name, ' ', 1), 'Test'),
+           coalesce(nullif(split_part(p.full_name, ' ', 2), ''), 'Worker'),
+           p.email, _dept, _position, 'active', current_date
+    from public.profiles p where p.id = _profile_id
+    returning id into _employee;
+  else
+    update public.employees
+       set department_id = _dept, position_id = _position, employment_status = 'active'
+     where id = _employee;
+  end if;
+
+  -- profiles.role/status are guarded for API callers; the suite runs as owner,
+  -- and an admin claim is set so the guard sees a legitimate actor.
+  select p.id into _admin from public.profiles p
+   where p.role = 'admin' and p.status = 'active' limit 1;
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', _admin, 'role', 'authenticated')::text, true);
+  update public.profiles
+     set employee_id = _employee, role = 'employee', status = 'active'
+   where id = _profile_id;
+  perform set_config('request.jwt.claims', coalesce(_saved, ''), true);
+end;
+$helper$;
+
+-- Mint a complete, compliant POS worker: auth user, profile and employment
+-- record. Needed because the demo database has only two employee-role accounts
+-- and Phase 9A requires a real employment record per POS holder.
+create function pg_temp.make_new_pos_worker(_name text, _position_title text)
+returns uuid
+language plpgsql
+as $mk$
+declare
+  _uid uuid := gen_random_uuid();
+  _dept uuid;
+  _position uuid;
+  _employee uuid;
+  _email text := lower(replace(_name, ' ', '.')) || '.' ||
+                 left(replace(gen_random_uuid()::text, '-', ''), 6) || '@example.com';
+begin
+  select d.id into _dept from public.departments d where d.name = 'Store Operations';
+  select po.id into _position from public.positions po
+   where po.department_id = _dept and po.title = _position_title;
+
+  -- A trigger on auth.users creates the profile row, so this updates it rather
+  -- than inserting a second one.
+  insert into auth.users (id, email) values (_uid, _email);
+  insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                employment_status, hire_date)
+  values (split_part(_name,' ',1), coalesce(nullif(split_part(_name,' ',2),''),'Worker'),
+          _email, _dept, _position, 'active', current_date)
+  returning id into _employee;
+
+  insert into public.profiles (id, employee_id, full_name, email, role, status)
+  values (_uid, _employee, _name, _email, 'employee', 'active')
+  on conflict (id) do update
+    set employee_id = excluded.employee_id, full_name = excluded.full_name,
+        role = 'employee', status = 'active';
+  return _uid;
+end;
+$mk$;
+
+-- A position eligible for BOTH POS roles, for the mixed-role cases. Under Phase
+-- 9A a single position grants exactly the roles an Administrator configured for
+-- it, so "manager at A, cashier at B" is only possible where both were granted.
+create function pg_temp.make_dual_role_position() returns uuid
+language plpgsql
+as $dual$
+declare _dept uuid; _pos uuid;
+begin
+  select d.id into _dept from public.departments d where d.name = 'Store Operations';
+  insert into public.positions (title, department_id, description)
+  values ('ZZ Test Branch Supervisor', _dept, 'Fixture: eligible for both POS roles')
+  returning id into _pos;
+  insert into public.position_system_roles (position_id, system, role_code)
+  values (_pos, 'pos', 'manager'), (_pos, 'pos', 'cashier');
+  return _pos;
+end;
+$dual$;
+
+create function pg_temp.make_eligible_at(_profile_id uuid, _position_id uuid)
+returns void language plpgsql as $at$
+declare _employee uuid; _dept uuid; _saved text := current_setting('request.jwt.claims', true); _admin uuid;
+begin
+  select po.department_id into _dept from public.positions po where po.id = _position_id;
+  select p.employee_id into _employee from public.profiles p where p.id = _profile_id;
+  if _employee is null then
+    insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                  employment_status, hire_date)
+    select coalesce(split_part(p.full_name,' ',1),'Test'),
+           coalesce(nullif(split_part(p.full_name,' ',2),''),'Worker'),
+           p.email, _dept, _position_id, 'active', current_date
+    from public.profiles p where p.id = _profile_id returning id into _employee;
+  else
+    update public.employees set department_id=_dept, position_id=_position_id,
+           employment_status='active' where id=_employee;
+  end if;
+  select p.id into _admin from public.profiles p where p.role='admin' and p.status='active' limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub',_admin,'role','authenticated')::text, true);
+  update public.profiles set employee_id=_employee, role='employee', status='active' where id=_profile_id;
+  perform set_config('request.jwt.claims', coalesce(_saved,''), true);
+end;
+$at$;
+
 do $$
 declare
   admin_id   uuid;
   staff_id   uuid;
+  decoy_id   uuid;
+  wf_dual_position uuid;
   worker_id  uuid;
   branch_a   uuid;
   branch_b   uuid;
@@ -61,8 +201,22 @@ begin
 
   -- Somebody else's assignment, so "sees only their own" is a real claim rather
   -- than a count of one in an otherwise empty table.
+  -- FIXTURE WIRED (Phase 9A): the decoy assignment needs a genuinely eligible
+  -- holder. It deliberately does NOT go to staff_id -- check 2 below relies on
+  -- that account still being HR Staff, and Phase 9A makes HR accounts
+  -- permanently ineligible for operational POS roles.
+  decoy_id := pg_temp.make_new_pos_worker('Decoy Manager', 'POS Manager');
+  -- worker_id is granted both cashier and manager across this suite, so they
+  -- hold a position configured for both. This suite is about WHO MAY GRANT --
+  -- every refusal here must be about privilege, not eligibility, or the checks
+  -- would pass for the wrong reason. (Note the ordering: the eligibility
+  -- trigger is BEFORE INSERT and therefore fires ahead of the RLS WITH CHECK,
+  -- so an ineligible target masks a privilege denial.)
+  wf_dual_position := pg_temp.make_dual_role_position();
+  perform pg_temp.make_eligible_at(worker_id, wf_dual_position);
+
   insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, created_by)
-  values (staff_id, branch_b, 'manager', admin_id);
+  values (decoy_id, branch_b, 'manager', admin_id);
 
   ------------------------------------------------------- 1. admin may grant
   perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
@@ -218,6 +372,13 @@ begin
   raise notice 'PASS 10  inactive profile + active assignment -> no access, no branches';
 
   reset role;
+
+  -- Restore the account: check 12 below grants a fresh assignment, and Phase 9A
+  -- refuses to grant one to a deactivated profile -- correctly, but that is
+  -- check 10's subject, not check 12's.
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  update public.profiles set status = 'active' where id = worker_id;
 
   ------------------------------------------- 11. the helpers are not public
   set local role anon;

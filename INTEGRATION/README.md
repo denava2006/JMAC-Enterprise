@@ -51,7 +51,7 @@ Demo accounts and their passwords are listed in `HRMS/DEMO.md`.
 ## Running the checks
 
 ```bash
-npm test          # vitest        — 497 tests across 34 files
+npm test          # vitest        — 516 tests across 35 files
 npm run build     # tsc -b && vite build
 npm run lint      # oxlint
 ```
@@ -63,7 +63,7 @@ docker exec -i supabase_db_harmony-suite psql -U postgres -d postgres \
   -v ON_ERROR_STOP=1 -f - < supabase/tests/pos_requests_rls.sql
 ```
 
-There are ten such suites in `HRMS/supabase/tests/` (329 contract checks),
+There are eleven such suites in `HRMS/supabase/tests/` (364 contract checks),
 plus two concurrency harnesses in `HRMS/scripts/`. `AI_WORKFLOW.md` §5 has the
 full sequence.
 
@@ -80,8 +80,19 @@ full sequence.
 | POS Reports — Manager operational and Administrator financial | done (Phase 7B) |
 | POS operational audit logs | done (Phase 7C) |
 | POS inventory / product requests | done (Phase 8) |
+| Workforce role eligibility — POS | done (Phase 9A) |
+| Workforce role eligibility — HRMS (9B) and FMS (9C) | not started |
 | **Next phase** | **none approved — see `AI_HANDOFF.md` §13** |
 | FMS integration | not started |
+
+Since Phase 9A a POS assignment is refused unless the employee's **job** makes
+them eligible: `position_system_roles` records which position may hold which
+system role, and the database enforces it on write, on every read, and again
+whenever an employee is transferred. Administrators configure this on
+`/dashboard/admin/positions` ("System access"), and any existing assignment that
+no longer authorizes is listed with its reason on `/dashboard/admin/pos-access`.
+Nothing is deleted and no employee record is rewritten to preserve access —
+see `ARCHITECTURE.md` §D2d.
 
 Managers open Reports at `/pos/reports` and the POS audit log at
 `/pos/audit-logs`; Administrators use the distinct

@@ -24,7 +24,39 @@ TAG="chk$(date +%s)"
 ADMIN=$(q "select id from public.profiles where role='admin' and status='active' limit 1;")
 BRANCH=$(q "select id from public.branches where is_active order by name limit 1;")
 CATEGORY=$(q "select id from public.pos_product_categories where normalized_name='general';")
-CASHIER=$(q "select id from public.profiles where role='employee' and status='active' order by created_at, id limit 1;")
+# Phase 9A: POS access requires a canonical employment record -- an active
+# profile with role 'employee', linked to an active employee whose position is
+# configured for the role. The demo accounts are IT Support and Sales Associate,
+# so grabbing "the first employee profile" no longer works, and should not: that
+# is precisely what this phase closed.
+#
+# This harness commits its fixtures (it races real sessions, so it cannot run
+# inside a rolled-back transaction), so it mints a compliant till user and
+# removes it again in cleanup.
+STORE_OPS=$(q "select id from public.departments where name='Store Operations';")
+CASHIER_POSITION=$(q "select id from public.positions where department_id='$STORE_OPS' and title='Cashier';")
+if [ -z "$STORE_OPS" ] || [ -z "$CASHIER_POSITION" ]; then
+  echo "FAIL  fixture: Store Operations / Cashier is missing (migration 20260828010000)"
+  exit 1
+fi
+
+CASHIER_EMAIL="zz.concurrency.$(date +%s)@example.com"
+CASHIER=$(q "
+  with u as (
+    insert into auth.users (id, email) values (gen_random_uuid(), '$CASHIER_EMAIL') returning id
+  ), e as (
+    insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                  employment_status, hire_date)
+    values ('ZZ', 'Concurrency', '$CASHIER_EMAIL', '$STORE_OPS', '$CASHIER_POSITION',
+            'active', current_date)
+    returning id
+  )
+  insert into public.profiles (id, employee_id, full_name, email, role, status)
+  select u.id, e.id, 'ZZ Concurrency Till', '$CASHIER_EMAIL', 'employee', 'active' from u, e
+  on conflict (id) do update set employee_id = excluded.employee_id, role = 'employee',
+                                 status = 'active', full_name = excluded.full_name
+  returning id;")
+CASHIER_EMPLOYEE=$(q "select employee_id from public.profiles where id='$CASHIER';")
 
 if [ -z "$ADMIN" ] || [ -z "$BRANCH" ] || [ -z "$CATEGORY" ] || [ -z "$CASHIER" ]; then
   echo "FAIL  fixture: need an active admin, an active branch, the General category and an employee"
@@ -67,6 +99,15 @@ cleanup() {
   fi
   # Only ever the row this script created.
   [ -n "$ASSIGNMENT" ] && q "delete from public.pos_branch_assignments where id='$ASSIGNMENT';" > /dev/null
+  # The minted till user, and everything hanging off it. Ordered so no foreign
+  # key blocks the delete.
+  if [ -n "$CASHIER" ]; then
+    q "delete from public.pos_branch_assignments where profile_id='$CASHIER';
+       delete from public.pos_audit_events where actor_id='$CASHIER';
+       delete from public.profiles where id='$CASHIER';
+       delete from public.employees where id='$CASHIER_EMPLOYEE';
+       delete from auth.users where id='$CASHIER';" > /dev/null
+  fi
 }
 trap cleanup EXIT
 

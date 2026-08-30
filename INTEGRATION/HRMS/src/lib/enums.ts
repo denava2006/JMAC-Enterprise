@@ -35,6 +35,10 @@ export type UserRole = Enums<'user_role'>
  * person can be a manager at one branch and a cashier at another. */
 export type PosRole = Enums<'pos_role'>
 
+/** Which subsystem an eligibility row is about. Phase 9A enforces `pos` only;
+ * `hrms` and `fms` are configuration for later phases. */
+export type EntitlementSystem = Enums<'entitlement_system'>
+
 /* ------------------------------------------------------------------ HR */
 
 export type AttendanceStatus = Enums<'attendance_status'>

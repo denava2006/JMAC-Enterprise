@@ -29,9 +29,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useBranches } from '@/hooks/useBranches'
+import { useEligiblePosEmployees, useNoncompliantAssignments } from '@/hooks/useWorkforce'
+import { AlertTriangle } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   type PosAssignment,
-  useAssignableProfiles,
   useGrantPosAccess,
   usePosAssignments,
   useRevokePosAccess,
@@ -42,11 +44,8 @@ import {
   POS_ROLE_LABEL,
   STATUS_FILTERS,
   STATUS_FILTER_LABEL,
-  activeBranchIdsFor,
-  assignableProfiles,
   countByStatus,
   filterByStatus,
-  grantableBranches,
   type StatusFilter,
 } from '@/lib/posAccess'
 import { ROLE_LABEL } from '@/lib/roles'
@@ -73,6 +72,19 @@ export interface GrantPrefill {
   posRole: GrantFormValues['posRole']
 }
 
+/**
+ * Branch -> POS Role -> Eligible Employee.
+ *
+ * The order matters. Before Phase 9A this asked for a person first and offered
+ * every assignable account, which is how an IT Support engineer came to hold
+ * POS Manager. Now the branch and the role are chosen first, and the candidate
+ * list comes from `get_eligible_pos_employees` -- a database RPC returning only
+ * people whose current job configures them for that role.
+ *
+ * The list is not fetched-then-filtered here. A list filtered in React is a list
+ * that can be unfiltered in React, and the database refuses an ineligible grant
+ * regardless of what the client sends.
+ */
 function GrantAccessDialog({
   open,
   onOpenChange,
@@ -83,9 +95,7 @@ function GrantAccessDialog({
   prefill: GrantPrefill | null
 }) {
   const grant = useGrantPosAccess()
-  const { data: profiles } = useAssignableProfiles()
   const { data: branches } = useBranches()
-  const { data: assignments } = usePosAssignments()
 
   const {
     control,
@@ -105,29 +115,31 @@ function GrantAccessDialog({
     })
   }, [open, prefill, reset])
 
-  const people = assignableProfiles(profiles ?? [])
-  const selectedProfileId = watch('profileId')
   const selectedBranchId = watch('branchId')
+  const selectedRole = watch('posRole')
+  const selectedProfileId = watch('profileId')
 
-  const availableBranches = grantableBranches(
-    branches ?? [],
-    activeBranchIdsFor(assignments ?? [], selectedProfileId)
+  const { data: candidates, isLoading: candidatesLoading } = useEligiblePosEmployees(
+    selectedBranchId || undefined,
+    selectedRole
   )
+  const people = candidates ?? []
+  const availableBranches = (branches ?? []).filter((b) => b.is_active)
 
-  // Switching to someone who already works the branch that was picked would
-  // otherwise submit a combination the unique index refuses.
+  // Changing the branch or the role changes who is eligible, so somebody chosen
+  // under the previous combination must not silently carry over.
   React.useEffect(() => {
-    if (selectedBranchId && !availableBranches.some((b) => b.id === selectedBranchId)) {
-      setValue('branchId', '')
+    if (selectedProfileId && !people.some((person) => person.profile_id === selectedProfileId)) {
+      setValue('profileId', '')
     }
-  }, [selectedBranchId, availableBranches, setValue])
+  }, [people, selectedProfileId, setValue])
 
   const onSubmit = async (values: GrantFormValues) => {
     await grant.mutateAsync(values)
     onOpenChange(false)
   }
 
-  const selectedPerson = people.find((p) => p.id === selectedProfileId)
+  const selectedPerson = people.find((person) => person.profile_id === selectedProfileId)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,46 +149,10 @@ function GrantAccessDialog({
           <DialogDescription>
             {prefill
               ? 'This creates a new assignment. The revoked one stays on record.'
-              : 'POS access is granted to an existing account. Nobody gets a second login for the till.'}
+              : 'Only employees whose job makes them eligible for the role can be chosen.'}
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label>
-              Person <span className="text-destructive">*</span>
-            </Label>
-            <Controller
-              control={control}
-              name="profileId"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger aria-label="Person">
-                    <SelectValue placeholder="Choose an account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {people.map((person) => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.full_name} — {person.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {errors.profileId && <p className="text-xs text-destructive">{errors.profileId.message}</p>}
-            {people.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                There are no accounts to assign. Administrators already reach every branch, and inactive accounts
-                cannot hold POS access.
-              </p>
-            )}
-            {selectedPerson && (
-              <p className="text-xs text-muted-foreground">
-                Their HR role stays {ROLE_LABEL[selectedPerson.role]}. POS access is separate from it.
-              </p>
-            )}
-          </div>
-
           <div className="flex flex-col gap-1.5">
             <Label>
               Branch <span className="text-destructive">*</span>
@@ -185,9 +161,9 @@ function GrantAccessDialog({
               control={control}
               name="branchId"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={!selectedProfileId}>
+                <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger aria-label="Branch">
-                    <SelectValue placeholder={selectedProfileId ? 'Choose a branch' : 'Choose a person first'} />
+                    <SelectValue placeholder="Choose a branch" />
                   </SelectTrigger>
                   <SelectContent>
                     {availableBranches.map((branch) => (
@@ -200,11 +176,6 @@ function GrantAccessDialog({
               )}
             />
             {errors.branchId && <p className="text-xs text-destructive">{errors.branchId.message}</p>}
-            {selectedProfileId && availableBranches.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                They already have active access at every branch. Revoke one first to change its role.
-              </p>
-            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -233,6 +204,48 @@ function GrantAccessDialog({
             </p>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label>
+              Employee <span className="text-destructive">*</span>
+            </Label>
+            <Controller
+              control={control}
+              name="profileId"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange} disabled={!selectedBranchId}>
+                  <SelectTrigger aria-label="Employee">
+                    <SelectValue
+                      placeholder={
+                        selectedBranchId ? 'Choose an eligible employee' : 'Choose a branch first'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {people.map((person) => (
+                      <SelectItem key={person.profile_id} value={person.profile_id}>
+                        {person.full_name} &mdash; {person.position_title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.profileId && <p className="text-xs text-destructive">{errors.profileId.message}</p>}
+            {selectedBranchId && !candidatesLoading && people.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Nobody is eligible for POS {POS_ROLE_LABEL[selectedRole]} here. Eligibility comes from an
+                employee&apos;s position &mdash; configure it on the Positions page, or check they are not
+                already assigned at this branch.
+              </p>
+            )}
+            {selectedPerson && (
+              <p className="text-xs text-muted-foreground">
+                {selectedPerson.department_name} &middot; {selectedPerson.position_title}
+              </p>
+            )}
+          </div>
+
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -244,6 +257,59 @@ function GrantAccessDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+
+/**
+ * Assignments that no longer authorize.
+ *
+ * A grant made before Phase 9A -- or one whose holder has since been
+ * transferred -- keeps its row but stops working. Without this panel that would
+ * be an invisible outage; with it, an Administrator can see exactly who is
+ * affected and why, and close or re-grant deliberately.
+ *
+ * Only ACTIVE assignments appear. Closed history is not a problem to fix.
+ */
+function NoncompliantPanel() {
+  const { data: rows, isLoading } = useNoncompliantAssignments()
+  const items = rows ?? []
+
+  if (isLoading || items.length === 0) return null
+
+  return (
+    <Card className="border-warning/40">
+      <CardContent className="flex flex-col gap-3 py-5">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <h3 className="text-sm font-semibold text-foreground">
+            {items.length} assignment{items.length === 1 ? '' : 's'} no longer authorize
+          </h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          These accounts still hold an assignment, but their current job does not make them eligible for it, so
+          the database refuses them access. Nothing was deleted &mdash; revoke them, or move the employee into an
+          eligible position.
+        </p>
+        <div className="flex flex-col gap-2">
+          {items.map((row) => (
+            <div
+              key={row.assignment_id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border p-3"
+            >
+              <span className="text-sm font-medium text-foreground">{row.full_name}</span>
+              <Badge variant="secondary">
+                {row.branch_name} &middot; {POS_ROLE_LABEL[row.pos_role]}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {row.department_name} &middot; {row.position_title}
+              </span>
+              <span className="w-full text-xs text-warning">{row.reason}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -379,6 +445,8 @@ export default function PosAccessPage() {
           nobody gets a second login for the till.
         </p>
       </div>
+
+      <NoncompliantPanel />
 
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

@@ -206,10 +206,18 @@ POS access comes from `profiles.role = 'admin'` and covers every branch;
 recording it in the assignment table too would create two places answering the
 same question.
 
+Since Phase 9A a third, non-granting layer sits alongside these:
+`position_system_roles` records which **job** may hold which system role. It
+confers nothing on its own — see D2d. An assignment is refused unless the
+holder's position makes them eligible, which is why `profiles.role` must be
+`employee` for a POS assignment: `hr_manager` and `hr_staff` are HR identities,
+and `admin` needs no entitlement because `is_admin()` short-circuits ahead of
+the check.
+
 ### Database
 
-**116 migrations, all applied** to the live local database (verified against
-`supabase_migrations.schema_migrations`, 2026-08-25). The HR tables:
+**123 migrations, all applied** to the live local database (verified against
+`supabase_migrations.schema_migrations`, 2026-08-30). The HR tables:
 
 ```text
 profiles  employees  employee_history  employee_documents
@@ -641,6 +649,129 @@ Migrations `20260827000000` / `000100` / `010000` / `020000` / `030000`.
 
 ---
 
+### D2d. Workforce eligibility — your job decides your systems (Phase 9A)
+
+The defect that prompted this phase was live in the working database:
+**Jerome Castillo, Department IT, Position IT Support, held POS Manager.**
+Nothing was broken — the screen did exactly what it was asked. There was simply
+no rule saying an assignment must correspond to the job the person actually
+holds.
+
+(Production carries the schema and two branches but no workforce yet — no
+employees, profiles or assignments — so the violation exists only in the local
+database. It is nonetheless a real defect in the *authorization model*, and it
+would have reproduced the moment production was populated.)
+
+```text
+Human Resources        Store Operations       IT
+├── HR Manager         ├── POS Manager        └── IT Support
+└── HR Staff           └── Cashier
+```
+
+**Three layers, still separate.** Phase 9A adds a layer; it collapses nothing.
+
+```text
+profiles.role                    enterprise / HR identity   admin | employee
+pos_branch_assignments.pos_role  the actual authorization   manager | cashier
+position_system_roles            eligibility only           -- NEW
+```
+
+`position_system_roles` never grants anything. It answers one question — *may
+this job hold that role at all* — and an Administrator must still make the
+assignment. Eligibility is a precondition, not a grant.
+
+```text
+position_system_roles
+  position_id → positions(id) on delete cascade
+  system       entitlement_system   hrms | pos | fms
+  role_code    text                 CHECK-constrained per system
+  unique (position_id, system, role_code)
+```
+
+`'admin'` and `'employee'` are **deliberately absent** from every branch of that
+CHECK. Administrator is an enterprise identity, not something a job title
+confers, and Employee Self-Service is the baseline every employee already has —
+making either an entitlement would invite a position to grant it.
+
+**Eligibility is a conjunction, and every term is load-bearing:**
+
+```sql
+is_eligible_for_system_role(profile, system, role) =
+     profile.status = 'active'
+ and profile.role   = 'employee'          -- an Administrator needs no entitlement
+ and employment_permits_operational_work(employee.employment_status)
+ and employee.department_id is not null
+ and position.department_id = employee.department_id   -- the pairing must hold
+ and (position, system, role) ∈ position_system_roles
+```
+
+`employment_permits_operational_work()` exists as its own function so that
+"which employment statuses may work a till" is a single named decision rather
+than a predicate copied into five places. Today it is `status = 'active'`.
+
+**Three gates, because one is not enough.**
+
+```text
+write   pos_assignment_requires_eligibility   BEFORE INSERT/UPDATE   POS_ASSIGNMENT_NOT_ELIGIBLE
+read    has_pos_role / my_pos_assignments /   every authorization    an ineligible holder is
+        has_pos_access                        check                  refused live
+drift   revoke_ineligible_pos_assignments     AFTER UPDATE on        status='inactive',
+                                              employees              revoked_reason='workforce_ineligible'
+```
+
+The write gate alone would leave every pre-existing grant intact and working.
+The read gate alone would let invalid rows accumulate. The drift trigger alone
+would not stop a bad grant being made in the first place. `is_admin()` still
+short-circuits the read path — an Administrator's access does not come from a
+position.
+
+**The drift trigger only ever closes.** It sets `status = 'inactive'`; no branch
+sets `active`. Transferring an employee *back* into an eligible position does
+not resurrect their old assignment — an Administrator must grant it again,
+deliberately. `no_assignment_resurrection` enforces the other half: reopening a
+closed row raises `POS_ASSIGNMENT_CLOSED`. Access that returns by itself, days
+later, as a side effect of an HR edit, is not access anyone authorized.
+
+**History is preserved, and the audit trail does not lie.** Nothing is deleted.
+`revoked_reason` records *why* a row closed, and `pos_audit_assignment()` reads
+it to say "POS access closed automatically: the employee is no longer eligible
+for this role" — attributed to no actor, because no person did it. Inventing a
+revoking Administrator would have been the easier implementation and a false
+record.
+
+**Department/position integrity underpins all of it.** Eligibility is meaningless
+if an employee can hold a position belonging to another department, so
+`enforce_position_department_pairing()` guards `employees` and `job_postings`
+(`POSITION_DEPARTMENT_MISMATCH`), and `guard_position_department_move()` stops a
+position being moved out from under its holders (`POSITION_DEPARTMENT_IN_USE`).
+Null semantics are preserved throughout: the check fires only when both sides
+are present, so an employee with no position assigned yet is still valid.
+
+**The picker is a convenience, not a control.** `get_eligible_pos_employees()`
+returns identity and org placement only — no salary, no pay grade, no personal
+data — and a contract test pins that signature, because an assignment screen is
+not a reason to widen access to payroll. The list is filtered in the database; a
+candidate list filtered in React is a candidate list that can be unfiltered in
+React, and the write gate refuses regardless of what the client sends.
+
+**Existing violations were not quietly rewritten.**
+`get_noncompliant_pos_assignments()` surfaces every active assignment whose
+holder is no longer eligible, with the reason, on the POS Access page. The
+alternative — editing Jerome's department to make his assignment valid — would
+have falsified an employment record to protect an access grant. Real employees
+keep their real jobs; the invalid *assignment* is what an Administrator
+resolves.
+
+**Scope.** Phase 9A enforces **POS only**. HRMS and FMS entitlements are
+configurable and displayed read-only, so the model is legible, but nothing reads
+them yet — 9B and 9C. `ENFORCED_SYSTEMS = ['pos']` is the single client-side
+statement of that, and it is asserted by test rather than left as a comment.
+
+Migrations `20260828000000` / `010000` / `020000` / `030000` / `040000` /
+`050000` / `060000`. Contract suite `workforce_eligibility_rls.sql` (35 checks).
+
+---
+
 ### D3. FMS boundary
 
 FMS integration has **not** begun. The boundary is defined now so POS does not
@@ -995,8 +1126,8 @@ performed.
 
 ## H. Known problems and next step
 
-1. **The reorganised tree is not in git.** 439 tracked deletions, `INTEGRATION/`
-   untracked. No restore point. The user commits, not an agent.
+1. ~~**The reorganised tree is not in git.**~~ **RESOLVED.** `INTEGRATION/` is
+   committed and pushed to `origin/main`; there is a restore point.
 2. **`HRMS/PROJECT_CONTEXT.md` is stale** — lists built modules as remaining.
 3. **`supabase_vector_harmony-suite` is restart-looping.** Logging/analytics
    only; it does not affect Postgres, auth or the API, but it is noise.
@@ -1045,18 +1176,26 @@ this is the one place a port would most plausibly go wrong.
 
 ### Next step
 
-**None approved.** Phase 7C is complete; the candidates and their scoping notes
-are in `AI_HANDOFF.md` §13. The nearest is an **Enterprise Audit Cleanup** to
+**None approved.** Phase 9A is complete and released; the candidates and their
+scoping notes are in `AI_HANDOFF.md` §13. The two named successors are **9B**
+(HRMS role eligibility — making `hr_manager` / `hr_staff` follow from a position
+the same way POS now does) and **9C** (FMS, once that integration begins).
+Neither is started. One item is outstanding from 9A and is an Administrator
+decision, not a code change: the two live assignments the compliance panel now
+reports — Jerome Castillo (IT Support / POS Manager) and Liza Fernandez (Sales
+Associate / Cashier) — are refused access but still on file, and must be either
+revoked or replaced by moving those employees into eligible positions. The nearest is an **Enterprise Audit Cleanup** to
 remove the legacy generic `audit_logs` writes still made by `checkout_pos_sale`,
 `receive_pos_stock` and `adjust_pos_stock` — with `checkout_pos_sale` left alone
 unless it is being changed for another reason, because re-emitting 293 lines of
 proven concurrency-critical code to delete six lines of audit insert is a
 disproportionate risk for a cosmetic gain.
 
-Phases 2A through 7C — plus the navigation revision — are complete: HRMS 445
-tests pass across 31 files, build and lint are clean, nine database contract
-suites pass (18 + 42 + 33 + 33 + 36 + 41 + 47 + 19 + 26 = 295 checks), both
-concurrency harnesses pass, the standalone POS regression remains 61 tests, and
-Phase 7C browser verification passed 26/26 checks — every context running in
+Phases 2A through 9A — plus the navigation revision — are complete: HRMS 516
+tests pass across 35 files, typecheck, build and lint are clean, eleven database
+contract suites pass (18 + 42 + 33 + 33 + 36 + 41 + 47 + 19 + 34 + 26 + 35 = 364
+checks), both concurrency harnesses pass and leave no residue, the standalone
+POS regression remains 61 tests, and Phase 9A browser verification passed 18/18
+checks. Phase 7C's browser pass (26/26) ran with every context in
 `America/New_York`, a non-Manila timezone, so a browser-computed day boundary
 would have shown up.

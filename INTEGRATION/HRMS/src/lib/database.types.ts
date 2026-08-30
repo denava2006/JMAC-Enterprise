@@ -1637,6 +1637,7 @@ export type Database = {
           id: string
           pos_role: Database["public"]["Enums"]["pos_role"]
           profile_id: string
+          revoked_reason: string | null
           status: Database["public"]["Enums"]["account_status"]
           updated_at: string
         }
@@ -1647,6 +1648,7 @@ export type Database = {
           id?: string
           pos_role: Database["public"]["Enums"]["pos_role"]
           profile_id: string
+          revoked_reason?: string | null
           status?: Database["public"]["Enums"]["account_status"]
           updated_at?: string
         }
@@ -1657,6 +1659,7 @@ export type Database = {
           id?: string
           pos_role?: Database["public"]["Enums"]["pos_role"]
           profile_id?: string
+          revoked_reason?: string | null
           status?: Database["public"]["Enums"]["account_status"]
           updated_at?: string
         }
@@ -2156,6 +2159,44 @@ export type Database = {
           },
         ]
       }
+      position_system_roles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          position_id: string
+          role_code: string
+          system: Database["public"]["Enums"]["entitlement_system"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          position_id: string
+          role_code: string
+          system: Database["public"]["Enums"]["entitlement_system"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          position_id?: string
+          role_code?: string
+          system?: Database["public"]["Enums"]["entitlement_system"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "position_system_roles_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       positions: {
         Row: {
           created_at: string
@@ -2482,6 +2523,14 @@ export type Database = {
         Args: { _category_id: string; _replacement_id?: string }
         Returns: undefined
       }
+      describe_pos_ineligibility: {
+        Args: { _profile_id: string; _role_code: string }
+        Returns: string
+      }
+      employment_permits_operational_work: {
+        Args: { _status: Database["public"]["Enums"]["employment_status"] }
+        Returns: boolean
+      }
       generate_application_reference: { Args: never; Returns: string }
       generate_employee_number: { Args: never; Returns: string }
       generate_payslip_number: { Args: never; Returns: string }
@@ -2693,6 +2742,18 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_eligible_pos_employees: {
+        Args: { _branch_id: string; _role_code: string }
+        Returns: {
+          department_name: string
+          email: string
+          employee_id: string
+          employee_number: string
+          full_name: string
+          position_title: string
+          profile_id: string
+        }[]
+      }
       get_my_transactions: {
         Args: {
           _from?: string
@@ -2716,6 +2777,20 @@ export type Database = {
           subtotal: number
           total_amount: number
           total_count: number
+        }[]
+      }
+      get_noncompliant_pos_assignments: {
+        Args: never
+        Returns: {
+          assignment_id: string
+          branch_id: string
+          branch_name: string
+          department_name: string
+          full_name: string
+          pos_role: Database["public"]["Enums"]["pos_role"]
+          position_title: string
+          profile_id: string
+          reason: string
         }[]
       }
       get_pos_carryable_products: {
@@ -2917,6 +2992,17 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_position_entitlements: {
+        Args: never
+        Returns: {
+          department_id: string
+          department_name: string
+          position_id: string
+          position_title: string
+          role_code: string
+          system: Database["public"]["Enums"]["entitlement_system"]
+        }[]
+      }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
       has_pos_access: { Args: never; Returns: boolean }
       has_pos_role: {
@@ -2929,6 +3015,14 @@ export type Database = {
       is_active_employee: { Args: never; Returns: boolean }
       is_active_staff: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
+      is_eligible_for_system_role: {
+        Args: {
+          _profile_id: string
+          _role_code: string
+          _system: Database["public"]["Enums"]["entitlement_system"]
+        }
+        Returns: boolean
+      }
       is_hr_manager_or_admin: { Args: never; Returns: boolean }
       is_hr_staff_or_admin: { Args: never; Returns: boolean }
       lookup_application: {
@@ -3119,6 +3213,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_position_entitlement: {
+        Args: {
+          _granted: boolean
+          _position_id: string
+          _role_code: string
+          _system: Database["public"]["Enums"]["entitlement_system"]
+        }
+        Returns: undefined
+      }
       submit_job_application:
         | {
             Args: {
@@ -3194,6 +3297,7 @@ export type Database = {
         | "terminated"
         | "retired"
       employment_type: "regular" | "part_time"
+      entitlement_system: "hrms" | "pos" | "fms"
       interview_status:
         | "scheduled"
         | "passed"
@@ -3416,6 +3520,7 @@ export const Constants = {
         "retired",
       ],
       employment_type: ["regular", "part_time"],
+      entitlement_system: ["hrms", "pos", "fms"],
       interview_status: [
         "scheduled",
         "passed",

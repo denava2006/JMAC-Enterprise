@@ -36,11 +36,30 @@ function assignment(overrides: Partial<PosAssignment> = {}): PosAssignment {
 
 const state: { assignments: PosAssignment[] } = { assignments: [] }
 
+/** Candidates the database says may hold the chosen role at the chosen branch. */
+let eligibleEmployees: {
+  profile_id: string; employee_id: string; full_name: string; email: string
+  employee_number: string | null; department_name: string; position_title: string
+}[] = []
+/** Active assignments whose holder is no longer eligible. */
+let noncompliant: {
+  assignment_id: string; profile_id: string; full_name: string; branch_id: string
+  branch_name: string; pos_role: 'manager' | 'cashier'; department_name: string
+  position_title: string; reason: string
+}[] = []
+
 vi.mock('@/hooks/usePosAccess', () => ({
   usePosAssignments: () => ({ data: state.assignments, isLoading: false }),
   useAssignableProfiles: () => ({ data: [] }),
   useGrantPosAccess: () => ({ mutateAsync: vi.fn() }),
   useRevokePosAccess: () => ({ mutate: vi.fn() }),
+}))
+
+// Phase 9A: the page now asks the database who is eligible, and shows a panel
+// for assignments that no longer authorize. Both are RPC-backed.
+vi.mock('@/hooks/useWorkforce', () => ({
+  useEligiblePosEmployees: () => ({ data: eligibleEmployees, isLoading: false }),
+  useNoncompliantAssignments: () => ({ data: noncompliant, isLoading: false }),
 }))
 
 vi.mock('@/hooks/useBranches', () => ({
@@ -163,5 +182,40 @@ describe('the grant entry point', () => {
   it('is offered', () => {
     render(<PosAccessPage />)
     expect(screen.getByRole('button', { name: 'Grant access' })).toBeTruthy()
+  })
+})
+
+describe('Phase 9A eligibility', () => {
+  it('lists an assignment that no longer authorizes, and says why', () => {
+    // A grant made before the workforce rules -- or one whose holder has since
+    // been transferred -- keeps its row but stops working. Silence would be an
+    // invisible outage.
+    noncompliant = [
+      {
+        assignment_id: 'a1',
+        profile_id: 'u9',
+        full_name: 'Jerome Castillo',
+        branch_id: 'b1',
+        branch_name: 'Cavite Branch',
+        pos_role: 'manager',
+        department_name: 'IT',
+        position_title: 'IT Support',
+        reason: 'IT Support is not eligible for POS Manager.',
+      },
+    ]
+    render(<PosAccessPage />)
+    // The count and the noun are separate text nodes, so match the heading
+    // element rather than a text fragment.
+    expect(
+      screen.getByRole('heading', { name: '1 assignment no longer authorize' })
+    ).toBeTruthy()
+    expect(screen.getByText('IT Support is not eligible for POS Manager.')).toBeTruthy()
+    expect(screen.getByText(/Nothing was deleted/)).toBeTruthy()
+  })
+
+  it('shows no compliance panel when every assignment is valid', () => {
+    noncompliant = []
+    render(<PosAccessPage />)
+    expect(screen.queryByText(/no longer authorize/)).toBeNull()
   })
 })

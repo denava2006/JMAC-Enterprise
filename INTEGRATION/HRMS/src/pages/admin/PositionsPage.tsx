@@ -30,6 +30,9 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { PositionEligibilityDialog } from '@/components/admin/PositionEligibilityDialog'
+import { usePositionEntitlements } from '@/hooks/useWorkforce'
+import { describeEligibility, type PositionEntitlements } from '@/lib/workforce'
 import { type Position, usePositions, useCreatePosition, useUpdatePosition, useDeletePosition } from '@/hooks/usePositions'
 import { useAuth } from '@/contexts/AuthContext'
 import { canApproveWork } from '@/lib/roles'
@@ -165,6 +168,11 @@ function PositionFormDialog({
 }
 
 export default function PositionsPage() {
+  // What each position makes an employee eligible to hold. Phase 9A: this is
+  // what replaced comparing position titles for authorization.
+  const { data: entitlements } = usePositionEntitlements()
+  const [eligibilityFor, setEligibilityFor] = React.useState<PositionEntitlements | null>(null)
+
   const { profile } = useAuth()
   const canWriteDirect = canApproveWork(profile?.role)
   const { data, isLoading } = usePositions()
@@ -189,6 +197,19 @@ export default function PositionsPage() {
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.description || '\u2014'}</span>,
     },
     {
+      id: 'eligibility',
+      header: 'System access',
+      cell: ({ row }) => {
+        const entry = (entitlements ?? []).find((e) => e.positionId === row.original.id)
+        if (!entry) return <span className="text-muted-foreground">\u2014</span>
+        return entry.pos.length > 0 ? (
+          <Badge variant="success">{describeEligibility(entry)}</Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">{describeEligibility(entry)}</span>
+        )
+      },
+    },
+    {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
@@ -206,6 +227,14 @@ export default function PositionsPage() {
               }}
             >
               Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                const entry = (entitlements ?? []).find((e) => e.positionId === row.original.id)
+                if (entry) setEligibilityFor(entry)
+              }}
+            >
+              System access
             </DropdownMenuItem>
             <DropdownMenuItem destructive onClick={() => setDeleting(row.original)}>
               Delete
@@ -280,6 +309,10 @@ export default function PositionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <PositionEligibilityDialog
+        position={eligibilityFor}
+        onClose={() => setEligibilityFor(null)}
+      />
     </div>
   )
 }
