@@ -216,7 +216,7 @@ the check.
 
 ### Database
 
-**123 migrations, all applied** to the live local database (verified against
+**124 migrations, all applied** to the live local database (verified against
 `supabase_migrations.schema_migrations`, 2026-08-30). The HR tables:
 
 ```text
@@ -768,7 +768,20 @@ them yet — 9B and 9C. `ENFORCED_SYSTEMS = ['pos']` is the single client-side
 statement of that, and it is asserted by test rather than left as a comment.
 
 Migrations `20260828000000` / `010000` / `020000` / `030000` / `040000` /
-`050000` / `060000`. Contract suite `workforce_eligibility_rls.sql` (35 checks).
+`050000` / `060000` / `070000`. Contract suite `workforce_eligibility_rls.sql`
+(35 checks).
+
+`070000` is a post-cutover correction, and it is worth naming: the production
+smoke test found `employment_permits_operational_work()` still carrying
+PostgreSQL's default `PUBLIC EXECUTE`, because `030000` issued both revokes for
+the two routines that read data and none for the pure helper beside them. The
+exposure was nil — the function is `IMMUTABLE`, reads no table, is not
+`SECURITY DEFINER`, and returns `_status = 'active'` — but it is ACL incident
+pattern #1/#2/#5 again, and the reason it escaped is that the suite's ACL check
+listed four routine names by hand and said nothing about the three it omitted.
+That check now enumerates the set from `pg_proc` and tests privileges by OID, so
+a new Phase 9A routine is covered the moment it exists. Assert the final
+privilege state, never the presence of a REVOKE line — §D2.
 
 ---
 

@@ -408,27 +408,59 @@ begin
   end;
 
   ------------------------------------------------------------------ 12. ACLs
-  for txt in select unnest(array[
-    'public.is_eligible_for_system_role(uuid,public.entitlement_system,text)',
-    'public.get_eligible_pos_employees(uuid,text)',
-    'public.get_noncompliant_pos_assignments()',
-    'public.set_position_entitlement(uuid,public.entitlement_system,text,boolean)'])
-  loop
-    if has_function_privilege('anon', txt, 'execute') then
-      raise exception 'FAIL 12a anon holds EXECUTE on %', txt; end if;
-    if not has_function_privilege('authenticated', txt, 'execute') then
-      raise exception 'FAIL 12b authenticated lost EXECUTE on %', txt; end if;
-  end loop;
-  raise notice 'PASS 12a anon can execute none of the workforce routines';
+  -- Enumerated from the catalogue, NOT from a hand-written list, and privileges
+  -- are tested by OID so no signature has to be re-spelled here. The earlier
+  -- version listed four routines by name and therefore said nothing about the
+  -- three it omitted -- which is how employment_permits_operational_work()
+  -- reached production still carrying the default PUBLIC EXECUTE grant.
+  select count(*) into n
+  from pg_proc pr join pg_namespace ns on ns.oid = pr.pronamespace
+  where ns.nspname = 'public'
+    and pr.prorettype <> 'trigger'::regtype
+    and pr.proname in ('is_eligible_for_system_role', 'employment_permits_operational_work',
+                       'describe_pos_ineligibility', 'get_eligible_pos_employees',
+                       'get_noncompliant_pos_assignments', 'get_position_entitlements',
+                       'set_position_entitlement');
+  if n <> 7 then
+    raise exception 'FAIL 12a expected 7 workforce routines, found % -- update this check', n;
+  end if;
 
-  for txt in select unnest(array[
-    'public.enforce_position_department_pairing()',
-    'public.pos_assignment_requires_eligibility()',
-    'public.revoke_ineligible_pos_assignments()'])
-  loop
-    if has_function_privilege('authenticated', txt, 'execute') then
-      raise exception 'FAIL 12c an API role can execute the internal trigger %', txt; end if;
-  end loop;
+  select string_agg(pr.proname, ', ' order by pr.proname) into txt
+  from pg_proc pr join pg_namespace ns on ns.oid = pr.pronamespace
+  where ns.nspname = 'public'
+    and pr.prorettype <> 'trigger'::regtype
+    and pr.proname in ('is_eligible_for_system_role', 'employment_permits_operational_work',
+                       'describe_pos_ineligibility', 'get_eligible_pos_employees',
+                       'get_noncompliant_pos_assignments', 'get_position_entitlements',
+                       'set_position_entitlement')
+    and has_function_privilege('anon', pr.oid, 'execute');
+  if txt is not null then
+    raise exception 'FAIL 12b anon holds EXECUTE on: %', txt; end if;
+
+  select string_agg(pr.proname, ', ' order by pr.proname) into txt
+  from pg_proc pr join pg_namespace ns on ns.oid = pr.pronamespace
+  where ns.nspname = 'public'
+    and pr.prorettype <> 'trigger'::regtype
+    and pr.proname in ('is_eligible_for_system_role', 'employment_permits_operational_work',
+                       'describe_pos_ineligibility', 'get_eligible_pos_employees',
+                       'get_noncompliant_pos_assignments', 'get_position_entitlements',
+                       'set_position_entitlement')
+    and not has_function_privilege('authenticated', pr.oid, 'execute');
+  if txt is not null then
+    raise exception 'FAIL 12c authenticated lost EXECUTE on: %', txt; end if;
+  raise notice 'PASS 12a anon can execute none of the 7 workforce routines';
+
+  -- Every trigger function this phase installs, again from the catalogue.
+  select string_agg(pr.proname, ', ' order by pr.proname) into txt
+  from pg_proc pr join pg_namespace ns on ns.oid = pr.pronamespace
+  where ns.nspname = 'public'
+    and pr.prorettype = 'trigger'::regtype
+    and pr.proname in ('enforce_position_department_pairing', 'guard_position_department_move',
+                       'pos_assignment_requires_eligibility', 'revoke_ineligible_pos_assignments')
+    and (has_function_privilege('authenticated', pr.oid, 'execute')
+         or has_function_privilege('anon', pr.oid, 'execute'));
+  if txt is not null then
+    raise exception 'FAIL 12d an API role can execute the internal trigger(s): %', txt; end if;
   raise notice 'PASS 12b the enforcement triggers are not callable by an API role';
 
   select string_agg(g.table_name, ', ') into txt
