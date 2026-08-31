@@ -39,25 +39,18 @@ describe('describeRecoveryError', () => {
     expect(describeRecoveryError(null)).toBeNull()
   })
 
-  it('tells an expired link apart from a used one', () => {
-    // These need different actions from the reader, so they get different
-    // sentences rather than one shrug.
-    expect(
-      describeRecoveryError({ code: 'otp_expired', description: 'Email link is invalid or has expired' })
-    ).toMatch(/expired/i)
-    expect(
-      describeRecoveryError({ code: 'access_denied', description: 'Email link has already been used' })
-    ).toMatch(/already been used/i)
-  })
-
-  it('always ends with something the reader can do', () => {
-    for (const code of ['otp_expired', 'access_denied', 'something_new']) {
-      expect(describeRecoveryError({ code, description: '' })).toMatch(/request a new one/i)
-    }
+  it('gives the same sentence for expired, used and malformed links', () => {
+    // Deliberately uniform: telling them apart would disclose whether a
+    // particular link had ever been valid.
+    const expired = describeRecoveryError({ code: 'otp_expired', description: 'Email link has expired' })
+    const used = describeRecoveryError({ code: 'access_denied', description: 'Email link has already been used' })
+    const junk = describeRecoveryError({ code: 'whatever', description: '' })
+    expect(expired).toBe('This password reset link is invalid or has expired.')
+    expect(used).toBe(expired)
+    expect(junk).toBe(expired)
   })
 
   it('never echoes the raw code back at the reader', () => {
-    const message = describeRecoveryError({ code: 'otp_expired', description: 'x' })
-    expect(message).not.toMatch(/otp_expired/)
+    expect(describeRecoveryError({ code: 'otp_expired', description: 'x' })).not.toMatch(/otp_expired/)
   })
 })

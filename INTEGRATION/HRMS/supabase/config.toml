@@ -192,7 +192,12 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# JMAC accounts come only from controlled provisioning -- an Administrator
+# inviting an employee, never a stranger signing themselves up. Applicants
+# use the reference-code recruitment flow and need no Auth account at all,
+# so nothing legitimate depends on this being open. The admin APIs
+# (inviteUserByEmail / createUser) are unaffected by it.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -237,6 +242,10 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
+# Deliberately left TRUE. Under [auth.email] this flag disables the email
+# provider itself, not just self-service signup -- setting it false made every
+# sign-in fail with "email_provider_disabled". The global [auth].enable_signup
+# above is the one that closes public registration.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.

@@ -36,7 +36,6 @@ export default function ForgotPasswordPage() {
   const {
     register,
     handleSubmit,
-    getValues,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ resolver: zodResolver(schema) })
 
@@ -65,14 +64,14 @@ export default function ForgotPasswordPage() {
           className="group mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-          Back to sign in
+          Back to login
         </Link>
 
         <Card className="shadow-lg">
           <CardHeader className="items-center pb-5 text-center">
             <JmacWordmark layout="stacked" className="mb-3 text-xl text-foreground" />
             <h1 className="text-base font-semibold text-foreground">
-              {sent ? 'Check your email' : 'Reset your password'}
+              {sent ? 'Check your email' : 'Forgot your password?'}
             </h1>
           </CardHeader>
 
@@ -83,17 +82,18 @@ export default function ForgotPasswordPage() {
                   <MailCheck className="h-5 w-5" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  If <span className="font-medium text-foreground">{getValues('email')}</span> has an account, a
-                  link to set a new password is on its way. It can be used once, and expires shortly.
+                  If an account exists for that email, a password reset link has been sent. It can be used once,
+                  and expires shortly.
                 </p>
                 <Button asChild variant="outline" className="mt-1 w-full">
-                  <Link to="/login">Back to sign in</Link>
+                  <Link to="/login">Back to login</Link>
                 </Button>
               </div>
             ) : (
               <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
                 <p className="text-sm text-muted-foreground">
-                  Enter the email address your account uses. We&apos;ll send a link to set a new password.
+                  Enter the email associated with your JMAC account. We&apos;ll send you a secure link to
+                  create a new password.
                 </p>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="email">Email</Label>

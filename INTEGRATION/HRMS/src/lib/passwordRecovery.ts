@@ -39,18 +39,16 @@ export function readRecoveryError(hash: string): RecoveryLinkError | null {
   }
 }
 
-/** Turn that into something worth reading. */
+/**
+ * One sentence for every bad link.
+ *
+ * Expired, already used and malformed are deliberately NOT told apart. The
+ * reader's next action is the same in all three cases, and distinguishing them
+ * would disclose whether a given link had ever been valid -- which is the same
+ * enumeration leak the neutral "if an account exists" wording avoids on the
+ * request side.
+ */
 export function describeRecoveryError(error: RecoveryLinkError | null): string | null {
   if (!error) return null
-  const text = `${error.code} ${error.description}`.toLowerCase()
-  if (text.includes('expired')) {
-    return 'That link has expired. Request a new one and use it within the hour.'
-  }
-  if (text.includes('already') || text.includes('used')) {
-    return 'That link has already been used. Request a new one if you still need to change your password.'
-  }
-  if (text.includes('otp') || text.includes('token')) {
-    return 'That link is no longer valid. Request a new one.'
-  }
-  return 'That link could not be used. Request a new one.'
+  return 'This password reset link is invalid or has expired.'
 }

@@ -71,7 +71,7 @@ export default function ResetPasswordPage() {
       if (data.session) {
         setLinkError(null)
       } else {
-        setLinkError('Open this page from the link in your reset email.')
+        setLinkError('This password reset link is invalid or has expired.')
       }
       setReady(true)
     })
@@ -105,7 +105,11 @@ export default function ResetPasswordPage() {
           <CardHeader className="items-center pb-5 text-center">
             <JmacWordmark layout="stacked" className="mb-3 text-xl text-foreground" />
             <h1 className="text-base font-semibold text-foreground">
-              {done ? 'Password changed' : 'Choose a new password'}
+              {done
+                ? 'Password updated successfully.'
+                : linkError
+                  ? 'Link no longer valid'
+                  : 'Create a new password'}
             </h1>
           </CardHeader>
 
@@ -118,7 +122,7 @@ export default function ResetPasswordPage() {
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Sign in with your new password. Taking you to the sign-in page…
+                  Sign in with your new password. Taking you back to login…
                 </p>
               </div>
             ) : linkError ? (
@@ -131,7 +135,7 @@ export default function ResetPasswordPage() {
                   <span>{linkError}</span>
                 </div>
                 <Button asChild variant="outline" className="w-full">
-                  <Link to="/forgot-password">Request a new link</Link>
+                  <Link to="/forgot-password">Request a new reset link</Link>
                 </Button>
               </div>
             ) : (
@@ -181,7 +185,7 @@ export default function ResetPasswordPage() {
                 </div>
 
                 <Button type="submit" className="mt-1 w-full" loading={isSubmitting}>
-                  Set new password
+                  Update password
                 </Button>
               </form>
             )}
