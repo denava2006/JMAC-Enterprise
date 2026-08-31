@@ -1,23 +1,7 @@
 import * as React from 'react'
 import { formatAddress } from '@/components/AddressFields'
 import { Link, useParams } from 'react-router-dom'
-import {
-  ArrowLeft,
-  Pencil,
-  Mail,
-  Phone,
-  MapPin,
-  Cake,
-  Users2,
-  Globe,
-  Building2,
-  Briefcase,
-  Calendar,
-  Wallet,
-  CheckCircle2,
-  KeyRound,
-  IdCard,
-} from 'lucide-react'
+import { ArrowLeft, ArrowRightLeft, Briefcase, Building2, Cake, Calendar, CheckCircle2, Globe, IdCard, KeyRound, Mail, MapPin, Pencil, Phone, Users2, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { EditPersonalInfoDialog } from '@/components/employees/EditPersonalInfoDialog'
 import { EditEmploymentInfoDialog } from '@/components/employees/EditEmploymentInfoDialog'
+import { TransferEmployeeDialog } from '@/components/employees/TransferEmployeeDialog'
 import { EmployeeDocumentsTab } from '@/components/employees/EmployeeDocumentsTab'
 import { AdjustLeaveBalanceDialog } from '@/components/leave/AdjustLeaveBalanceDialog'
 import {
@@ -158,6 +143,7 @@ export default function EmployeeDetailsPage() {
 
   const [editPersonalOpen, setEditPersonalOpen] = React.useState(false)
   const [editEmploymentOpen, setEditEmploymentOpen] = React.useState(false)
+  const [transferOpen, setTransferOpen] = React.useState(false)
 
   if (isLoading || !employee) {
     return <DetailsSkeleton />
@@ -239,10 +225,20 @@ export default function EmployeeDetailsPage() {
             <CardContent className="flex flex-col gap-4 p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employment Information</h3>
-                <Button variant="outline" size="sm" onClick={() => setEditEmploymentOpen(true)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
+                <div className="flex items-center gap-2">
+                  {/* Separate from Edit on purpose: a position decides which
+                      systems its holder may be assigned to, so moving somebody
+                      is its own deliberate act rather than one dropdown among
+                      the pay fields. */}
+                  <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    Transfer or promote
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setEditEmploymentOpen(true)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 <Field icon={Building2} label="Department" value={employee.departments?.name ?? ''} />
@@ -427,6 +423,7 @@ export default function EmployeeDetailsPage() {
 
       <EditPersonalInfoDialog open={editPersonalOpen} onOpenChange={setEditPersonalOpen} employee={employee} />
       <EditEmploymentInfoDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={employee} />
+      <TransferEmployeeDialog open={transferOpen} onOpenChange={setTransferOpen} employee={employee} />
     </div>
   )
 }

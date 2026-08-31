@@ -12,8 +12,6 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { MoneyInput } from '@/components/MoneyInput'
-import { useDepartments } from '@/hooks/useDepartments'
-import { usePositions } from '@/hooks/usePositions'
 import { useSalaryGrades } from '@/hooks/useSalaryGrades'
 import { useWorkSchedules } from '@/hooks/useWorkSchedules'
 import { useUpdateEmployee, type Employee } from '@/hooks/useEmployees'
@@ -31,8 +29,6 @@ export function EditEmploymentInfoDialog({
   onOpenChange: (open: boolean) => void
   employee: Employee
 }) {
-  const { data: departments } = useDepartments()
-  const { data: positions } = usePositions()
   const { data: salaryGrades } = useSalaryGrades()
   const { data: workSchedules } = useWorkSchedules()
   const updateEmployee = useUpdateEmployee()
@@ -42,8 +38,6 @@ export function EditEmploymentInfoDialog({
   // posting behind them, so it stays editable for them.
   const typeIsInherited = !!employee.application_id
 
-  const [departmentId, setDepartmentId] = React.useState('')
-  const [positionId, setPositionId] = React.useState('')
   const [employmentType, setEmploymentType] = React.useState<'regular' | 'part_time'>('regular')
   const [employmentStatus, setEmploymentStatus] = React.useState<EmploymentStatus>('active')
   const [salaryGradeId, setSalaryGradeId] = React.useState('')
@@ -54,8 +48,6 @@ export function EditEmploymentInfoDialog({
 
   React.useEffect(() => {
     if (open) {
-      setDepartmentId(employee.department_id ?? '')
-      setPositionId(employee.position_id ?? '')
       setEmploymentType(employee.employment_type)
       setEmploymentStatus(employee.employment_status)
       setSalaryGradeId(employee.salary_grade_id ?? '')
@@ -65,11 +57,6 @@ export function EditEmploymentInfoDialog({
       setErrors({})
     }
   }, [open, employee])
-
-  const filteredPositions = React.useMemo(
-    () => positions?.filter((p) => p.department_id === departmentId),
-    [positions, departmentId]
-  )
 
   // Only resources matching the employee's type can be assigned — the database
   // refuses the pairing, so the options are narrowed to what will be accepted.
@@ -84,8 +71,6 @@ export function EditEmploymentInfoDialog({
 
   const onSubmit = () => {
     const nextErrors: Record<string, string> = {}
-    if (!departmentId) nextErrors.departmentId = 'Department is required.'
-    if (!positionId) nextErrors.positionId = 'Position is required.'
     if (!basicSalary || Number(basicSalary) <= 0) nextErrors.basicSalary = 'Basic salary is required.'
     if (!hireDate) nextErrors.hireDate = 'Date hired is required.'
     if (!workScheduleId) nextErrors.workScheduleId = 'Work schedule is required.'
@@ -98,8 +83,6 @@ export function EditEmploymentInfoDialog({
       {
         id: employee.id,
         values: {
-          department_id: departmentId,
-          position_id: positionId,
           employment_type: employmentType,
           employment_status: employmentStatus,
           salary_grade_id: salaryGradeId || null,
@@ -118,48 +101,23 @@ export function EditEmploymentInfoDialog({
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Employment Information</DialogTitle>
-          <DialogDescription>Changes are reflected immediately on the employee profile.</DialogDescription>
+          <DialogDescription>
+            Pay, standing and schedule. To move this employee to a different job, use Transfer or promote.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>Department</Label>
-              <Select
-                value={departmentId}
-                onValueChange={(v) => {
-                  setDepartmentId(v)
-                  setPositionId('')
-                }}
-              >
-                <SelectTrigger invalid={!!errors.departmentId}>
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments?.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.departmentId && <p className="text-xs text-destructive">{errors.departmentId}</p>}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Position</Label>
-              <Select value={positionId} onValueChange={setPositionId} disabled={!departmentId}>
-                <SelectTrigger invalid={!!errors.positionId}>
-                  <SelectValue placeholder="Select position" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredPositions?.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.positionId && <p className="text-xs text-destructive">{errors.positionId}</p>}
+          {/* Read-only. A position decides which systems its holder may be
+              assigned to, so moving somebody is a deliberate act with its own
+              action -- not a dropdown beside their salary. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 p-3">
+            <div className="text-sm">
+              <p className="font-medium text-foreground">
+                {employee.departments?.name ?? '\u2014'} \u00b7 {employee.positions?.title ?? '\u2014'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Change this under Transfer or promote.
+              </p>
             </div>
           </div>
 

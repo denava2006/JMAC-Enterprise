@@ -6,10 +6,14 @@ import type { EmploymentStatus } from '@/lib/enums'
 import type { CurrencyCode } from '@/lib/currency'
 import { toast } from '@/components/ui/sonner'
 import { describeFunctionError } from '@/lib/functionErrors'
+import { describeWorkforceError } from '@/lib/workforce'
 
 function friendlyEmployeeError(error: Error): string {
   if (error.message.includes('employees_email_key')) return 'An employee with this email already exists.'
-  return error.message
+  // A transfer can trip the workforce rules -- a position that does not belong
+  // to the chosen department, or an assignment that stops being eligible.
+  // describeWorkforceError turns those codes into the database's own sentence.
+  return describeWorkforceError(error)
 }
 
 const EMPLOYEE_SELECT = `
@@ -285,11 +289,22 @@ export function useUpdateEmployee() {
   const { profile } = useAuth()
   const invalidate = useInvalidateEmployees()
   return useMutation({
-    mutationFn: async ({ id, values }: { id: string; values: TablesUpdate<'employees'> }) => {
+    mutationFn: async ({
+      id,
+      values,
+      notes,
+    }: {
+      id: string
+      values: TablesUpdate<'employees'>
+      /** Why this change was made. Recorded against every history row the
+       *  change produces, so a transfer explains itself years later instead of
+       *  reading as an unexplained department move. */
+      notes?: string
+    }) => {
       const { error } = await supabase.from('employees').update(values).eq('id', id)
       if (error) throw error
 
-      const historyEvents: { employee_id: string; event: string; actor_id?: string }[] = []
+      const historyEvents: { employee_id: string; event: string; actor_id?: string; notes?: string }[] = []
       const auditActions: string[] = []
       if ('department_id' in values) {
         historyEvents.push({ employee_id: id, event: 'department_assigned', actor_id: profile?.id })
@@ -309,7 +324,9 @@ export function useUpdateEmployee() {
         auditActions.push('Employee Profile Updated')
       }
 
-      await supabase.from('employee_history').insert(historyEvents)
+      await supabase
+        .from('employee_history')
+        .insert(historyEvents.map((e) => (notes ? { ...e, notes } : e)))
       await supabase
         .from('audit_logs')
         .insert(auditActions.map((action) => ({ actor_id: profile?.id, action, table_name: 'employees', record_id: id })))
