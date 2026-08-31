@@ -100,7 +100,14 @@ begin
   select po.id into pos_cashier from public.positions po where po.department_id=store_ops and po.title='Cashier';
   select po.id into it_support  from public.positions po where po.department_id=it_dept and po.title='IT Support';
   select po.id into sales_assoc from public.positions po where po.department_id=sales_dept and po.title='Sales Associate';
-  select po.id into sales_cash  from public.positions po where po.department_id=sales_dept and po.title='Cashier';
+  -- Mint this one rather than borrowing demo data. It previously read the
+  -- Sales department's own "Cashier" position, which an Administrator later
+  -- deleted through the app -- and because the check below was guarded on it
+  -- being present, the assertion silently stopped running instead of failing.
+  -- A contract test must not depend on reference data a user may edit.
+  insert into public.positions (title, department_id, description)
+  values ('Cashier', sales_dept, 'Same title, different department -- deliberately not eligible.')
+  returning id into sales_cash;
   select po.id into hr_staff_pos from public.positions po where po.department_id=hr_dept and po.title='HR Staff';
 
   if admin_id is null or branch_b is null or pos_manager is null or pos_cashier is null
@@ -125,11 +132,10 @@ begin
 
   -- The Sales department also has a position literally titled "Cashier". If
   -- authorization compared titles it would be eligible. It is not.
-  if sales_cash is not null then
-    select count(*) into n from public.position_system_roles psr where psr.position_id = sales_cash;
-    if n <> 0 then raise exception 'FAIL  1d a same-titled position in another department is eligible'; end if;
-    raise notice 'PASS  1b a position TITLED Cashier in another department grants nothing -- titles are not identities';
-  end if;
+  if sales_cash is null then raise exception 'FAIL  1b fixture: the same-titled position was not created'; end if;
+  select count(*) into n from public.position_system_roles psr where psr.position_id = sales_cash;
+  if n <> 0 then raise exception 'FAIL  1b a same-titled position in another department is eligible'; end if;
+  raise notice 'PASS  1b a position TITLED Cashier in another department grants nothing -- titles are not identities';
 
   ------------------------------------------- 2. department-position pairing
   begin

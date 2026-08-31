@@ -1,22 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Tables, TablesUpdate } from '@/lib/database.types'
 import type { EmploymentStatus } from '@/lib/enums'
 import type { CurrencyCode } from '@/lib/currency'
 import { toast } from '@/components/ui/sonner'
-
-/** supabase.functions.invoke() throws a FunctionsHttpError whose `.message` is
- * always the generic "Edge Function returned a non-2xx status code" — the
- * actual `{ error: "..." }` body has to be read separately from `error.context`. */
-async function describeFunctionError(error: unknown): Promise<string> {
-  if (error instanceof FunctionsHttpError) {
-    const body = await error.context.json().catch(() => null)
-    if (body?.error) return body.error
-  }
-  return error instanceof Error ? error.message : 'Something went wrong. Please try again.'
-}
+import { describeFunctionError } from '@/lib/functionErrors'
 
 function friendlyEmployeeError(error: Error): string {
   if (error.message.includes('employees_email_key')) return 'An employee with this email already exists.'
@@ -375,7 +364,7 @@ export function useCreateEmployeeAccount() {
       const { data, error } = await supabase.functions.invoke('create-employee-account', {
         body: { employeeId, email, fullName },
       })
-      if (error) throw new Error(await describeFunctionError(error))
+      if (error) throw new Error(await describeFunctionError(error, 'employee account service'))
       if (data?.error) throw new Error(data.error)
       return data as { id: string; email: string; password: string }
     },
@@ -400,7 +389,7 @@ export function useResetEmployeePassword() {
       const { data, error } = await supabase.functions.invoke('reset-employee-password', {
         body: { employeeId },
       })
-      if (error) throw new Error(await describeFunctionError(error))
+      if (error) throw new Error(await describeFunctionError(error, 'employee account service'))
       if (data?.error) throw new Error(data.error)
       return data as { email: string; password: string }
     },

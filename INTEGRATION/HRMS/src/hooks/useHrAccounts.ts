@@ -1,26 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/lib/database.types'
 import type { UserRole } from '@/lib/enums'
 import { ROLE_LABEL, type CreatableHrRole } from '@/lib/roles'
 import { toast } from '@/components/ui/sonner'
-
-/**
- * supabase.functions.invoke() throws a FunctionsHttpError whose `.message` is
- * always the generic "Edge Function returned a non-2xx status code" — the
- * actual `{ error: "..." }` body our function returns has to be read
- * separately from `error.context` (the raw Response). Without this, every
- * edge function failure surfaces as that one unhelpful string regardless of
- * the real reason (duplicate email, permission denied, etc).
- */
-async function describeFunctionError(error: unknown): Promise<string> {
-  if (error instanceof FunctionsHttpError) {
-    const body = await error.context.json().catch(() => null)
-    if (body?.error) return body.error
-  }
-  return error instanceof Error ? error.message : 'Something went wrong. Please try again.'
-}
+import { describeFunctionError } from '@/lib/functionErrors'
 
 export type HrAccount = Tables<'profiles'>
 
@@ -54,7 +38,7 @@ export function useCreateHrAccount() {
   return useMutation({
     mutationFn: async (input: CreateHrAccountInput) => {
       const { data, error } = await supabase.functions.invoke('create-hr-account', { body: input })
-      if (error) throw new Error(await describeFunctionError(error))
+      if (error) throw new Error(await describeFunctionError(error, 'account service'))
       if (data?.error) throw new Error(data.error)
       return data as { id: string; email: string; role: UserRole; password: string }
     },

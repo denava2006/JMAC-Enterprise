@@ -32,14 +32,12 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { PositionEligibilityDialog } from '@/components/admin/PositionEligibilityDialog'
 import { usePositionEntitlements } from '@/hooks/useWorkforce'
-import { describeEligibility, type PositionEntitlements } from '@/lib/workforce'
+import { entitlementChips, type PositionEntitlements } from '@/lib/workforce'
 import { type Position, usePositions, useCreatePosition, useUpdatePosition, useDeletePosition } from '@/hooks/usePositions'
 import { useAuth } from '@/contexts/AuthContext'
 import { canApproveWork } from '@/lib/roles'
 import { useSubmitChangeRequest } from '@/hooks/useChangeRequests'
 import { useDepartments } from '@/hooks/useDepartments'
-import { SystemAccessFields } from '@/components/admin/SystemAccessFields'
-import { toSystemAccessPayload, type SystemAccessSelection } from '@/lib/workforce'
 
 const positionSchema = z.object({
   title: z.string().min(1, 'Position title is required').max(100),
@@ -64,10 +62,6 @@ function PositionFormDialog({
   const createPos = useCreatePosition()
   const updatePos = useUpdatePosition()
   const submitRequest = useSubmitChangeRequest()
-  // Eligibility is only offered while creating. An existing position is edited
-  // through the System Access dialog on its row, so the two never disagree
-  // about which one is authoritative.
-  const [access, setAccess] = React.useState<SystemAccessSelection>({})
   const {
     register,
     control,
@@ -83,16 +77,16 @@ function PositionFormDialog({
         department_id: position?.department_id ?? '',
         description: position?.description ?? '',
       })
-      // A new position starts with no privileged access: Employee Self-Service
-      // only, until somebody deliberately chooses otherwise.
-      setAccess({})
     }
   }, [open, position, reset])
 
   const onSubmit = async (values: PositionFormValues) => {
-    // Null rather than an empty object: "no privileged access" is the absence
-    // of entitlements, never a role code meaning none.
-    const systemAccess = isEdit ? null : toSystemAccessPayload(access)
+    // Creating a position never configures eligibility. A new position is
+    // Employee Self-Service only -- zero position_system_roles rows -- and
+    // privileged eligibility is configured afterwards through the System access
+    // action on the row. Passing null keeps the existing RPC contract, which
+    // still applies eligibility when the caller supplies it.
+    const systemAccess = null
 
     if (canWriteDirect) {
       if (isEdit) {
@@ -111,8 +105,6 @@ function PositionFormDialog({
           description: values.description || null,
         },
         summary: `${isEdit ? 'Update' : 'Create'} position: ${values.title}`,
-        // Travels with the request and is applied by the database only if the
-        // request is approved, so a rejected position leaves no entitlement.
         systemAccess,
       })
     }
@@ -169,8 +161,6 @@ function PositionFormDialog({
             <Textarea id="description" {...register('description')} placeholder="Optional" rows={3} />
           </div>
 
-          {!isEdit && <SystemAccessFields value={access} onChange={setAccess} />}
-
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -219,11 +209,22 @@ export default function PositionsPage() {
       header: 'System access',
       cell: ({ row }) => {
         const entry = (entitlements ?? []).find((e) => e.positionId === row.original.id)
-        if (!entry) return <span className="text-muted-foreground">\u2014</span>
-        return entry.pos.length > 0 ? (
-          <Badge variant="success">{describeEligibility(entry)}</Badge>
-        ) : (
-          <span className="text-xs text-muted-foreground">{describeEligibility(entry)}</span>
+        if (!entry) return <span className="text-muted-foreground">—</span>
+        const chips = entitlementChips(entry)
+        // No colour: eligibility is configuration, not a status. Green here made
+        // a Cashier row read like "Active", and HR roles -- which got no badge
+        // at all -- look less important than POS ones.
+        if (chips.length === 0) {
+          return <span className="text-xs text-muted-foreground">Employee self-service only</span>
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {chips.map((chip) => (
+              <Badge key={chip.key} variant="outline" className="bg-muted/60 font-normal">
+                {chip.label}
+              </Badge>
+            ))}
+          </div>
         )
       },
     },

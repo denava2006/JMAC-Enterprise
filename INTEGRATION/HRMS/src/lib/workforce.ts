@@ -118,7 +118,7 @@ export function groupEntitlements(rows: PositionEntitlementRow[]): PositionEntit
 /** Role codes are storage, not display. The same map the creation form uses,
  *  so a position reads the same wherever it appears. */
 function roleLabel(code: string): string {
-  for (const group of SYSTEM_ACCESS_CHOICES) {
+  for (const group of ELIGIBILITY_SYSTEMS) {
     const hit = group.options.find((o) => o.value === code)
     if (hit) return hit.label
   }
@@ -139,6 +139,23 @@ export function describeEligibility(entry: PositionEntitlements): string {
   if (entry.hrms.length > 0) parts.push(entry.hrms.map(roleLabel).join(' and '))
   if (entry.fms.length > 0) parts.push(entry.fms.map(roleLabel).join(' and '))
   return parts.length > 0 ? parts.join(' · ') : 'Employee self-service only'
+}
+
+/**
+ * Every entitlement a position holds, as chips for the Positions table.
+ *
+ * All systems in one list and all rendered identically. The column previously
+ * gave POS roles a green success badge and left HR roles as plain text, which
+ * read as a status -- as though "Cashier" were something like Active or
+ * Approved. Eligibility is configuration, not a status, so it gets no colour,
+ * and HR and POS get the same one.
+ */
+export function entitlementChips(entry: PositionEntitlements): { key: string; label: string }[] {
+  return [
+    ...entry.hrms.map((code) => ({ key: `hrms-${code}`, label: roleLabel(code) })),
+    ...entry.pos.map((code) => ({ key: `pos-${code}`, label: roleLabel(code) })),
+    ...entry.fms.map((code) => ({ key: `fms-${code}`, label: roleLabel(code) })),
+  ]
 }
 
 export function hasPosEligibility(entry: PositionEntitlements, role: PosRole): boolean {
@@ -183,21 +200,32 @@ export interface SystemAccessSelection {
   fms?: string | null
 }
 
-/** What each system offers at creation time. FMS is listed so the model reads
- *  completely, but nothing reads FMS entitlements yet, so it is not offered. */
-export const SYSTEM_ACCESS_CHOICES: {
+/**
+ * The eligibility model, in one place.
+ *
+ * The dialog renders from this, `roleLabel` reads it so the Positions table
+ * says "HR Manager" rather than `hr_manager`, and the tests assert against it —
+ * so the screen, the column and the contract cannot describe different systems.
+ *
+ * `admin` and `employee` appear nowhere: an enterprise identity is not
+ * conferred by a job, and Employee Self-Service is the baseline every position
+ * already carries. The database refuses both by name.
+ */
+export const ELIGIBILITY_SYSTEMS: {
   system: EntitlementSystem
   label: string
+  /** Whether an Administrator can configure it yet. FMS is listed so the model
+   *  reads completely, but nothing reads FMS entitlements, so it is inert. */
   available: boolean
-  options: { value: string; label: string }[]
+  options: { value: string; label: string; description: string }[]
 }[] = [
   {
     system: 'hrms',
     label: 'Human Resources',
     available: true,
     options: [
-      { value: 'hr_staff', label: 'HR Staff' },
-      { value: 'hr_manager', label: 'HR Manager' },
+      { value: 'hr_staff', label: 'HR Staff', description: 'Handles routine HR operations.' },
+      { value: 'hr_manager', label: 'HR Manager', description: 'HR approval and management authority.' },
     ],
   },
   {
@@ -205,29 +233,14 @@ export const SYSTEM_ACCESS_CHOICES: {
     label: 'Point of Sale',
     available: true,
     options: [
-      { value: 'cashier', label: 'Cashier' },
-      { value: 'manager', label: 'POS Manager' },
+      { value: 'cashier', label: 'Cashier', description: 'Works a till and looks up their own sales.' },
+      {
+        value: 'manager',
+        label: 'POS Manager',
+        description: 'Runs a branch: stock, catalogue, transactions, reports and requests.',
+      },
     ],
   },
   { system: 'fms', label: 'Finance', available: false, options: [] },
 ]
 
-export const NO_ROLE = 'none'
-
-/** True when a selection grants nothing — the position is Employee Self-Service
- *  only, and no entitlement row will be written for it. */
-export function isEmployeeOnly(selection: SystemAccessSelection): boolean {
-  return !selection.hrms && !selection.pos && !selection.fms
-}
-
-/** Drop the empty systems so the request carries only what was chosen. Returns
- *  null when nothing was chosen, which is what "Employee only" looks like on
- *  the wire — never a role code meaning "none". */
-export function toSystemAccessPayload(
-  selection: SystemAccessSelection
-): SystemAccessSelection | null {
-  const out: SystemAccessSelection = {}
-  if (selection.hrms) out.hrms = selection.hrms
-  if (selection.pos) out.pos = selection.pos
-  return Object.keys(out).length > 0 ? out : null
-}

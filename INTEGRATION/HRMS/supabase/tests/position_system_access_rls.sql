@@ -99,13 +99,26 @@ begin
      ('Store Operations','Cashier'), ('Store Operations','POS Manager'));
   if txt <> '' then raise exception 'FAIL 1c unexpected positions hold entitlements: %', txt; end if;
 
-  select count(*) into n
-  from public.position_system_roles psr
-  join public.positions p on p.id = psr.position_id
-  join public.departments d on d.id = p.department_id
-  where d.name = 'Sales' and p.title = 'Cashier';
-  if n <> 0 then raise exception 'FAIL 1d the Sales "Cashier" gained POS eligibility from its title'; end if;
-  raise notice 'PASS 1b IT Support, Cleaner, Sales Associate and the Sales Cashier hold nothing';
+  -- Minted here rather than assumed. This previously read the Sales
+  -- department's own "Cashier", which an Administrator later deleted through
+  -- the app -- leaving the count trivially 0 and the assertion passing without
+  -- testing anything.
+  declare
+    same_title uuid;
+  begin
+    insert into public.positions (title, department_id)
+    select 'Cashier', d.id from public.departments d where d.name = 'Sales'
+    returning id into same_title;
+    if same_title is null then
+      raise exception 'FAIL 1c fixture: no Sales department to file a same-titled position under';
+    end if;
+    select count(*) into n from public.position_system_roles where position_id = same_title;
+    if n <> 0 then
+      raise exception 'FAIL 1c a same-titled Cashier in another department gained POS eligibility';
+    end if;
+    delete from public.positions where id = same_title;
+  end;
+  raise notice 'PASS 1b IT Support, Cleaner, Sales Associate and a same-titled Cashier hold nothing';
 
   ------------------------------------------------- 2. Employee is the baseline
   insert into public.positions (title, department_id) values ('ZZ Probe Plain', it_dept) returning id into pid;

@@ -1,5 +1,4 @@
 import { Info } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,8 +11,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useSetPositionEntitlement } from '@/hooks/useWorkforce'
-import { POS_ROLE_LABEL, type PositionEntitlements } from '@/lib/workforce'
-import { POS_ROLES } from '@/lib/posAccess'
+import { ELIGIBILITY_SYSTEMS, type PositionEntitlements } from '@/lib/workforce'
+import type { EntitlementSystem } from '@/lib/enums'
 
 /**
  * What a job makes somebody eligible to hold.
@@ -23,8 +22,13 @@ import { POS_ROLES } from '@/lib/posAccess'
  * still has none. It decides who may be *offered* on the POS Access screen, and
  * who the database will accept a grant for.
  *
+ * HRMS and POS are shown with equal weight. An earlier version rendered POS as
+ * the only real section and pushed HRMS into a read-only "Other systems" box,
+ * which said "None configured" for every position and made HR eligibility look
+ * like an afterthought rather than something an Administrator sets here.
+ *
  * Employee Self-Service has no switch. Every employee has it, and an
- * entitlement checkbox for the baseline would imply it could be taken away.
+ * entitlement switch for the baseline would imply it could be taken away.
  */
 export function PositionEligibilityDialog({
   position,
@@ -37,9 +41,12 @@ export function PositionEligibilityDialog({
 
   if (!position) return null
 
+  const held = (system: EntitlementSystem): string[] =>
+    system === 'hrms' ? position.hrms : system === 'pos' ? position.pos : position.fms
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{position.positionTitle}</DialogTitle>
           <DialogDescription>
@@ -57,69 +64,56 @@ export function PositionEligibilityDialog({
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Point of Sale
-            </Label>
-            {POS_ROLES.map((role) => (
-              <div
-                key={role}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">{POS_ROLE_LABEL[role]}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {role === 'manager'
-                      ? 'Runs a branch: stock, catalogue, transactions, reports and requests.'
-                      : 'Works a till and looks up their own sales.'}
-                  </p>
-                </div>
-                <Switch
-                  checked={position.pos.includes(role)}
-                  aria-label={`${POS_ROLE_LABEL[role]} eligibility for ${position.positionTitle}`}
-                  disabled={setEntitlement.isPending}
-                  onCheckedChange={(granted) =>
-                    setEntitlement.mutate({
-                      positionId: position.positionId,
-                      system: 'pos',
-                      roleCode: role,
-                      granted,
-                    })
-                  }
-                />
-              </div>
-            ))}
-          </div>
+          {ELIGIBILITY_SYSTEMS.map((group) => (
+            <div key={group.system} className="flex flex-col gap-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.label}
+              </Label>
 
-          {/* HRMS and Finance eligibility is recorded but not yet enforced --
-              Phase 9B and 9C. Showing it read-only keeps the model legible
-              instead of pretending POS is the only system. */}
-          <div className="flex flex-col gap-2">
-            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Other systems
-            </Label>
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border p-3">
-              {position.hrms.length === 0 && position.fms.length === 0 ? (
-                <span className="text-xs text-muted-foreground">None configured.</span>
+              {group.available ? (
+                group.options.map((role) => (
+                  <div
+                    key={role.value}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{role.label}</p>
+                      <p className="text-xs text-muted-foreground">{role.description}</p>
+                    </div>
+                    <Switch
+                      checked={held(group.system).includes(role.value)}
+                      aria-label={`${role.label} eligibility for ${position.positionTitle}`}
+                      disabled={setEntitlement.isPending}
+                      onCheckedChange={(granted) =>
+                        setEntitlement.mutate({
+                          positionId: position.positionId,
+                          system: group.system,
+                          roleCode: role.value,
+                          granted,
+                        })
+                      }
+                    />
+                  </div>
+                ))
               ) : (
-                <>
-                  {position.hrms.map((code) => (
-                    <Badge key={`hrms-${code}`} variant="secondary">
-                      HRMS {code}
-                    </Badge>
-                  ))}
-                  {position.fms.map((code) => (
-                    <Badge key={`fms-${code}`} variant="secondary">
-                      Finance {code}
-                    </Badge>
-                  ))}
-                </>
+                // Finance is in the platform's scope but nothing reads FMS
+                // entitlements yet. A switch that changes nothing would be a
+                // promise the database does not keep.
+                <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+                  Planned — not configurable yet.
+                </p>
               )}
-              <span className="w-full text-xs text-muted-foreground">
-                Recorded for later phases. Only POS eligibility is enforced today.
-              </span>
             </div>
-          </div>
+          ))}
+
+          {/* HRMS eligibility is recorded and configurable, but HR authorization
+              still runs on profiles.role until Phase 9B links accounts to
+              positions. Saying so is cheaper than letting an Administrator
+              believe a toggle here changes who can sign in to HR today. */}
+          <p className="text-xs text-muted-foreground">
+            POS eligibility is enforced today. HR eligibility is recorded here and takes effect when HR
+            authorization moves onto positions.
+          </p>
 
           <p className="text-xs text-muted-foreground">
             Employee self-service needs no entitlement — every employee has it.

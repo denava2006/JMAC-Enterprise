@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   ENFORCED_SYSTEMS,
-  SYSTEM_ACCESS_CHOICES,
-  isEmployeeOnly,
-  toSystemAccessPayload,
+  ELIGIBILITY_SYSTEMS,
+  entitlementChips,
   POS_ROLE_LABEL,
   SYSTEM_LABEL,
   describeEligibility,
@@ -174,58 +173,93 @@ describe('POS role labels', () => {
   })
 })
 
-describe('system access selection', () => {
-  it('treats an empty selection as Employee Self-Service only', () => {
-    expect(isEmployeeOnly({})).toBe(true)
-    expect(isEmployeeOnly({ hrms: null, pos: null, fms: null })).toBe(true)
-  })
-
-  it('stops being employee-only once any system is chosen', () => {
-    expect(isEmployeeOnly({ hrms: 'hr_staff' })).toBe(false)
-    expect(isEmployeeOnly({ pos: 'cashier' })).toBe(false)
-  })
-
-  it('sends null rather than a role code meaning "none"', () => {
-    // The absence of entitlements IS the meaning. A sentinel like
-    // {hrms: 'none'} would have to be understood by the database too.
-    expect(toSystemAccessPayload({})).toBeNull()
-    expect(toSystemAccessPayload({ hrms: null, pos: null })).toBeNull()
-  })
-
-  it('carries only the systems that were chosen', () => {
-    expect(toSystemAccessPayload({ hrms: 'hr_staff', pos: null })).toEqual({ hrms: 'hr_staff' })
-    expect(toSystemAccessPayload({ pos: 'manager' })).toEqual({ pos: 'manager' })
-    expect(toSystemAccessPayload({ hrms: 'hr_manager', pos: 'cashier' })).toEqual({
-      hrms: 'hr_manager',
-      pos: 'cashier',
-    })
-  })
-
-  it('never offers admin or employee as a selectable role', () => {
-    // Administrator is an enterprise identity and Employee is the baseline;
-    // the database refuses both by name, and the UI must not present them.
-    const offered = SYSTEM_ACCESS_CHOICES.flatMap((g) => g.options.map((o) => o.value))
-    for (const forbidden of ['admin', 'administrator', 'employee']) {
-      expect(offered).not.toContain(forbidden)
-    }
-  })
-
-  it('offers exactly the roles the database accepts for each system', () => {
-    const hrms = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'hrms')
-    const pos = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'pos')
+describe('the eligibility model', () => {
+  it('offers HR Staff and HR Manager for HRMS', () => {
+    // These were previously read-only in the dialog, which showed "None
+    // configured" for every position and made HR look unconfigurable.
+    const hrms = ELIGIBILITY_SYSTEMS.find((g) => g.system === 'hrms')
+    expect(hrms?.available).toBe(true)
     expect(hrms?.options.map((o) => o.value).sort()).toEqual(['hr_manager', 'hr_staff'])
+  })
+
+  it('offers Cashier and POS Manager for POS, unchanged', () => {
+    const pos = ELIGIBILITY_SYSTEMS.find((g) => g.system === 'pos')
+    expect(pos?.available).toBe(true)
     expect(pos?.options.map((o) => o.value).sort()).toEqual(['cashier', 'manager'])
   })
 
-  it('lists FMS but does not let it be configured yet', () => {
-    const fms = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'fms')
+  it('gives HRMS and POS equal standing', () => {
+    // Both configurable, both with descriptions -- neither is a second-class
+    // section in the dialog.
+    for (const system of ['hrms', 'pos'] as const) {
+      const group = ELIGIBILITY_SYSTEMS.find((g) => g.system === system)
+      expect(group?.available).toBe(true)
+      expect(group?.options.length).toBe(2)
+      expect(group?.options.every((o) => o.description.length > 0)).toBe(true)
+    }
+  })
+
+  it('lists FMS but keeps it unconfigurable', () => {
+    const fms = ELIGIBILITY_SYSTEMS.find((g) => g.system === 'fms')
     expect(fms).toBeDefined()
     expect(fms?.available).toBe(false)
     expect(fms?.options).toEqual([])
   })
 
+  it('never offers admin or employee as a grantable role', () => {
+    // Administrator is an enterprise identity; Employee Self-Service is the
+    // baseline. The database refuses both by name, and the UI must not present
+    // them.
+    const offered = ELIGIBILITY_SYSTEMS.flatMap((g) => g.options.map((o) => o.value))
+    for (const forbidden of ['admin', 'administrator', 'employee']) {
+      expect(offered).not.toContain(forbidden)
+    }
+  })
+
   it('labels the POS manager role so it cannot be read as HR Manager', () => {
-    const pos = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'pos')
+    const pos = ELIGIBILITY_SYSTEMS.find((g) => g.system === 'pos')
     expect(pos?.options.find((o) => o.value === 'manager')?.label).toBe('POS Manager')
+  })
+})
+
+describe('entitlementChips', () => {
+  it('returns one neutral chip per entitlement, HR and POS alike', () => {
+    const [entry] = groupEntitlements([
+      row({ system: 'hrms', role_code: 'hr_staff' }),
+      row({ system: 'pos', role_code: 'manager' }),
+    ])
+    expect(entitlementChips(entry).map((c) => c.label)).toEqual(['HR Staff', 'POS Manager'])
+  })
+
+  it('handles a position holding more than one role in a system', () => {
+    const [entry] = groupEntitlements([
+      row({ position_title: 'Branch Supervisor', role_code: 'cashier' }),
+      row({ position_title: 'Branch Supervisor', role_code: 'manager' }),
+    ])
+    const labels = entitlementChips(entry).map((c) => c.label)
+    expect(labels).toHaveLength(2)
+    expect(labels.sort()).toEqual(['Cashier', 'POS Manager'])
+  })
+
+  it('gives an employee-only position no chips at all', () => {
+    // The table shows muted "Employee self-service only" text instead, and it
+    // is not an error or warning state.
+    const [entry] = groupEntitlements([row({ system: null, role_code: null })])
+    expect(entitlementChips(entry)).toEqual([])
+  })
+
+  it('uses labels, never storage codes', () => {
+    const [entry] = groupEntitlements([row({ system: 'hrms', role_code: 'hr_manager' })])
+    expect(entitlementChips(entry)[0].label).toBe('HR Manager')
+    expect(entitlementChips(entry)[0].label).not.toBe('hr_manager')
+  })
+
+  it('keys each chip by system and role so two systems cannot collide', () => {
+    const [entry] = groupEntitlements([
+      row({ system: 'hrms', role_code: 'hr_manager' }),
+      row({ system: 'pos', role_code: 'manager' }),
+    ])
+    const keys = entitlementChips(entry).map((c) => c.key)
+    expect(new Set(keys).size).toBe(keys.length)
   })
 })
