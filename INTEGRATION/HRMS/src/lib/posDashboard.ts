@@ -1,4 +1,4 @@
-import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/lib/posTill'
+import { saleMethodLabel } from '@/lib/posTill'
 
 /**
  * The POS Manager's dashboard: the pure parts.
@@ -62,7 +62,7 @@ export const peso = (value: number) =>
   })}`
 
 export function paymentMethodLabel(method: string): string {
-  return PAYMENT_METHOD_LABEL[method as PaymentMethod] ?? method
+  return saleMethodLabel(method)
 }
 
 /** An empty day still has a shape. Without this the cards would flash `NaN`

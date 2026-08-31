@@ -440,3 +440,11 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# PayMongo posts webhook deliveries with no Supabase JWT -- it cannot have one.
+# The signature check inside the function is what authenticates the request, so
+# JWT verification is disabled here and NOWHERE else. Recorded in config rather
+# than passed as a --no-verify-jwt deploy flag, so a future redeploy that
+# forgets the flag cannot silently start rejecting every real payment.
+[functions.paymongo-webhook]
+verify_jwt = false

@@ -17,6 +17,9 @@ export default defineConfig({
     // decisions, which read from a DOM-shaped environment.
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // Edge Function code is included so the PayMongo webhook signature check
+    // is actually tested rather than reviewed. The shared module uses only Web
+    // Crypto, so it runs unchanged in Deno and here.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'supabase/functions/**/*.test.ts'],
   },
 })

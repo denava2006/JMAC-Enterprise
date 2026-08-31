@@ -1,5 +1,5 @@
 import { formatMoney } from '@/lib/currency'
-import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/lib/posTill'
+import { saleMethodLabel } from '@/lib/posTill'
 
 export const POS_REPORTS_KEY = ['pos-reports'] as const
 export const POS_REPORT_MAX_DAYS = 366
@@ -216,7 +216,7 @@ export function formatPosReportPeriod(range: PosReportRange | undefined): string
 }
 
 export function posReportPaymentMethodLabel(method: string): string {
-  return PAYMENT_METHOD_LABEL[method as PaymentMethod] ?? method
+  return saleMethodLabel(method)
 }
 
 export function describePosReportError(error: unknown): string {

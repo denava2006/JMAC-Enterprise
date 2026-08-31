@@ -1,5 +1,5 @@
 import type { Receipt } from '@/hooks/usePosTill'
-import { PAYMENT_METHOD_LABEL } from '@/lib/posTill'
+import { saleMethodLabel } from '@/lib/posTill'
 import { peso } from '@/lib/posTransactions'
 
 /**
@@ -72,7 +72,7 @@ export function SaleReceipt({ receipt }: { receipt: Receipt }) {
       <div className="flex flex-col gap-1 border-t border-border pt-2 text-sm text-muted-foreground">
         <div className="flex justify-between">
           <span>Paid by</span>
-          <span>{PAYMENT_METHOD_LABEL[receipt.payment_method] ?? receipt.payment_method}</span>
+          <span>{saleMethodLabel(receipt.payment_method)}</span>
         </div>
         {receipt.payment_reference && (
           <div className="flex justify-between">

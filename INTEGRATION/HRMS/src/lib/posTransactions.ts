@@ -1,5 +1,5 @@
 import type { Enums } from '@/lib/database.types'
-import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/lib/posTill'
+import { saleMethodLabel } from '@/lib/posTill'
 
 /**
  * Transaction history: the pure parts.
@@ -90,7 +90,7 @@ export function summarise(rows: TransactionRow[]): { sales: number; units: numbe
 }
 
 export function paymentLabel(method: PaymentMethod): string {
-  return PAYMENT_METHOD_LABEL[method] ?? method
+  return saleMethodLabel(method)
 }
 
 export function describeTransactionError(error: unknown): string {

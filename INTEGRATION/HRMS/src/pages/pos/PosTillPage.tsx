@@ -2,11 +2,24 @@ import * as React from 'react'
 import { Image as ImageIcon, Minus, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/MoneyInput'
+import { OnlinePaymentPanel } from '@/components/pos/OnlinePaymentPanel'
+import { useCreateOnlineCheckout, useRefreshAfterOnlineSale } from '@/hooks/usePosPayment'
+import { useSaleDetail } from '@/hooks/usePosTransactions'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +34,11 @@ import { usePosCatalogue, useProductImageUrls } from '@/hooks/usePosCatalogue'
 import { useBranchFees, useCheckout, type Receipt } from '@/hooks/usePosTill'
 import {
   PAYMENT_METHODS,
+  ONLINE_METHODS,
+  ONLINE_METHOD_LABEL,
+  saleMethodLabel,
+  isOnlineMethod,
+  onlineMethodOf,
   PAYMENT_METHOD_LABEL,
   addToCart,
   attemptFingerprint,
@@ -35,7 +53,7 @@ import {
   type CartLine,
   type CatalogueProduct,
   type CheckoutAttempt,
-  type PaymentMethod,
+  type TillMethod,
 } from '@/lib/posTill'
 
 /**
@@ -98,7 +116,7 @@ function ReceiptDialog({ receipt, onClose }: { receipt: Receipt | null; onClose:
           <div className="flex flex-col gap-1 border-t border-border pt-2 text-sm text-muted-foreground">
             <div className="flex justify-between">
               <span>Paid by</span>
-              <span>{PAYMENT_METHOD_LABEL[receipt.payment_method]}</span>
+              <span>{saleMethodLabel(receipt.payment_method)}</span>
             </div>
             {receipt.payment_reference && (
               <div className="flex justify-between">
@@ -155,10 +173,25 @@ export default function PosTillPage() {
 
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [search, setSearch] = React.useState('')
-  const [method, setMethod] = React.useState<PaymentMethod>('cash')
+  const [method, setMethod] = React.useState<TillMethod>('cash')
   const [reference, setReference] = React.useState('')
   const [tendered, setTendered] = React.useState('')
   const [receipt, setReceipt] = React.useState<Receipt | null>(null)
+
+  // A live online payment. While this is set the till is watching a row it
+  // cannot write, and the cart stays put so nothing is lost if the payment
+  // fails and the cashier falls back to cash.
+  const [onlinePayment, setOnlinePayment] = React.useState<{
+    checkoutKey: string
+    checkoutUrl: string | null
+    amountCentavos: number
+    reference: string | null
+  } | null>(null)
+  const [paidSaleId, setPaidSaleId] = React.useState<string | null>(null)
+
+  const createOnline = useCreateOnlineCheckout()
+  const refreshAfterOnlineSale = useRefreshAfterOnlineSale()
+  const paidSale = useSaleDetail(paidSaleId)
 
   // Switching branch abandons the cart: the prices, stock and fees all belong
   // to the branch it was built at.
@@ -166,6 +199,7 @@ export default function PosTillPage() {
     setCart([])
     setTendered('')
     setReference('')
+    setOnlinePayment(null)
   }, [branchId])
 
   const products: CatalogueProduct[] = React.useMemo(
@@ -201,15 +235,57 @@ export default function PosTillPage() {
     branchId: branchId || null,
     items: cartToItems(cart),
     method,
-    reference: method === 'cash' ? null : reference.trim() || null,
+    reference: method === 'cash' || isOnlineMethod(method) ? null : reference.trim() || null,
     tendered: method === 'cash' && tendered.trim() !== '' ? Number(tendered) : null,
   })
   attemptRef.current = nextAttempt(attemptRef.current, fingerprint, newCheckoutKey)
 
   const inCart = (id: string) => cart.find((l) => l.product.product_id === id)?.quantity ?? 0
 
+  // When an online payment is confirmed, the sale already exists -- the webhook
+  // created it. Fetch it and show the same receipt a cash sale shows.
+  React.useEffect(() => {
+    if (paidSale.data) {
+      setReceipt(paidSale.data)
+      setCart([])
+      setTendered('')
+      setReference('')
+      setOnlinePayment(null)
+      setPaidSaleId(null)
+      attemptRef.current = null
+      refreshAfterOnlineSale()
+    }
+  }, [paidSale.data, refreshAfterOnlineSale])
+
   const pay = () => {
-    if (errors.length > 0 || checkout.isPending || !branchId) return
+    if (errors.length > 0 || checkout.isPending || createOnline.isPending || !branchId) return
+
+    const online = onlineMethodOf(method)
+    if (online) {
+      // The till sends products and quantities only. The amount is priced by
+      // the database inside the Edge Function, so nothing here can influence
+      // what the customer is charged.
+      createOnline.mutate(
+        {
+          branchId,
+          items: cartToItems(cart),
+          method: online,
+          checkoutKey: attemptRef.current!.key,
+        },
+        {
+          onSuccess: (result) => {
+            setOnlinePayment({
+              checkoutKey: attemptRef.current!.key,
+              checkoutUrl: result.checkoutUrl,
+              amountCentavos: result.amountCentavos,
+              reference: result.reference ?? null,
+            })
+          },
+        }
+      )
+      return
+    }
+
     checkout.mutate(
       {
         branchId,
@@ -435,20 +511,50 @@ export default function PosTillPage() {
                       {PAYMENT_METHOD_LABEL[m]}
                     </SelectItem>
                   ))}
+                  {/* Two GCash entries is deliberate and they are not the same
+                      thing: the one above records a payment the customer
+                      already made and read out, this one collects the payment
+                      through JMAC and waits for PayMongo to confirm it. */}
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Collect online (test)</SelectLabel>
+                    {ONLINE_METHODS.map((m) => (
+                      <SelectItem key={'online:' + m} value={'online:' + m}>
+                        {ONLINE_METHOD_LABEL[m]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
 
-            {method === 'cash' ? (
+            {isOnlineMethod(method) ? (
+              onlinePayment ? (
+                <OnlinePaymentPanel
+                  checkoutKey={onlinePayment.checkoutKey}
+                  checkoutUrl={onlinePayment.checkoutUrl}
+                  amountCentavos={onlinePayment.amountCentavos}
+                  reference={onlinePayment.reference}
+                  onPaid={setPaidSaleId}
+                  onDismiss={() => setOnlinePayment(null)}
+                />
+              ) : (
+                <p className="rounded-lg border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+                  The customer pays on a PayMongo page. The sale is recorded only once PayMongo
+                  confirms the payment, and nothing is deducted from stock before then.
+                </p>
+              )
+            ) : method === 'cash' ? (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="till_tendered">Cash received</Label>
-                <Input
+                {/* Deliberately NOT type="number": browsers accept e, E, +
+                    and - in a number field, which is how a symbol reached this
+                    field before. MoneyInput sanitises to digits and at most one
+                    decimal point, and caps the length. */}
+                <MoneyInput
                   id="till_tendered"
-                  type="number"
-                  min={0}
-                  step="0.01"
                   value={tendered}
-                  onChange={(e) => setTendered(e.target.value)}
+                  onValueChange={setTendered}
                   placeholder="0.00"
                 />
                 {change !== null && change >= 0 && (
@@ -463,7 +569,19 @@ export default function PosTillPage() {
                 <Input
                   id="till_reference"
                   value={reference}
-                  onChange={(e) => setReference(e.target.value)}
+                  inputMode={method === 'gcash' || method === 'maya' ? 'numeric' : 'text'}
+                  maxLength={64}
+                  onChange={(e) => {
+                    // GCash and Maya references are digits only, and
+                    // validateSale enforces 6-32 of them. Stripping here means
+                    // the field cannot hold something the rules will refuse.
+                    const raw = e.target.value
+                    setReference(
+                      method === 'gcash' || method === 'maya'
+                        ? raw.replace(/[^0-9]/g, '').slice(0, 32)
+                        : raw.slice(0, 64)
+                    )
+                  }}
                   placeholder={method === 'bank' ? 'TRF 2026-0001' : '1234567890'}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -483,20 +601,33 @@ export default function PosTillPage() {
               </ul>
             )}
 
+            {createOnline.isError && (
+              <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+                {createOnline.error.message}
+              </p>
+            )}
+
             {checkout.isError && (
               <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
                 {checkout.error.message}
               </p>
             )}
 
-            <Button
-              className="w-full"
-              loading={checkout.isPending}
-              disabled={errors.length > 0 || cart.length === 0}
-              onClick={pay}
-            >
-              Take payment · {peso(totals.total)}
-            </Button>
+            {/* Hidden while a payment is in flight: the customer is at the
+                PayMongo page and pressing this again would only start a second
+                one. The idempotency key would make that harmless, but showing
+                it invites the cashier to think the first attempt failed. */}
+            {!onlinePayment && (
+              <Button
+                className="w-full"
+                loading={checkout.isPending || createOnline.isPending}
+                disabled={errors.length > 0 || cart.length === 0}
+                onClick={pay}
+              >
+                {isOnlineMethod(method) ? 'Start payment' : 'Take payment'} ·{' '}
+                {peso(totals.total)}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

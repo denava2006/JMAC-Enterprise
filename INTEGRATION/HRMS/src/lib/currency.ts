@@ -30,13 +30,40 @@ export function formatMoney(amount: number, currency: CurrencyCode = DEFAULT_CUR
 }
 
 /** Strips everything but digits and a single decimal point, capped at 2 decimal places. */
+/** The largest whole amount any money field will accept.
+ *
+ * A trillion pesos: far past anything a real sale, salary or payment can be,
+ * and small enough that the result is still an exact IEEE-754 integer, so
+ * arithmetic on it cannot silently lose precision the way 10^16 would. Without
+ * a bound a field accepts digits until the browser gives up, and the number
+ * that reaches the database is whatever survives the round trip. */
+export const MAX_MONEY_WHOLE_DIGITS = 13
+
 export function sanitizeMoneyInput(raw: string): string {
+  // Everything that is not a digit or a dot goes, which covers the letters and
+  // symbols an <input type="number"> would otherwise let through: e, E, +, -,
+  // and separators like , and /.
   const digitsAndDot = raw.replace(/[^0-9.]/g, '')
   const firstDot = digitsAndDot.indexOf('.')
-  if (firstDot === -1) return digitsAndDot
-  const wholePart = digitsAndDot.slice(0, firstDot)
+  if (firstDot === -1) return digitsAndDot.slice(0, MAX_MONEY_WHOLE_DIGITS)
+  const wholePart = digitsAndDot.slice(0, firstDot).slice(0, MAX_MONEY_WHOLE_DIGITS)
   const fractionPart = digitsAndDot.slice(firstDot + 1).replace(/\./g, '').slice(0, 2)
   return `${wholePart}.${fractionPart}`
+}
+
+/** The one shape a money field may hold: plain digits, optionally two decimals.
+ *  Scientific notation, signs and separators are all excluded by construction,
+ *  so "1e5" is rejected rather than quietly read as 100000. */
+export const MONEY_PATTERN = /^\d{1,13}(\.\d{1,2})?$/
+
+/** Parse a money string, or null if it is not a plain amount within bounds.
+ *  Number() alone is too permissive: it accepts "1e5", " 12 ", "0x10" and
+ *  "Infinity", none of which a person typed on purpose. */
+export function parseMoney(raw: string): number | null {
+  const trimmed = (raw ?? '').trim()
+  if (!MONEY_PATTERN.test(trimmed)) return null
+  const value = Number(trimmed)
+  return Number.isFinite(value) ? value : null
 }
 
 /** Thousands-grouped display of a raw numeric string, preserving whatever decimal

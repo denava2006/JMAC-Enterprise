@@ -2024,6 +2024,109 @@ export type Database = {
           },
         ]
       }
+      pos_payment_attempts: {
+        Row: {
+          amount_centavos: number
+          branch_id: string
+          cancelled_at: string | null
+          cashier_profile_id: string
+          checkout_key: string
+          checkout_url: string | null
+          created_at: string
+          currency: string
+          expires_at: string | null
+          failed_at: string | null
+          id: string
+          items: Json
+          last_error: string | null
+          livemode: boolean
+          method: string
+          paid_at: string | null
+          provider: string
+          provider_checkout_session_id: string | null
+          provider_payment_id: string | null
+          provider_payment_intent_id: string | null
+          reference_number: string
+          sale_id: string | null
+          status: Database["public"]["Enums"]["pos_payment_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount_centavos: number
+          branch_id: string
+          cancelled_at?: string | null
+          cashier_profile_id: string
+          checkout_key: string
+          checkout_url?: string | null
+          created_at?: string
+          currency?: string
+          expires_at?: string | null
+          failed_at?: string | null
+          id?: string
+          items: Json
+          last_error?: string | null
+          livemode?: boolean
+          method: string
+          paid_at?: string | null
+          provider?: string
+          provider_checkout_session_id?: string | null
+          provider_payment_id?: string | null
+          provider_payment_intent_id?: string | null
+          reference_number: string
+          sale_id?: string | null
+          status?: Database["public"]["Enums"]["pos_payment_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount_centavos?: number
+          branch_id?: string
+          cancelled_at?: string | null
+          cashier_profile_id?: string
+          checkout_key?: string
+          checkout_url?: string | null
+          created_at?: string
+          currency?: string
+          expires_at?: string | null
+          failed_at?: string | null
+          id?: string
+          items?: Json
+          last_error?: string | null
+          livemode?: boolean
+          method?: string
+          paid_at?: string | null
+          provider?: string
+          provider_checkout_session_id?: string | null
+          provider_payment_id?: string | null
+          provider_payment_intent_id?: string | null
+          reference_number?: string
+          sale_id?: string | null
+          status?: Database["public"]["Enums"]["pos_payment_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_payment_attempts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_attempts_cashier_profile_id_fkey"
+            columns: ["cashier_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_attempts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_product_categories: {
         Row: {
           color: string | null
@@ -2621,6 +2724,10 @@ export type Database = {
         Args: { _request_type: Database["public"]["Enums"]["pos_request_type"] }
         Returns: boolean
       }
+      cancel_pos_payment_attempt: {
+        Args: { _checkout_key: string }
+        Returns: undefined
+      }
       cancel_pos_request: { Args: { _request_id: string }; Returns: undefined }
       checkout_pos_sale: {
         Args: {
@@ -2691,6 +2798,14 @@ export type Database = {
           _payload?: Json
         }
         Returns: string
+      }
+      finalize_pos_payment: {
+        Args: {
+          _attempt_id: string
+          _paid_centavos?: number
+          _provider_payment_id?: string
+        }
+        Returns: Json
       }
       generate_application_reference: { Args: never; Returns: string }
       generate_employee_number: { Args: never; Returns: string }
@@ -3297,6 +3412,14 @@ export type Database = {
           submitted_at: string
         }[]
       }
+      mark_pos_payment_state: {
+        Args: {
+          _attempt_id: string
+          _reason?: string
+          _status: Database["public"]["Enums"]["pos_payment_status"]
+        }
+        Returns: undefined
+      }
       my_employee_id: { Args: never; Returns: string }
       my_pos_assignments: {
         Args: never
@@ -3343,6 +3466,7 @@ export type Database = {
       pos_max_cart_lines: { Args: never; Returns: number }
       pos_max_line_quantity: { Args: never; Returns: number }
       pos_page_size: { Args: { _requested: number }; Returns: number }
+      pos_payment_is_cash: { Args: { _method: string }; Returns: boolean }
       pos_qr_branch_id: { Args: { _object_name: string }; Returns: string }
       pos_report_bounds: {
         Args: { _from_date?: string; _to_date?: string }
@@ -3364,6 +3488,10 @@ export type Database = {
         Returns: undefined
       }
       pos_sale_receipt: { Args: { _sale_id: string }; Returns: Json }
+      price_pos_cart: {
+        Args: { _branch_id: string; _items: Json }
+        Returns: Json
+      }
       receive_pos_stock: {
         Args: {
           _branch_id: string
@@ -3570,6 +3698,13 @@ export type Database = {
         | "stock_request_approved"
         | "stock_request_declined"
       pos_movement_type: "receipt" | "adjustment_in" | "adjustment_out" | "sale"
+      pos_payment_status:
+        | "pending"
+        | "paid"
+        | "paid_unfulfilled"
+        | "failed"
+        | "expired"
+        | "cancelled"
       pos_product_status: "draft" | "active" | "archived"
       pos_request_status: "pending" | "approved" | "declined" | "cancelled"
       pos_request_type: "restock" | "carry_existing_product"
@@ -3803,6 +3938,14 @@ export const Constants = {
         "stock_request_declined",
       ],
       pos_movement_type: ["receipt", "adjustment_in", "adjustment_out", "sale"],
+      pos_payment_status: [
+        "pending",
+        "paid",
+        "paid_unfulfilled",
+        "failed",
+        "expired",
+        "cancelled",
+      ],
       pos_product_status: ["draft", "active", "archived"],
       pos_request_status: ["pending", "approved", "declined", "cancelled"],
       pos_request_type: ["restock", "carry_existing_product"],
