@@ -18,7 +18,7 @@ import {
   useEmployeeHistory,
   useEmployeeAuditLog,
   useCreateEmployeeAccount,
-  useResetEmployeePassword,
+  useSendPasswordReset,
   useSetEmployeeAccountStatus,
 } from '@/hooks/useEmployees'
 import { useEmployeeAttendanceSummary, type EmployeeAttendanceSummary } from '@/hooks/useAttendance'
@@ -70,7 +70,6 @@ function TimelineStep({ label, timestamp, actor }: { label: string; timestamp: s
 /** The default every employee login is created with and reset to. Documented
  * rather than emailed because the app runs on a per-deployer local stack with
  * no reachable mailbox — see create-employee-account. */
-const DEFAULT_EMPLOYEE_PASSWORD = 'Employee123'
 
 /** Employee ID, email, and password in one place. HR reads these out to the
  * employee; having them in three different places is how people end up being
@@ -78,12 +77,10 @@ const DEFAULT_EMPLOYEE_PASSWORD = 'Employee123'
 function CredentialsPanel({
   employeeNumber,
   email,
-  password,
   hasOwnPassword,
 }: {
   employeeNumber: string
   email: string
-  password: string
   /** True once the employee has set a password of their own, which HR does not
    * know. Showing the default at that point is worse than showing nothing —
    * it's an answer that no longer works. */
@@ -106,17 +103,15 @@ function CredentialsPanel({
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Password</p>
-          {hasOwnPassword ? (
-            <p className="text-sm text-muted-foreground">Set by the employee</p>
-          ) : (
-            <p className="font-mono text-sm text-foreground">{password}</p>
-          )}
+          <p className="text-sm text-muted-foreground">
+            {hasOwnPassword ? 'Known only to the employee' : 'Not set yet'}
+          </p>
         </div>
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
         {hasOwnPassword
-          ? 'Only the employee knows this. Use Reset Password to put it back to the default.'
-          : 'They will be asked to choose their own password the first time they sign in.'}
+          ? 'Nobody else can see it. Send a reset link if they cannot get in.'
+          : 'They set their own from the link in their setup email; there is no password to hand over.'}
       </p>
     </div>
   )
@@ -138,7 +133,7 @@ export default function EmployeeDetailsPage() {
   const { data: history } = useEmployeeHistory(employeeId)
   const { data: auditLog } = useEmployeeAuditLog(employeeId)
   const createAccount = useCreateEmployeeAccount()
-  const resetPassword = useResetEmployeePassword()
+  const sendReset = useSendPasswordReset()
   const setAccountStatus = useSetEmployeeAccountStatus()
 
   const [editPersonalOpen, setEditPersonalOpen] = React.useState(false)
@@ -259,13 +254,12 @@ export default function EmployeeDetailsPage() {
               {!account ? (
                 <div className="flex flex-col items-start gap-3">
                   <p className="text-sm text-muted-foreground">
-                    No account has been created for this employee yet. Once created they can sign in immediately —
-                    there is no activation email to wait for.
+                    No account has been created for this employee yet. Creating one emails them a setup link;
+                    they choose their own password from it.
                   </p>
                   <CredentialsPanel
                     employeeNumber={employee.employee_number}
                     email={employee.email}
-                    password={DEFAULT_EMPLOYEE_PASSWORD}
                   />
                   <Button
                     loading={createAccount.isPending}
@@ -277,7 +271,7 @@ export default function EmployeeDetailsPage() {
                       })
                     }
                   >
-                    Generate Employee Account
+                    Create account
                   </Button>
                 </div>
               ) : (
@@ -293,7 +287,7 @@ export default function EmployeeDetailsPage() {
                     <div>
                       <p className="text-xs text-muted-foreground">Activation Status</p>
                       <Badge variant={account.activated_at ? 'success' : 'warning'}>
-                        {account.activated_at ? 'Activated' : 'Pending Activation'}
+                        {account.activated_at ? 'Active' : 'Awaiting setup'}
                       </Badge>
                     </div>
                     <Field icon={Calendar} label="Last Login" value={formatDateTime(account.last_login_at)} />
@@ -303,18 +297,19 @@ export default function EmployeeDetailsPage() {
                   <CredentialsPanel
                     employeeNumber={employee.employee_number}
                     email={account.email}
-                    password={DEFAULT_EMPLOYEE_PASSWORD}
                     hasOwnPassword={!!account.activated_at}
                   />
 
                   <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+                    {/* A link, not a password. HR starts the flow; only the
+                        employee ever learns the result. */}
                     <Button
                       variant="outline"
-                      loading={resetPassword.isPending}
-                      onClick={() => resetPassword.mutate({ employeeId: employee.id })}
+                      loading={sendReset.isPending}
+                      onClick={() => sendReset.mutate({ email: account.email })}
                     >
                       <KeyRound className="h-4 w-4" />
-                      Reset Password
+                      {account.activated_at ? 'Send password reset' : 'Resend setup link'}
                     </Button>
                     {account.status === 'active' ? (
                       <Button

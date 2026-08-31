@@ -27,6 +27,10 @@
 
 begin;
 
+-- Phase 9B: an HR account is no longer a role on a bare profile. It needs a
+-- workforce identity -- an employee in Human Resources holding the position
+-- that confers the role -- and an explicit grant. A fixture that skips any of
+-- that is refused by is_active_staff(), which is the rule working, not a bug.
 create function pg_temp.new_account(_name text, _role public.user_role)
 returns uuid
 language plpgsql
@@ -34,11 +38,35 @@ as $mk$
 declare
   _uid uuid := gen_random_uuid();
   _email text := lower(replace(_name,' ','.'))||'.'||left(replace(gen_random_uuid()::text,'-',''),6)||'@example.com';
+  _dept uuid;
+  _pos uuid;
+  _emp uuid;
 begin
   insert into auth.users (id, email) values (_uid, _email);
   insert into public.profiles (id, full_name, email, role, status)
   values (_uid, _name, _email, _role, 'active')
   on conflict (id) do update set role = excluded.role, status = 'active', full_name = excluded.full_name;
+
+  if _role in ('hr_staff', 'hr_manager') then
+    select id into _dept from public.departments where lower(name) = 'human resources';
+    select id into _pos from public.positions
+     where department_id = _dept
+       and lower(title) = case _role when 'hr_manager' then 'hr manager' else 'hr staff' end;
+    if _dept is null or _pos is null then
+      raise exception 'fixture: Human Resources / % position is missing', _role;
+    end if;
+
+    insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                  employment_status, hire_date)
+    values ('ZZ', _name, _email, _dept, _pos, 'active', current_date)
+    returning id into _emp;
+
+    update public.profiles set employee_id = _emp where id = _uid;
+
+    insert into public.hr_privilege_grants (profile_id, hr_role, status)
+    values (_uid, _role::text, 'active');
+  end if;
+
   return _uid;
 end;
 $mk$;
@@ -367,26 +395,66 @@ begin
   end if;
   raise notice 'PASS 9a nothing in the system-access surface is reachable by anon; internals reach no API role';
 
-  ------------------------------------- 10. HR authorization is NOT yet enforced
-  -- Deliberate boundary. Eligibility is configurable now; runtime HR
-  -- authorization still reads profiles.role, and changing that is Phase 9B.
-  -- Asserting it here keeps the claim honest and catches an accidental cutover.
-  if not public.is_active_staff() is null then null; end if;
+  ------------------------------------------ 10. HR authorization after 9B
+  -- This check used to assert the opposite: that HR still authorized on
+  -- profiles.role alone, which was the deliberate 9A boundary. Phase 9B removed
+  -- that boundary, so the check now asserts the rule that replaced it -- a
+  -- claimed role, an explicit grant, and current eligibility, all three.
   perform set_config('request.jwt.claims',
     json_build_object('sub', staff_id, 'role','authenticated')::text, true);
   set local role authenticated;
   if not public.is_active_staff() then
-    raise exception 'FAIL 10a an existing HR Staff account lost access -- eligibility was wired into runtime auth';
+    raise exception 'FAIL 10a a properly provisioned HR Staff account cannot authorize';
+  end if;
+  if public.is_hr_manager_or_admin() then
+    raise exception 'FAIL 10b HR Staff authorized as an HR Manager';
   end if;
   reset role;
+
   perform set_config('request.jwt.claims',
     json_build_object('sub', hrm_id, 'role','authenticated')::text, true);
   set local role authenticated;
   if not public.is_hr_manager_or_admin() then
-    raise exception 'FAIL 10b an existing HR Manager account lost approval rights';
+    raise exception 'FAIL 10c a properly provisioned HR Manager cannot approve';
   end if;
   reset role;
-  raise notice 'PASS 10a existing HR accounts still authorize on profiles.role (9B boundary intact)';
+  raise notice 'PASS 10a HR authorization needs role + grant + eligibility, and HR Staff is not an HR Manager';
+
+  -- Closing the grant is enough on its own: the profile still says hr_manager
+  -- and the position still confers it, but nobody granted it any more.
+  update public.hr_privilege_grants
+     set status = 'closed', closed_at = now(), closed_reason = 'test'
+   where profile_id = hrm_id and status = 'active';
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', hrm_id, 'role','authenticated')::text, true);
+  set local role authenticated;
+  if public.is_hr_manager_or_admin() or public.is_active_staff() then
+    raise exception 'FAIL 10d a closed grant still authorized';
+  end if;
+  reset role;
+
+  -- And it cannot simply be switched back on.
+  begin
+    update public.hr_privilege_grants set status = 'active'
+     where profile_id = hrm_id and status = 'closed';
+    raise exception 'FAIL 10e a closed grant was reopened in place';
+  exception when others then
+    if SQLERRM not like 'HR_GRANT_CLOSED%' then raise; end if;
+  end;
+  raise notice 'PASS 10b closing the grant revokes HR authority, and it cannot be reopened in place';
+
+  -- The Administrator needs none of it: no employee, no position, no grant.
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', admin_id, 'role','authenticated')::text, true);
+  set local role authenticated;
+  if not public.is_active_staff() or not public.is_hr_manager_or_admin() then
+    raise exception 'FAIL 10f the Administrator lost access in the HR cutover';
+  end if;
+  reset role;
+  if (select employee_id from public.profiles where id = admin_id) is not null then
+    raise exception 'FAIL 10g this Administrator has an employee link; the check proves nothing';
+  end if;
+  raise notice 'PASS 10c the Administrator authorizes with no employee record at all';
 
   raise notice '--- all position system access contract checks passed ---';
 end $$;

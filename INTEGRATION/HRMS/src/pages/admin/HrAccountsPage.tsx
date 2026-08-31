@@ -33,115 +33,23 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   type HrAccount,
   useHrAccounts,
-  useCreateHrAccount,
   useUpdateHrAccount,
   useSetAccountStatus,
 } from '@/hooks/useHrAccounts'
 // This page only ever manages Admin/HR Manager/HR Staff logins — employee
 // logins (added by the Employee Management module) live in the same `profiles`
 // table but are excluded from useHrAccounts()'s query and never appear here.
-import { ROLE_LABEL, CREATABLE_HR_ROLES, DEFAULT_ROLE_PASSWORD } from '@/lib/roles'
-
-const createSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
-  full_name: z.string().min(1, 'Full name is required').max(150),
-  role: z.enum(CREATABLE_HR_ROLES),
-})
-type CreateFormValues = z.infer<typeof createSchema>
+import { ROLE_LABEL, CREATABLE_HR_ROLES } from '@/lib/roles'
+import { GrantHrPrivilegeDialog } from '@/components/admin/GrantHrPrivilegeDialog'
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useCloseHrPrivilege, useHrAccounts as useHrPrivilegeRows } from '@/hooks/useHrPrivilege'
 
 const editSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(150),
   role: z.enum(['admin', 'hr_manager', 'hr_staff']),
 })
 type EditFormValues = z.infer<typeof editSchema>
-
-function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const createAccount = useCreateHrAccount()
-  const {
-    register,
-    control,
-    watch,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateFormValues>({ resolver: zodResolver(createSchema) })
-
-  React.useEffect(() => {
-    if (open) reset({ email: '', full_name: '', role: 'hr_staff' })
-  }, [open, reset])
-
-  const onSubmit = async (values: CreateFormValues) => {
-    await createAccount.mutateAsync(values)
-    onOpenChange(false)
-  }
-
-  const selectedRole = watch('role')
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New HR account</DialogTitle>
-          <DialogDescription>
-            They can sign in immediately with the email below and the default password{' '}
-            <strong>{DEFAULT_ROLE_PASSWORD[selectedRole ?? 'hr_staff']}</strong>.
-          </DialogDescription>
-        </DialogHeader>
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="full_name">
-              Full name <span className="text-destructive">*</span>
-            </Label>
-            <Input id="full_name" invalid={!!errors.full_name} {...register('full_name')} placeholder="Juan Dela Cruz" />
-            {errors.full_name && <p className="text-xs text-destructive">{errors.full_name.message}</p>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="email">
-              Email <span className="text-destructive">*</span>
-            </Label>
-            <Input id="email" type="email" invalid={!!errors.email} {...register('email')} placeholder="juan@company.com" />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Role</Label>
-            <Controller
-              control={control}
-              name="role"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CREATABLE_HR_ROLES.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {ROLE_LABEL[value]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <p className="text-xs text-muted-foreground">
-              {selectedRole === 'hr_manager'
-                ? 'HR Managers can do everything HR Staff can, plus approve payroll for release and decide leave requests.'
-                : 'HR Staff run the day-to-day workflow. Payroll release and leave decisions need an HR Manager.'}{' '}
-              Administrator accounts can't be created from the UI.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={isSubmitting}>
-              Create account
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 function EditAccountDialog({
   open,
@@ -228,6 +136,116 @@ function EditAccountDialog({
   )
 }
 
+
+/** Local, matching how the other screens format a timestamp. */
+function formatDateTime(iso: string | null) {
+  if (!iso) return 'Never'
+  return new Date(iso).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+/**
+ * Who currently holds HR authority, and on what basis.
+ *
+ * Three separate things decide it, and the table shows all three rather than a
+ * single badge: the role the account claims, the grant an Administrator made,
+ * and whether the position still confers it. A row can hold a live grant and
+ * still not authorize -- that is what "no longer authorizes" means, and it is
+ * the state this screen exists to make visible.
+ */
+function HrPrivilegeTable() {
+  const { data: rows, isLoading } = useHrPrivilegeRows()
+  const closePrivilege = useCloseHrPrivilege()
+  const items = rows ?? []
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <p className="text-sm text-muted-foreground">
+            Nobody holds HR privilege yet. Grant it to an employee whose position confers an HR role.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent className="overflow-x-auto p-0">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="px-4 py-3 font-semibold">Employee</th>
+              <th className="px-4 py-3 font-semibold">Department</th>
+              <th className="px-4 py-3 font-semibold">Position</th>
+              <th className="px-4 py-3 font-semibold">HR role</th>
+              <th className="px-4 py-3 font-semibold">Account</th>
+              <th className="px-4 py-3 font-semibold">Eligibility</th>
+              <th className="px-4 py-3 font-semibold">Last login</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((row) => (
+              <tr key={`${row.profile_id}-${row.granted_at}`} className="border-b border-border last:border-0">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-foreground">{row.full_name ?? row.email}</p>
+                  <p className="text-xs text-muted-foreground">{row.email}</p>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">{row.department_name ?? '\u2014'}</td>
+                <td className="px-4 py-3 text-muted-foreground">{row.position_title ?? '\u2014'}</td>
+                <td className="px-4 py-3">
+                  <Badge variant="outline" className="bg-muted/60 font-normal">
+                    {ROLE_LABEL[row.hr_role as keyof typeof ROLE_LABEL] ?? row.hr_role}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3">
+                  {/* Colour here IS a status: the account is on or off. */}
+                  <Badge variant={row.account_status === 'active' ? 'success' : 'muted'}>
+                    {row.account_status === 'active' ? 'Active' : 'Disabled'}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3">
+                  {row.grant_status !== 'active' ? (
+                    <span className="text-xs text-muted-foreground">
+                      Closed{row.closed_reason ? ` \u00b7 ${row.closed_reason.replace(/_/g, ' ')}` : ''}
+                    </span>
+                  ) : row.authorizes_now ? (
+                    <span className="text-xs text-muted-foreground">Authorizes</span>
+                  ) : (
+                    <span className="text-xs text-warning">
+                      Granted, but the position no longer confers it
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">{formatDateTime(row.last_login_at)}</td>
+                <td className="px-4 py-3 text-right">
+                  {row.grant_status === 'active' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={closePrivilege.isPending}
+                      onClick={() =>
+                        closePrivilege.mutate({ profileId: row.profile_id, reason: 'revoked by administrator' })
+                      }
+                    >
+                      Close
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function HrAccountsPage() {
   const { profile: currentProfile } = useAuth()
   const { data, isLoading } = useHrAccounts()
@@ -311,8 +329,13 @@ export default function HrAccountsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="font-display text-xl font-semibold text-foreground">HR Accounts</h2>
-        <p className="text-sm text-muted-foreground">Everyone with sign-in access to JMAC Enterprise.</p>
+        <p className="text-sm text-muted-foreground">
+          HR authority follows the job. An account authorizes only while it claims the role, holds a grant, and its
+          position still confers it.
+        </p>
       </div>
+
+      <HrPrivilegeTable />
 
       <DataTable
         columns={columns}
@@ -323,12 +346,12 @@ export default function HrAccountsPage() {
         toolbarAction={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
-            New account
+            Grant HR privilege
           </Button>
         }
       />
 
-      <CreateAccountDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <GrantHrPrivilegeDialog open={createOpen} onOpenChange={setCreateOpen} />
       <EditAccountDialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)} account={editing} />
 
       <AlertDialog open={!!deactivating} onOpenChange={(open) => !open && setDeactivating(null)}>

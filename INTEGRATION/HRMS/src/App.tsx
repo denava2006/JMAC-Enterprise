@@ -9,6 +9,8 @@ import { PublicLayout } from '@/layouts/PublicLayout'
 import { Toaster } from '@/components/ui/sonner'
 import LoginPage from '@/pages/LoginPage'
 import SetupPasswordPage from '@/pages/auth/SetupPasswordPage'
+import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
+import ResetPasswordPage from '@/pages/auth/ResetPasswordPage'
 import DashboardHome from '@/pages/DashboardHome'
 import DepartmentsPage from '@/pages/admin/DepartmentsPage'
 import PositionsPage from '@/pages/admin/PositionsPage'
@@ -88,6 +90,11 @@ export default function App() {
 
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/setup-password" element={<SetupPasswordPage />} />
+            {/* Recovery is Supabase's: the link becomes a session before the
+                page renders, so there is no home-grown token to validate. The
+                path is shared with the sender via RESET_PASSWORD_PATH. */}
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
 
             {/* Every sign-in lands here first. It decides the portal from the
                 account that just authenticated -- see PortalRedirect. */}

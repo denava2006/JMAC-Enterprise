@@ -857,6 +857,60 @@ export type Database = {
           },
         ]
       }
+      hr_privilege_grants: {
+        Row: {
+          closed_at: string | null
+          closed_reason: string | null
+          created_at: string
+          granted_at: string
+          granted_by: string | null
+          hr_role: string
+          id: string
+          profile_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by?: string | null
+          hr_role: string
+          id?: string
+          profile_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by?: string | null
+          hr_role?: string
+          id?: string
+          profile_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_privilege_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_privilege_grants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interviews: {
         Row: {
           application_id: string
@@ -2516,6 +2570,10 @@ export type Database = {
         }
         Returns: Json
       }
+      close_hr_privilege: {
+        Args: { _profile_id: string; _reason: string }
+        Returns: undefined
+      }
       create_pos_carry_request: {
         Args: { _branch_id: string; _product_id: string; _reason: string }
         Returns: string
@@ -2545,6 +2603,14 @@ export type Database = {
       delete_pos_category: {
         Args: { _category_id: string; _replacement_id?: string }
         Returns: undefined
+      }
+      describe_ineligibility: {
+        Args: {
+          _profile_id: string
+          _role_code: string
+          _system: Database["public"]["Enums"]["entitlement_system"]
+        }
+        Returns: string
       }
       describe_pos_ineligibility: {
         Args: { _profile_id: string; _role_code: string }
@@ -2773,6 +2839,43 @@ export type Database = {
           employee_id: string
           employee_number: string
           full_name: string
+          position_title: string
+          profile_id: string
+        }[]
+      }
+      get_hr_account_candidates: {
+        Args: { _hr_role?: string }
+        Returns: {
+          account_role: string
+          department_name: string
+          eligible_roles: string[]
+          email: string
+          employee_id: string
+          employee_number: string
+          full_name: string
+          has_account: boolean
+          position_title: string
+          profile_id: string
+        }[]
+      }
+      get_hr_accounts: {
+        Args: never
+        Returns: {
+          account_role: string
+          account_status: string
+          authorizes_now: boolean
+          closed_at: string
+          closed_reason: string
+          currently_eligible: boolean
+          department_name: string
+          email: string
+          employee_id: string
+          employment_status: string
+          full_name: string
+          grant_status: string
+          granted_at: string
+          hr_role: string
+          last_login_at: string
           position_title: string
           profile_id: string
         }[]
@@ -3027,6 +3130,11 @@ export type Database = {
         }[]
       }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
+      grant_hr_privilege: {
+        Args: { _hr_role: string; _profile_id: string }
+        Returns: string
+      }
+      has_hr_privilege: { Args: { _roles: string[] }; Returns: boolean }
       has_pos_access: { Args: never; Returns: boolean }
       has_pos_role: {
         Args: {

@@ -143,6 +143,15 @@ export default function LoginPage() {
                 )}
               </div>
 
+              <div className="-mt-1 flex justify-end">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-secondary hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
               <Button type="submit" className="mt-2 w-full" loading={isSubmitting}>
                 {isSubmitting ? 'Signing in\u2026' : 'Sign in'}
               </Button>

@@ -7,6 +7,7 @@ import type { CurrencyCode } from '@/lib/currency'
 import { toast } from '@/components/ui/sonner'
 import { describeFunctionError } from '@/lib/functionErrors'
 import { describeWorkforceError } from '@/lib/workforce'
+import { RESET_PASSWORD_PATH } from '@/lib/passwordRecovery'
 
 function friendlyEmployeeError(error: Error): string {
   if (error.message.includes('employees_email_key')) return 'An employee with this email already exists.'
@@ -339,6 +340,39 @@ export function useUpdateEmployee() {
   })
 }
 
+/**
+ * Send the employee a password reset link.
+ *
+ * Replaces useResetEmployeePassword, which called an Edge Function that set the
+ * account back to a documented default and returned it so HR could read it out.
+ * Two people knowing a password is one too many, and "reset to the shared
+ * default" meant the account was briefly openable by anyone who had read the
+ * demo notes.
+ *
+ * This needs no privileged key and no function: resetPasswordForEmail is
+ * callable with the anon key, and the recovery link only ever grants a session
+ * to whoever opens the mailbox. HR triggers it; the employee chooses the
+ * password; nobody else ever sees it.
+ */
+export function useSendPasswordReset() {
+  return useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}${RESET_PASSWORD_PATH}`,
+      })
+      if (error) throw error
+      return email
+    },
+    onSuccess: (email) => toast.success(`A password reset link has been sent to ${email}.`),
+    onError: (error) =>
+      toast.error(
+        /smtp|email/i.test(error.message)
+          ? 'Could not send the email. Check that an SMTP sender is configured for this project.'
+          : error.message
+      ),
+  })
+}
+
 export function useEmployeeHistory(employeeId: string | undefined) {
   return useQuery({
     queryKey: ['employee-history', employeeId],
@@ -383,36 +417,11 @@ export function useCreateEmployeeAccount() {
       })
       if (error) throw new Error(await describeFunctionError(error, 'employee account service'))
       if (data?.error) throw new Error(data.error)
-      return data as { id: string; email: string; password: string }
+      return data as { id: string; email: string; setupRequired: boolean }
     },
     onSuccess: (data, { employeeId }) => {
       invalidate(employeeId)
-      toast.success(`Employee account created. They can sign in now with ${data.email} / ${data.password}.`)
-    },
-    onError: (error) => toast.error(error.message),
-  })
-}
-
-/** Puts an employee's password back to the documented default.
- *
- * There is no mailbox a reset link could reach on a local stack (see
- * create-employee-account), so "reset" means handing them the default again.
- * The actual change needs the service_role key and happens in the Edge
- * Function; this only reports what to tell them. */
-export function useResetEmployeePassword() {
-  const invalidate = useInvalidateEmployees()
-  return useMutation({
-    mutationFn: async ({ employeeId }: { employeeId: string }) => {
-      const { data, error } = await supabase.functions.invoke('reset-employee-password', {
-        body: { employeeId },
-      })
-      if (error) throw new Error(await describeFunctionError(error, 'employee account service'))
-      if (data?.error) throw new Error(data.error)
-      return data as { email: string; password: string }
-    },
-    onSuccess: (data, { employeeId }) => {
-      invalidate(employeeId)
-      toast.success(`Password reset. They can sign in with ${data.email} / ${data.password}.`)
+      toast.success(`Account created. A setup link has been emailed to ${data.email}.`)
     },
     onError: (error) => toast.error(error.message),
   })

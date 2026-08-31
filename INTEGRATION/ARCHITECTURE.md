@@ -216,8 +216,8 @@ the check.
 
 ### Database
 
-**128 migrations, all applied** to the live local database (verified against
-`supabase_migrations.schema_migrations`, 2026-08-31). The HR tables:
+**132 migrations, all applied** to the live local database (verified against
+`supabase_migrations.schema_migrations`, 2026-09-01). The HR tables:
 
 ```text
 profiles  employees  employee_history  employee_documents
@@ -847,6 +847,76 @@ revokes were written for the two routines beside them and not for these. The
 9A ACL check could not catch it — it enumerated 9A's routines by name. Both ACL
 sections now enumerate from `pg_proc` and assert the expected count, so the next
 routine added to either area is covered the moment it exists.
+
+---
+
+### D2f. HR authorization is a grant, not a column (Phase 9B)
+
+Before this phase `profiles.role = 'hr_manager'` *was* HR authorization, and the
+two live HR accounts had no employee record at all -- no department, no
+position, nothing that could ever make their access wrong. A POS cashier could
+not be given branch access without a matching position; an HR Manager needed
+only a value in a column.
+
+Three things must now hold, and each can fail on its own:
+
+```text
+profiles.role        the HR role the account claims        (enum unchanged)
+an ACTIVE grant      an Administrator said so, explicitly
+current eligibility  their job still permits that role
+```
+
+`has_hr_privilege(roles[])` is the single place that decides it.
+`is_active_staff()`, `is_hr_manager_or_admin()` and `is_hr_staff_or_admin()`
+became thin wrappers over it, so **47 policies and 9 routines inherited the new
+rule without one of them being rewritten** -- the signatures were deliberately
+left alone.
+
+**The Administrator is the exception, and stays one.** Their authority is
+enterprise identity, not a position; requiring them to hold a job would make a
+fresh install unadministrable. Every predicate short-circuits on `is_admin()`.
+
+**Eligibility describes the job, not the account.** Phase 9A required
+`profiles.role = 'employee'`, which conflated "what this position permits" with
+"what this account currently is" -- and made an `hr_staff` account ineligible
+for the very role its position exists to confer. It now excludes only `admin`.
+The 9A assertion that HR accounts get no POS role still holds, because it always
+rested on entitlement rather than on that check.
+
+**Closure is one-way, as POS closure is.**
+
+```text
+transferred out / on_leave / terminated   ->  close_ineligible_hr_grants
+position's hrms entitlement removed       ->  close_hr_grants_for_entitlement
+Administrator revokes                     ->  close_hr_privilege
+```
+
+Returning to the same position does **not** reopen it; reopening a closed row
+raises `HR_GRANT_CLOSED`. Employee Self-Service survives all of it -- losing HR
+authority is not losing employment.
+
+**One person, one account.** `grant_hr_privilege` upgrades the profile that
+already exists rather than creating a second login, and
+`close_hr_privilege` returns it to `employee` without touching the auth user.
+The redesigned `create-hr-account` only creates an account when the employee has
+none, and checks eligibility *before* provisioning -- otherwise a mistaken
+attempt would leave a stray login for somebody who was never eligible.
+
+**The cutover could not ship alone.** Applying `20260901000000` by itself signed
+out both existing HR accounts -- verified, not assumed. `20260901010000` is the
+other half: it gives a standalone HR account the workforce identity the rule now
+requires, and records the grant. It is a no-op on any database without such
+accounts, which is every production database today.
+
+**Provisioning no longer hands out a password.** `Employee123`, `HrStaff123` and
+`HrManager123` are gone from the product. Accounts are created by invitation and
+`/forgot-password` sends a Supabase recovery link; the password is chosen by its
+owner and never transmitted, stored or displayed. That buys a real dependency:
+**this needs a working email sender**, and the functions say so rather than
+falling back to a shared secret.
+
+Migrations `20260901000000` / `000100` / `010000` / `020000`. Contract suite
+`hr_privilege_rls.sql` (18 checks).
 
 ---
 

@@ -12,11 +12,6 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 export const CREATABLE_HR_ROLES = ['hr_staff', 'hr_manager'] as const
 export type CreatableHrRole = (typeof CREATABLE_HR_ROLES)[number]
 
-export const DEFAULT_ROLE_PASSWORD: Record<CreatableHrRole, string> = {
-  hr_staff: 'HrStaff123',
-  hr_manager: 'HrManager123',
-}
-
 /** Approving payroll for release and deciding leave requests are the HR
  * Manager's calls, not HR Staff's. Mirrors the database's
  * is_hr_manager_or_admin() — the triggers are the real enforcement, this just

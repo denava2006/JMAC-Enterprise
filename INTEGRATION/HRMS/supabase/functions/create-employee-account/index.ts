@@ -1,22 +1,22 @@
-// Creates an employee login for Harmony Suite.
+// Creates an employee login for JMAC Enterprise.
 //
-// Mirrors create-hr-account's shape (same reason this has to be an Edge
-// Function: creating an auth user requires the service_role key, which must
-// never reach the browser; same reason it uses a fixed default password
-// instead of an emailed invite link — see DEFAULT_EMPLOYEE_PASSWORD below).
-// The differences: any active Admin OR HR Staff may call this (not
-// Admin-only), and the resulting profile is role='employee' and linked to a
-// specific employees row.
+// This has to be an Edge Function because creating an auth user needs the
+// service_role key, which must never reach the browser. Any active Admin, HR
+// Manager or HR Staff may call it; the resulting profile is role='employee'
+// and linked to a specific employees row.
+//
+// Phase 9B removed the shared password. Until then every account was created
+// on 'Employee123' and the browser was told so, which meant one publicly
+// documented credential opened any freshly created account until its owner got
+// round to changing it. Now the employee is invited: Supabase mails a one-time
+// link, they choose a password nobody else ever knows, and nothing reusable is
+// returned to the caller.
+//
+// The cost is a real dependency: this needs a working email sender. A project
+// with no custom SMTP cannot deliver to arbitrary addresses, and the function
+// says so plainly rather than silently falling back to a shared secret.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// This app runs on a per-deployer local Supabase stack (see README) rather
-// than one shared mailbox-reachable project, so an email-invite link can
-// never reach a real inbox for anyone other than whoever is running it
-// locally. Accounts are created immediately active with this fixed, publicly
-// documented default password instead — the login email is always the
-// applicant's own email, carried through from their job application.
-const DEFAULT_EMPLOYEE_PASSWORD = 'Employee123'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,6 +47,11 @@ Deno.serve(async (req: Request) => {
     // and confirm they're active HR staff/admin. Cannot bypass RLS.
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
+      // Without this, supabase-js manages its own session and substitutes its
+      // own token on rpc()/from() calls, so the caller's JWT never reaches
+      // PostgREST -- auth.uid() comes back null and every is_admin() check
+      // inside a SECURITY DEFINER function fails for a genuine Administrator.
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
 
     const {
@@ -107,26 +112,28 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'This employee already has an account.' }, 400)
     }
 
-    const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+    // Invite rather than assign: no password is chosen here, so none can leak
+    // here either.
+    const { data: created, error: createError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
-      password: DEFAULT_EMPLOYEE_PASSWORD,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    })
+      { data: { full_name: fullName } }
+    )
 
-    if (createError || !created.user) {
-      return json({ error: createError?.message ?? 'Failed to create account.' }, 400)
+    if (createError || !created?.user) {
+      console.error('inviteUserByEmail failed:', createError?.message)
+      return json({
+        error:
+          'Could not send the setup email. Check that this project has an SMTP sender configured, then try again.',
+      }, 502)
     }
 
-    // handle_new_user() already created a `profiles` row (defaulting to
-    // hr_staff/inactive) — overwrite it for an employee login.
+    // handle_new_user() already created a `profiles` row — overwrite it for an
+    // employee login.
     //
-    // activated_at is deliberately NOT stamped. The account is usable
-    // immediately, but "activated" means the employee has set a password only
-    // they know, and they haven't yet — they're still on the default below.
-    // The app sends them to /auth/setup-password until they do, and the stamp
-    // comes from the password change itself (see
-    // 20260731130000_employees_must_set_own_password.sql).
+    // activated_at is deliberately NOT stamped. "Activated" means the employee
+    // has set a password only they know, and the stamp comes from the password
+    // change itself, so it now marks something real: until they follow the
+    // invite there is no password at all.
     const now = new Date().toISOString()
     const { error: updateError } = await adminClient
       .from('profiles')
@@ -154,8 +161,15 @@ Deno.serve(async (req: Request) => {
       record_id: employeeId,
     })
 
-    return json({ id: created.user.id, email: created.user.email, password: DEFAULT_EMPLOYEE_PASSWORD })
+    // No password in the response, because none exists to return.
+    return json({
+      id: created.user.id,
+      email: created.user.email,
+      setupRequired: true,
+      invited: true,
+    })
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'Unexpected error.' }, 500)
+    console.error('create-employee-account unhandled:', err instanceof Error ? err.message : err)
+    return json({ error: 'Could not create that account.' }, 500)
   }
 })

@@ -44,6 +44,11 @@ Deno.serve(async (req: Request) => {
     // Cannot bypass RLS.
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
+      // Without this, supabase-js manages its own session and substitutes its
+      // own token on rpc()/from() calls, so the caller's JWT never reaches
+      // PostgREST -- auth.uid() comes back null and every is_admin() check
+      // inside a SECURITY DEFINER function fails for a genuine Administrator.
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
 
     const {

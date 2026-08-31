@@ -1011,9 +1011,8 @@ export default function CreateEmployeePage() {
                   <span>
                     <span className="font-medium text-foreground">Create login now.</span>{' '}
                     <span className="text-muted-foreground">
-                      They'll be able to sign in immediately with {watch('email') || 'their email'} and the default
-                      password <strong>Employee123</strong>. You can create this later instead from the employee's
-                      details page.
+                      A setup link is emailed to {watch('email') || 'their email'}; they choose their own password
+                      from it. You can create this later instead from the employee's details page.
                     </span>
                   </span>
                 </label>
