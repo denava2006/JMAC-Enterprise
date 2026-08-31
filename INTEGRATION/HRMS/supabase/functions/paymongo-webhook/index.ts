@@ -78,31 +78,75 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceRoleKey)
 
     // Find the attempt without trusting anything a browser could have shaped.
-    // Metadata first (we set it at creation), then the provider's own ids.
+    //
+    // Every locator is tried in turn rather than as an either/or. The first
+    // version short-circuited -- `sessionId ? bySession : reference ? byRef` --
+    // and because a resource always has an `id`, the reference branch was dead
+    // code. A real payment.failed then arrived, matched nothing, and was
+    // silently ignored: the attempt sat at 'pending' forever while the customer
+    // saw a declined payment.
+    //
+    // The reason different events need different locators: a
+    // checkout_session.* event's resource IS the checkout session, but a
+    // payment.* event's resource is a Payment, whose id is a pay_... that
+    // matches no session. So the Payment has to be found by its reference, its
+    // payment intent, or its own id.
     const metadata = resourceAttrs.metadata ?? {}
-    let attemptId: string | null = metadata.jmac_attempt_id ?? null
 
-    if (!attemptId) {
-      const sessionId: string | null =
-        resource?.id ??
-        resourceAttrs.checkout_session_id ??
-        null
-      const reference: string | null = resourceAttrs.reference_number ?? metadata.jmac_reference ?? null
+    const locators: { column: string; value: string }[] = []
+    const push = (column: string, value: unknown) => {
+      if (typeof value === 'string' && value.length > 0) locators.push({ column, value })
+    }
 
-      const query = admin.from('pos_payment_attempts').select('id').limit(1)
-      const { data: found } = sessionId
-        ? await query.eq('provider_checkout_session_id', sessionId).maybeSingle()
-        : reference
-          ? await query.eq('reference_number', reference).maybeSingle()
-          : { data: null }
-      attemptId = found?.id ?? null
+    push('provider_checkout_session_id', resource?.id)
+    push('provider_checkout_session_id', resourceAttrs.checkout_session_id)
+    push('reference_number', resourceAttrs.reference_number)
+    push('reference_number', resourceAttrs.external_reference_number)
+    push('reference_number', metadata.jmac_reference)
+    push('provider_payment_intent_id', resourceAttrs.payment_intent_id)
+    push('provider_payment_intent_id', resourceAttrs.payment_intent?.id)
+    push('provider_payment_id', resource?.id)
+
+    // Last resort, and the one that actually rescues payment.failed.
+    //
+    // A payment.failed payload carries a pay_... id and a payment intent id and
+    // nothing else we stored -- verified from a real delivery. But PayMongo
+    // echoes the checkout session's description onto the payment, and that
+    // description contains the JMAC reference we issued. The reference is
+    // server-generated and self-identifying, so finding it anywhere in an
+    // already-signature-verified body is enough to identify the attempt.
+    //
+    // Scanning the raw body rather than a named field because v2 does not
+    // document where it re-surfaces, and the pattern cannot collide with
+    // anything else.
+    const refInBody = rawBody.match(/JMAC-POS-[A-Z0-9]{6,32}/)
+    if (refInBody) push('reference_number', refInBody[0])
+
+    let attemptId: string | null =
+      typeof metadata.jmac_attempt_id === 'string' ? metadata.jmac_attempt_id : null
+
+    for (const locator of locators) {
+      if (attemptId) break
+      const { data: found } = await admin
+        .from('pos_payment_attempts')
+        .select('id')
+        .eq(locator.column, locator.value)
+        .limit(1)
+        .maybeSingle()
+      if (found?.id) attemptId = found.id
     }
 
     if (!attemptId) {
       // 200, not 404: the delivery was authentic, it just isn't ours to act on
       // (another integration on the same account, or an event type we don't
       // handle). A non-2xx would make PayMongo retry it forever.
-      console.log(`no matching attempt for event ${eventType}`)
+      //
+      // The identifiers are logged so a future mismatch is diagnosable without
+      // guessing. Only provider ids -- never billing details or customer data.
+      console.log(
+        `no matching attempt for event ${eventType}; tried ` +
+          JSON.stringify(locators.map((l) => `${l.column}=${l.value}`))
+      )
       return json({ received: true, matched: false })
     }
 
@@ -142,6 +186,7 @@ Deno.serve(async (req: Request) => {
       await admin.rpc('mark_pos_payment_state', {
         _attempt_id: attemptId, _status: 'failed', _reason: 'provider reported payment failed',
       })
+      console.log(`attempt ${attemptId} -> failed`)
       return json({ received: true, status: 'failed' })
     }
 

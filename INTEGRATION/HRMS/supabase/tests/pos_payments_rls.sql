@@ -250,6 +250,30 @@ begin
   end if;
   raise notice 'PASS  4b exactly one sale was created';
 
+  -- The attempt must POINT AT the sale, not merely coexist with one.
+  --
+  -- This check exists because the suite did not have it: finalize_pos_payment
+  -- read the receipt at the wrong path, jsonb returned NULL for the missing
+  -- key rather than raising, and the attempt was marked paid with a NULL
+  -- sale_id. Everything the suite did assert -- the returned status, the sale
+  -- count, the stock deduction -- was correct, so it passed. A real test
+  -- payment caught it, because the till waits on exactly this field before it
+  -- shows the receipt.
+  if (result->>'sale_id') is null then
+    raise exception 'FAIL  4b1 finalize returned no sale_id';
+  end if;
+  select sale_id into attempt2_id from public.pos_payment_attempts where id = attempt_id;
+  if attempt2_id is null then
+    raise exception 'FAIL  4b2 the paid attempt has no sale_id';
+  end if;
+  if attempt2_id <> (select id from public.pos_sales where checkout_key = key2) then
+    raise exception 'FAIL  4b3 the attempt points at the wrong sale';
+  end if;
+  if (result->>'total')::numeric <> 110.00 then
+    raise exception 'FAIL  4b4 finalize reported total %, expected 110.00', result->>'total';
+  end if;
+  raise notice 'PASS  4b1-4 the attempt links to its sale, and reports its real total';
+
   select quantity_on_hand into qty from public.pos_branch_inventory
    where branch_id = branch_a and product_id = cola_id;
   if qty <> before_qty - 1 then
@@ -284,6 +308,7 @@ begin
   -- ======================================================================
   -- 5. When the world changed, refuse rather than record a wrong sale
   -- ======================================================================
+  -- attempt2_id was borrowed above to hold a sale id; reassign it here.
   insert into public.pos_payment_attempts
     (branch_id, cashier_profile_id, checkout_key, method, amount_centavos, items, reference_number)
   values (branch_a, till_user, key3, 'card', 11000, cart, 'JMAC-POS-BBBBBB02')

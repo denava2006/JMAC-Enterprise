@@ -259,6 +259,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const attrs = providerBody?.data?.attributes ?? {}
+
     const livemode = attrs.livemode ?? attrs.live_mode ?? false
 
     if (livemode === true) {
@@ -274,13 +275,17 @@ Deno.serve(async (req: Request) => {
     const sessionId: string | null = providerBody?.data?.id ?? null
     const checkoutUrl: string | null = attrs.checkout_url ?? attrs.url ?? null
 
+    // What v2 actually returns, confirmed by logging the response keys against
+    // this account: checkout_url, livemode, created_at, updated_at. There is no
+    // payment intent id and no expiry, so neither is stored here -- the earlier
+    // code read attrs.payment_intent and attrs.expires_at and silently wrote
+    // NULL every time, which is why a payment.failed event had nothing to match
+    // on. The webhook now identifies those by the JMAC reference instead.
     await admin.from('pos_payment_attempts')
       .update({
         provider_checkout_session_id: sessionId,
-        provider_payment_intent_id: attrs.payment_intent?.id ?? attrs.payment_intent_id ?? null,
         checkout_url: checkoutUrl,
         livemode: false,
-        expires_at: attrs.expires_at ? new Date(attrs.expires_at * 1000).toISOString() : null,
       })
       .eq('id', attempt.id)
 
