@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { HarmonyWaves } from '@/components/HarmonyWaves'
-import { HarmonyWordmark } from '@/components/Logo'
+import { JmacWordmark } from '@/components/Brand'
 
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -74,9 +74,13 @@ export default function LoginPage() {
         </Link>
 
         <Card className="shadow-lg">
-          <CardHeader className="items-center pb-2 text-center">
-            <HarmonyWordmark className="mb-2 h-9" />
-            <p className="text-sm text-muted-foreground">Sign in to your HR workspace</p>
+          <CardHeader className="items-center pb-5 text-center">
+            {/* Role-neutral by design. This one form serves Administrators, HR,
+                employees, POS managers, cashiers and -- later -- finance, so it
+                must not describe itself as any one workspace. Where the account
+                goes is decided at /home, after the profile loads. */}
+            <JmacWordmark layout="stacked" className="mb-3 text-xl text-foreground" />
+            <h1 className="text-base font-semibold text-foreground">Sign in to JMAC Enterprise</h1>
           </CardHeader>
 
           <CardContent>
@@ -147,7 +151,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Harmony Suite HRMS — sign in with the account provided to you.
+          JMAC Enterprise — use the account provided by your administrator.
         </p>
       </motion.div>
     </div>

@@ -50,7 +50,7 @@ export default function CareersPage() {
       <div className="text-center">
         <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">Open Positions</h1>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-          Browse current openings across Harmony Suite. Find a role that fits and apply in minutes.
+          Browse current openings across JMAC. Find a role that fits and apply in minutes.
         </p>
       </div>
 

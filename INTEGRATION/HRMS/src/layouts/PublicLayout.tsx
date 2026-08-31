@@ -1,10 +1,10 @@
 import * as React from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, Mail, MapPin, Phone } from 'lucide-react'
+import { Menu, X, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { HarmonyWordmark, HarmonyMark } from '@/components/Logo'
+import { JmacWordmark, MODULES } from '@/components/Brand'
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -14,8 +14,12 @@ const NAV_LINKS = [
 
 function Logo() {
   return (
-    <Link to="/" className="flex items-center" aria-label="Harmony Suite — home">
-      <HarmonyWordmark className="h-8" />
+    <Link
+      to="/"
+      className="flex items-center text-foreground transition-opacity hover:opacity-80"
+      aria-label="JMAC Enterprise — home"
+    >
+      <JmacWordmark className="text-base" />
     </Link>
   )
 }
@@ -98,13 +102,18 @@ function SiteFooter() {
     <footer className="border-t border-border bg-primary text-primary-foreground">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <HarmonyMark className="h-9 w-9" />
-            <span className="font-display text-lg font-semibold">Harmony Suite</span>
-          </div>
+          <JmacWordmark className="text-base" />
           <p className="mt-3 max-w-xs text-sm text-primary-foreground/70">
-            A modern human resource management system built to support growing teams across the Philippines.
+            One integrated platform for people, operations, sales, and finance.
           </p>
+          <ul className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5 font-mono text-[11px] tracking-[0.14em] text-primary-foreground/55">
+            {MODULES.map((m) => (
+              <li key={m.code} className={m.status === 'planned' ? 'opacity-60' : undefined}>
+                {m.code}
+                {m.status === 'planned' && <span className="ml-1 normal-case tracking-normal">(planned)</span>}
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div>
@@ -129,19 +138,21 @@ function SiteFooter() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-primary-foreground/60">Contact</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-primary-foreground/60">Applicants</h3>
           <ul className="mt-3 flex flex-col gap-2.5 text-sm text-primary-foreground/80">
-            <li className="flex items-center gap-2">
-              <Mail className="h-4 w-4 shrink-0" />
-              careers@harmonysuite.com
+            <li>
+              <Link to="/careers" className="hover:text-white">
+                Browse open roles
+              </Link>
             </li>
-            <li className="flex items-center gap-2">
-              <Phone className="h-4 w-4 shrink-0" />
-              +63 2 8888 0000
+            <li>
+              <Link to="/track" className="hover:text-white">
+                Check an application you already sent
+              </Link>
             </li>
-            <li className="flex items-center gap-2">
+            <li className="flex items-center gap-2 pt-1 text-primary-foreground/70">
               <MapPin className="h-4 w-4 shrink-0" />
-              Manila, Philippines
+              Philippines
             </li>
           </ul>
         </div>
@@ -149,7 +160,7 @@ function SiteFooter() {
 
       <div className="border-t border-white/10 py-4">
         <p className="mx-auto max-w-6xl px-4 text-center text-xs text-primary-foreground/50 sm:px-6">
-          © {new Date().getFullYear()} Harmony Suite HRMS. All rights reserved.
+          © {new Date().getFullYear()} JMAC Enterprise. All rights reserved.
         </p>
       </div>
     </footer>

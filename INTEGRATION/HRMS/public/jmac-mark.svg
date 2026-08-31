@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="JMAC Enterprise">
+  <!-- Placeholder mark, not an approved corporate logo. It is the wordmark's
+       initial set in the same weight and tracking as the page, on the brand
+       navy, so the browser tab matches the header instead of carrying the
+       previous brand's monogram. Replace wholesale when real artwork exists. -->
+  <rect width="64" height="64" rx="12" fill="#0f2a43"/>
+  <text x="32" y="33" fill="#ffffff" font-family="Manrope, ui-sans-serif, system-ui, sans-serif"
+        font-size="34" font-weight="800" letter-spacing="-1.5"
+        text-anchor="middle" dominant-baseline="central">J</text>
+  <rect x="20" y="45" width="24" height="2.5" rx="1.25" fill="#12a594"/>
+</svg>
