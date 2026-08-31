@@ -37,7 +37,9 @@ export interface DashboardSummary {
 }
 
 export interface PaymentTotal {
-  payment_method: PaymentMethod
+  /** A method a SALE holds, not one the till offers -- so 'card', 'qrph' and
+   *  'paymaya' appear here as well. Render it with paymentMethodLabel. */
+  payment_method: string
   transaction_count: number
   amount_collected: number
 }
