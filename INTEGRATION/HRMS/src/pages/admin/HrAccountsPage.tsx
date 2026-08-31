@@ -311,7 +311,7 @@ export default function HrAccountsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="font-display text-xl font-semibold text-foreground">HR Accounts</h2>
-        <p className="text-sm text-muted-foreground">Everyone with sign-in access to Harmony Suite.</p>
+        <p className="text-sm text-muted-foreground">Everyone with sign-in access to JMAC Enterprise.</p>
       </div>
 
       <DataTable

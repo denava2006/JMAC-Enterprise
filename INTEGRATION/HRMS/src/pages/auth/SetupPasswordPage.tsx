@@ -4,14 +4,14 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Mail } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { HarmonyWaves } from '@/components/HarmonyWaves'
-import { HarmonyWordmark } from '@/components/Logo'
+import { AuthWaves } from '@/components/AuthWaves'
+import { JmacWordmark } from '@/components/Brand'
 import { useAuth } from '@/contexts/AuthContext'
 import { needsPasswordSetup } from '@/lib/passwordSetup'
 
@@ -39,7 +39,7 @@ const REDIRECT_SECONDS = 2
 function AuthCardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4">
-      <HarmonyWaves />
+      <AuthWaves />
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -55,7 +55,7 @@ function AuthCardShell({ children }: { children: React.ReactNode }) {
 function BrandHeader({ title, description }: { title: string; description: string }) {
   return (
     <CardHeader className="items-center pb-2 text-center">
-      <HarmonyWordmark className="mb-3 h-8" />
+      <JmacWordmark layout="stacked" className="mb-4 text-xl text-foreground" />
       <h1 className="font-display text-2xl font-bold text-foreground">{title}</h1>
       <p className="text-sm text-muted-foreground">{description}</p>
     </CardHeader>
@@ -78,12 +78,6 @@ function InvalidInviteState({ message }: { message: string }) {
         </Button>
         <Button asChild variant="outline">
           <Link to="/">Back to Home</Link>
-        </Button>
-        <Button asChild variant="ghost">
-          <a href="mailto:admin@harmonysuite.com">
-            <Mail className="h-4 w-4" />
-            Contact Administrator
-          </a>
         </Button>
       </CardContent>
     </>
@@ -167,7 +161,7 @@ function SetupPasswordForm({ firstLogin }: { firstLogin: boolean }) {
   return (
     <>
       <BrandHeader
-        title="Welcome to Harmony Suite"
+        title="Welcome to JMAC Enterprise"
         description={
           firstLogin
             ? 'You signed in with the password HR gave you. Choose your own before continuing.'

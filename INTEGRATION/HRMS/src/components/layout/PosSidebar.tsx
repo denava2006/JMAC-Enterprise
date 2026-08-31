@@ -1,6 +1,6 @@
 import { Boxes, FileBarChart, LayoutDashboard, Receipt, ScrollText, ShoppingCart, Tags } from 'lucide-react'
 import { NavRow, type NavItem } from '@/components/layout/Sidebar'
-import { HarmonyWordmark } from '@/components/Logo'
+import { JmacWordmark } from '@/components/Brand'
 import { useAuth } from '@/contexts/AuthContext'
 import { hasAnyManagerAssignment } from '@/lib/portals'
 
@@ -48,7 +48,7 @@ export function PosSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex print:hidden">
       <div className="flex h-16 flex-col justify-center border-b border-border px-5">
-        <HarmonyWordmark className="h-7" />
+        <JmacWordmark className="text-[15px] text-foreground" />
         <span className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Point of Sale
         </span>

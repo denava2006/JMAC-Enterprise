@@ -29,7 +29,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { canAccessModule } from '@/lib/roles'
-import { HarmonyWordmark } from '@/components/Logo'
+import { JmacWordmark } from '@/components/Brand'
 
 export interface NavItem {
   label: string
@@ -144,8 +144,11 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex print:hidden">
-      <div className="flex h-16 items-center border-b border-border px-5">
-        <HarmonyWordmark className="h-7" />
+      <div className="flex h-16 flex-col justify-center border-b border-border px-5">
+        <JmacWordmark className="text-[15px] text-foreground" />
+        <span className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {profile?.role === 'employee' ? 'Employee Workspace' : 'Human Resources'}
+        </span>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">

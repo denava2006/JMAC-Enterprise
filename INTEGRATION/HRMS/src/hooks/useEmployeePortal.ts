@@ -201,7 +201,7 @@ export interface MyActivityItem {
 }
 
 const LEAVE_EMPLOYEE_HISTORY_LABEL: Record<string, string> = {
-  account_activated: 'Welcome to Harmony Suite.',
+  account_activated: 'Welcome to JMAC Enterprise.',
   status_updated: 'Employment status updated.',
 }
 

@@ -373,6 +373,7 @@ export type Database = {
           reviewed_by: string | null
           status: Database["public"]["Enums"]["change_request_status"]
           summary: string
+          system_access: Json | null
           target_id: string | null
           target_table: string
           updated_at: string
@@ -389,6 +390,7 @@ export type Database = {
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           summary: string
+          system_access?: Json | null
           target_id?: string | null
           target_table: string
           updated_at?: string
@@ -405,6 +407,7 @@ export type Database = {
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           summary?: string
+          system_access?: Json | null
           target_id?: string | null
           target_table?: string
           updated_at?: string
@@ -2478,12 +2481,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      apply_position_system_access: {
+        Args: { _access: Json; _position_id: string }
+        Returns: undefined
+      }
       approve_change_request: {
         Args: { p_request_id: string }
         Returns: undefined
       }
       approve_pos_request: {
         Args: { _note?: string; _request_id: string }
+        Returns: undefined
+      }
+      assert_entitlement_allowed: {
+        Args: {
+          _role_code: string
+          _system: Database["public"]["Enums"]["entitlement_system"]
+        }
         Returns: undefined
       }
       can_review_pos_request: {
@@ -2512,6 +2526,15 @@ export type Database = {
           _product_id: string
           _reason: string
           _requested_quantity: number
+        }
+        Returns: string
+      }
+      create_position_with_access: {
+        Args: {
+          _access?: Json
+          _department_id: string
+          _description: string
+          _title: string
         }
         Returns: string
       }

@@ -48,7 +48,7 @@ export default function PayslipPrintPage() {
 
   const applicant = record.employees
   const currency = record.currency as CurrencyCode
-  const companyName = settings?.company_name || 'Harmony Suite'
+  const companyName = settings?.company_name || 'JMAC Enterprise'
   const allowanceItems = record.payroll_line_items.filter((i) => i.item_type === 'allowance')
   const deductionItems = record.payroll_line_items.filter((i) => i.item_type === 'deduction')
 
@@ -170,7 +170,7 @@ export default function PayslipPrintPage() {
             <div className="border-b border-foreground/40 pb-1" />
             <div>
               <p className="font-medium text-foreground">HR Signature</p>
-              <p className="text-xs text-muted-foreground">Harmony Suite HR</p>
+              <p className="text-xs text-muted-foreground">JMAC Enterprise HR</p>
             </div>
           </div>
           <div className="flex flex-col gap-8">

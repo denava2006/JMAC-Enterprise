@@ -10,7 +10,7 @@ function fileBaseName(result: ReportResult): string {
 
 export async function downloadReportAsExcel(result: ReportResult): Promise<void> {
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'Harmony Suite HRMS'
+  workbook.creator = 'JMAC Enterprise'
   workbook.created = new Date()
 
   const summarySheet = workbook.addWorksheet('Summary')

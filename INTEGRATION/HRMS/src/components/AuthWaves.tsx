@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion'
  * triad (navy / ocean / teal), drifting almost imperceptibly. The one
  * deliberate decorative flourish on otherwise plain, functional auth screens.
  */
-export function HarmonyWaves() {
+export function AuthWaves() {
   const shouldReduceMotion = useReducedMotion()
   const waves = [
     { d: 'M-100,220 C 150,140 350,300 600,220 S 950,140 1200,220', color: 'var(--navy)', opacity: 0.1, duration: 40 },

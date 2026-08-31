@@ -11,6 +11,9 @@
  * below all end the session, as does the Sign out button.
  */
 
+// Deliberately NOT renamed with the JMAC rebrand: this key is what an
+// applicant's in-progress tracking session is stored under, so changing it
+// would sign out everyone mid-application to fix a string nobody can see.
 const STORAGE_KEY = 'harmony.applicant-session'
 
 /** Long enough to browse the careers site and come back, short enough that an

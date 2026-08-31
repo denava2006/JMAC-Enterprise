@@ -115,6 +115,16 @@ export function groupEntitlements(rows: PositionEntitlementRow[]): PositionEntit
   )
 }
 
+/** Role codes are storage, not display. The same map the creation form uses,
+ *  so a position reads the same wherever it appears. */
+function roleLabel(code: string): string {
+  for (const group of SYSTEM_ACCESS_CHOICES) {
+    const hit = group.options.find((o) => o.value === code)
+    if (hit) return hit.label
+  }
+  return code
+}
+
 /** What a position grants, in words. Employee Self-Service is the baseline and
  * is never an entitlement — every employee has it. */
 export function describeEligibility(entry: PositionEntitlements): string {
@@ -126,8 +136,8 @@ export function describeEligibility(entry: PositionEntitlements): string {
   if (entry.pos.length > 0) {
     parts.push(entry.pos.map((r) => POS_ROLE_LABEL[r]).join(' and '))
   }
-  if (entry.hrms.length > 0) parts.push(`HRMS ${entry.hrms.join(' and ')}`)
-  if (entry.fms.length > 0) parts.push(`Finance ${entry.fms.join(' and ')}`)
+  if (entry.hrms.length > 0) parts.push(entry.hrms.map(roleLabel).join(' and '))
+  if (entry.fms.length > 0) parts.push(entry.fms.map(roleLabel).join(' and '))
   return parts.length > 0 ? parts.join(' · ') : 'Employee self-service only'
 }
 
@@ -157,4 +167,67 @@ export function describeWorkforceError(error: unknown): string {
   if (message.includes('Only an Administrator')) return message
   if (message.includes('Sign in')) return 'Your session has expired. Sign in again.'
   return message || 'That change could not be saved.'
+}
+
+/**
+ * One role per system, as the position creation form offers it.
+ *
+ * A key that is present replaces that system's entitlements; a key that is
+ * absent leaves the system alone; null clears it. `employee` is never a value
+ * here — Employee Self-Service is the baseline every position already carries,
+ * so "no privileged access" is the *absence* of entitlements, not a role.
+ */
+export interface SystemAccessSelection {
+  hrms?: string | null
+  pos?: string | null
+  fms?: string | null
+}
+
+/** What each system offers at creation time. FMS is listed so the model reads
+ *  completely, but nothing reads FMS entitlements yet, so it is not offered. */
+export const SYSTEM_ACCESS_CHOICES: {
+  system: EntitlementSystem
+  label: string
+  available: boolean
+  options: { value: string; label: string }[]
+}[] = [
+  {
+    system: 'hrms',
+    label: 'Human Resources',
+    available: true,
+    options: [
+      { value: 'hr_staff', label: 'HR Staff' },
+      { value: 'hr_manager', label: 'HR Manager' },
+    ],
+  },
+  {
+    system: 'pos',
+    label: 'Point of Sale',
+    available: true,
+    options: [
+      { value: 'cashier', label: 'Cashier' },
+      { value: 'manager', label: 'POS Manager' },
+    ],
+  },
+  { system: 'fms', label: 'Finance', available: false, options: [] },
+]
+
+export const NO_ROLE = 'none'
+
+/** True when a selection grants nothing — the position is Employee Self-Service
+ *  only, and no entitlement row will be written for it. */
+export function isEmployeeOnly(selection: SystemAccessSelection): boolean {
+  return !selection.hrms && !selection.pos && !selection.fms
+}
+
+/** Drop the empty systems so the request carries only what was chosen. Returns
+ *  null when nothing was chosen, which is what "Employee only" looks like on
+ *  the wire — never a role code meaning "none". */
+export function toSystemAccessPayload(
+  selection: SystemAccessSelection
+): SystemAccessSelection | null {
+  const out: SystemAccessSelection = {}
+  if (selection.hrms) out.hrms = selection.hrms
+  if (selection.pos) out.pos = selection.pos
+  return Object.keys(out).length > 0 ? out : null
 }

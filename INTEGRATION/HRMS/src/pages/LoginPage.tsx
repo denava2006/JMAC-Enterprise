@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { HarmonyWaves } from '@/components/HarmonyWaves'
+import { AuthWaves } from '@/components/AuthWaves'
 import { JmacWordmark } from '@/components/Brand'
 
 const loginSchema = z.object({
@@ -57,7 +57,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4">
-      <HarmonyWaves />
+      <AuthWaves />
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}

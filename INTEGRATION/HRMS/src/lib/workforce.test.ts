@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ENFORCED_SYSTEMS,
+  SYSTEM_ACCESS_CHOICES,
+  isEmployeeOnly,
+  toSystemAccessPayload,
   POS_ROLE_LABEL,
   SYSTEM_LABEL,
   describeEligibility,
@@ -74,6 +77,12 @@ describe('describeEligibility', () => {
     // The baseline is not an entitlement -- every employee has it.
     const [entry] = groupEntitlements([row({ system: null, role_code: null })])
     expect(describeEligibility(entry)).toBe('Employee self-service only')
+  })
+
+  it('shows HR entitlements as labels, not storage codes', () => {
+    // The Positions column previously read "HRMS hr_manager".
+    const [entry] = groupEntitlements([row({ system: 'hrms', role_code: 'hr_manager' })])
+    expect(describeEligibility(entry)).toBe('HR Manager')
   })
 
   it('joins two POS roles rather than showing one', () => {
@@ -162,5 +171,61 @@ describe('POS role labels', () => {
   it('reuses the established labels, which distinguish POS Manager from HR Manager', () => {
     expect(POS_ROLE_LABEL.manager).toBe('POS Manager')
     expect(POS_ROLE_LABEL.cashier).toBe('Cashier')
+  })
+})
+
+describe('system access selection', () => {
+  it('treats an empty selection as Employee Self-Service only', () => {
+    expect(isEmployeeOnly({})).toBe(true)
+    expect(isEmployeeOnly({ hrms: null, pos: null, fms: null })).toBe(true)
+  })
+
+  it('stops being employee-only once any system is chosen', () => {
+    expect(isEmployeeOnly({ hrms: 'hr_staff' })).toBe(false)
+    expect(isEmployeeOnly({ pos: 'cashier' })).toBe(false)
+  })
+
+  it('sends null rather than a role code meaning "none"', () => {
+    // The absence of entitlements IS the meaning. A sentinel like
+    // {hrms: 'none'} would have to be understood by the database too.
+    expect(toSystemAccessPayload({})).toBeNull()
+    expect(toSystemAccessPayload({ hrms: null, pos: null })).toBeNull()
+  })
+
+  it('carries only the systems that were chosen', () => {
+    expect(toSystemAccessPayload({ hrms: 'hr_staff', pos: null })).toEqual({ hrms: 'hr_staff' })
+    expect(toSystemAccessPayload({ pos: 'manager' })).toEqual({ pos: 'manager' })
+    expect(toSystemAccessPayload({ hrms: 'hr_manager', pos: 'cashier' })).toEqual({
+      hrms: 'hr_manager',
+      pos: 'cashier',
+    })
+  })
+
+  it('never offers admin or employee as a selectable role', () => {
+    // Administrator is an enterprise identity and Employee is the baseline;
+    // the database refuses both by name, and the UI must not present them.
+    const offered = SYSTEM_ACCESS_CHOICES.flatMap((g) => g.options.map((o) => o.value))
+    for (const forbidden of ['admin', 'administrator', 'employee']) {
+      expect(offered).not.toContain(forbidden)
+    }
+  })
+
+  it('offers exactly the roles the database accepts for each system', () => {
+    const hrms = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'hrms')
+    const pos = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'pos')
+    expect(hrms?.options.map((o) => o.value).sort()).toEqual(['hr_manager', 'hr_staff'])
+    expect(pos?.options.map((o) => o.value).sort()).toEqual(['cashier', 'manager'])
+  })
+
+  it('lists FMS but does not let it be configured yet', () => {
+    const fms = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'fms')
+    expect(fms).toBeDefined()
+    expect(fms?.available).toBe(false)
+    expect(fms?.options).toEqual([])
+  })
+
+  it('labels the POS manager role so it cannot be read as HR Manager', () => {
+    const pos = SYSTEM_ACCESS_CHOICES.find((g) => g.system === 'pos')
+    expect(pos?.options.find((o) => o.value === 'manager')?.label).toBe('POS Manager')
   })
 })

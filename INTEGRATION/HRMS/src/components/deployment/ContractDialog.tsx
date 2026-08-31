@@ -55,7 +55,7 @@ export function ContractDialog({
   // contract — the standard clauses are identical every time, and hand-entering
   // them was how a contract ended up saying "fasf".
   const templateContext = {
-    companyName: settings?.company_name || 'Harmony Suite',
+    companyName: settings?.company_name || 'JMAC Enterprise',
     employeeName: applicantName,
     positionTitle,
     departmentName,

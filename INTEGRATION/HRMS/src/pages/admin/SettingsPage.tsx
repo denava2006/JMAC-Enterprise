@@ -27,7 +27,7 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="font-display text-xl font-semibold text-foreground">System Settings</h2>
-        <p className="text-sm text-muted-foreground">Organization-wide defaults used across Harmony Suite.</p>
+        <p className="text-sm text-muted-foreground">Organization-wide defaults used across JMAC Enterprise.</p>
       </div>
 
       <Card className="max-w-xl">

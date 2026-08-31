@@ -216,8 +216,8 @@ the check.
 
 ### Database
 
-**124 migrations, all applied** to the live local database (verified against
-`supabase_migrations.schema_migrations`, 2026-08-30). The HR tables:
+**128 migrations, all applied** to the live local database (verified against
+`supabase_migrations.schema_migrations`, 2026-08-31). The HR tables:
 
 ```text
 profiles  employees  employee_history  employee_documents
@@ -785,6 +785,71 @@ privilege state, never the presence of a REVOKE line — §D2.
 
 ---
 
+### D2e. System Access at position creation (JMAC branding task)
+
+Phase 9A made eligibility configurable *after* a position existed. Creating
+"HR Staff" therefore took two steps, and between them the position existed with
+no entitlement. For an HR Staff author it was worse: the position went through
+change-request approval and the entitlement did not, so the two could disagree
+about whether the change had happened.
+
+Eligibility now travels **with** the position change.
+
+```text
+position_system_roles          the registry, unchanged from 9A
+assert_entitlement_allowed     the single judgement of a (system, role) pair
+apply_position_system_access   the single writer -- internal, granted to no API role
+  ├── set_position_entitlement       System Access dialog   (Administrator)
+  ├── create_position_with_access    direct create          (HR Manager / Admin)
+  └── approve_change_request         approved request       (HR Manager)
+```
+
+One validator, one writer, three authorized entry points. The dialog and the
+creation form cannot drift into accepting different things, which is the
+failure mode a second code path would have introduced.
+
+**Atomic with the approval.** `change_requests.system_access jsonb` carries the
+proposal; `approve_change_request` applies it in the same transaction that
+writes the position, and the generic insert now returns the new row's id so a
+create knows what it made. Reject the request and nothing is written at all —
+there is no ordering in which a refused position leaves an entitlement behind.
+A malformed proposal is refused at *submission* by
+`validate_change_request_system_access`, so a reviewer is never shown a request
+that cannot be applied.
+
+**Employee is still the baseline, and still absent.** A position with no
+selections gets **no rows**. `assert_entitlement_allowed` refuses `admin`,
+`administrator` and `employee` by name, with an error that says why rather than
+leaving the CHECK constraint to explain. Writing `employee` would make the
+absence of a row ambiguous, and it is the absence that carries the meaning.
+
+**The HRMS registry is complete.** `Human Resources / HR Staff → hrms:hr_staff`
+and `HR Manager → hrms:hr_manager`. The 9A seed only added HR positions when an
+HR department already existed, which held locally and did nothing in production;
+`20260829000000` creates the department when missing, the way 9A created Store
+Operations.
+
+**What this is NOT.** HR runtime authorization still reads `profiles.role` —
+`is_active_staff()` and `is_hr_manager_or_admin()` are untouched. HR eligibility
+is *configurable*, not *enforced*. Wiring it into runtime auth is Phase 9B and
+needs the account-linkage work; doing it here would have signed out every
+existing HR account the moment it shipped. The contract suite asserts both
+directions of that boundary so an accidental cutover fails a test rather than a
+login.
+
+Migrations `20260829000000` / `010000` / `020000` / `030000`. Contract suite
+`position_system_access_rls.sql` (14 checks).
+
+`030000` is another ACL follow-up, and the pattern is now familiar enough to
+name: `assert_entitlement_allowed` and `validate_change_request_system_access`
+reached production carrying PostgreSQL's default `PUBLIC EXECUTE` because the
+revokes were written for the two routines beside them and not for these. The
+9A ACL check could not catch it — it enumerated 9A's routines by name. Both ACL
+sections now enumerate from `pg_proc` and assert the expected count, so the next
+routine added to either area is covered the moment it exists.
+
+---
+
 ### D3. FMS boundary
 
 FMS integration has **not** begun. The boundary is defined now so POS does not
@@ -1204,10 +1269,10 @@ unless it is being changed for another reason, because re-emitting 293 lines of
 proven concurrency-critical code to delete six lines of audit insert is a
 disproportionate risk for a cosmetic gain.
 
-Phases 2A through 9A — plus the navigation revision — are complete: HRMS 516
-tests pass across 35 files, typecheck, build and lint are clean, eleven database
-contract suites pass (18 + 42 + 33 + 33 + 36 + 41 + 47 + 19 + 34 + 26 + 35 = 364
-checks), both concurrency harnesses pass and leave no residue, the standalone
+Phases 2A through 9A — plus the navigation revision, the JMAC rebrand and
+System Access at position creation — are complete: HRMS 525 tests pass across 35
+files, typecheck, build and lint are clean, twelve database contract suites pass
+(378 checks), both concurrency harnesses pass and leave no residue, the standalone
 POS regression remains 61 tests, and Phase 9A browser verification passed 18/18
 checks. Phase 7C's browser pass (26/26) ran with every context in
 `America/New_York`, a non-Manila timezone, so a browser-computed day boundary

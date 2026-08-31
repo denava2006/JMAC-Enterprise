@@ -441,7 +441,7 @@ export default function PosAccessPage() {
       <div>
         <h2 className="font-display text-xl font-semibold text-foreground">POS Access</h2>
         <p className="text-sm text-muted-foreground">
-          Who may open the Point of Sale, and at which branch. Access is granted to an existing Harmony Suite account —
+          Who may open the Point of Sale, and at which branch. Access is granted to an existing JMAC Enterprise account —
           nobody gets a second login for the till.
         </p>
       </div>

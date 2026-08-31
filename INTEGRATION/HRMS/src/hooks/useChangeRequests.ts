@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import type { SystemAccessSelection } from '@/lib/workforce'
 import type { Json } from '@/lib/database.types'
 import type { ChangeRequestOperation, ChangeRequestStatus } from '@/lib/enums'
 import { useAuth } from '@/contexts/AuthContext'
@@ -100,6 +101,10 @@ export interface SubmitChangeRequestInput {
   targetId?: string
   payload?: Record<string, unknown>
   summary: string
+  /** Proposed position eligibility, applied by the database in the same
+   *  transaction that approves the request. Rejecting applies nothing, so a
+   *  refused position can never leave an entitlement behind. */
+  systemAccess?: SystemAccessSelection | null
 }
 
 export function useSubmitChangeRequest() {
@@ -116,6 +121,7 @@ export function useSubmitChangeRequest() {
         summary: input.summary,
         requested_by: profile.id,
         status: 'pending',
+        system_access: (input.systemAccess ?? null) as Json,
       })
       if (error) throw error
     },

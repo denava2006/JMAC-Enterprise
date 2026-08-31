@@ -399,7 +399,7 @@ export default function CreateEmployeePage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl font-semibold text-foreground">Create Employee</h2>
-          <p className="text-sm text-muted-foreground">Add a new employee record to Harmony Suite.</p>
+          <p className="text-sm text-muted-foreground">Add a new employee record to JMAC Enterprise.</p>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link to="/dashboard/employees">

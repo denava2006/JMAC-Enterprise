@@ -29,7 +29,7 @@ export default function ReportPrintPage() {
     )
   }
 
-  const companyName = settings?.company_name || 'Harmony Suite'
+  const companyName = settings?.company_name || 'JMAC Enterprise'
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10 print:p-0">

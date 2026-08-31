@@ -38,6 +38,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { canApproveWork } from '@/lib/roles'
 import { useSubmitChangeRequest } from '@/hooks/useChangeRequests'
 import { useDepartments } from '@/hooks/useDepartments'
+import { SystemAccessFields } from '@/components/admin/SystemAccessFields'
+import { toSystemAccessPayload, type SystemAccessSelection } from '@/lib/workforce'
 
 const positionSchema = z.object({
   title: z.string().min(1, 'Position title is required').max(100),
@@ -62,6 +64,10 @@ function PositionFormDialog({
   const createPos = useCreatePosition()
   const updatePos = useUpdatePosition()
   const submitRequest = useSubmitChangeRequest()
+  // Eligibility is only offered while creating. An existing position is edited
+  // through the System Access dialog on its row, so the two never disagree
+  // about which one is authoritative.
+  const [access, setAccess] = React.useState<SystemAccessSelection>({})
   const {
     register,
     control,
@@ -77,15 +83,22 @@ function PositionFormDialog({
         department_id: position?.department_id ?? '',
         description: position?.description ?? '',
       })
+      // A new position starts with no privileged access: Employee Self-Service
+      // only, until somebody deliberately chooses otherwise.
+      setAccess({})
     }
   }, [open, position, reset])
 
   const onSubmit = async (values: PositionFormValues) => {
+    // Null rather than an empty object: "no privileged access" is the absence
+    // of entitlements, never a role code meaning none.
+    const systemAccess = isEdit ? null : toSystemAccessPayload(access)
+
     if (canWriteDirect) {
       if (isEdit) {
         await updatePos.mutateAsync({ id: position.id, values })
       } else {
-        await createPos.mutateAsync(values)
+        await createPos.mutateAsync({ values, systemAccess })
       }
     } else {
       await submitRequest.mutateAsync({
@@ -98,6 +111,9 @@ function PositionFormDialog({
           description: values.description || null,
         },
         summary: `${isEdit ? 'Update' : 'Create'} position: ${values.title}`,
+        // Travels with the request and is applied by the database only if the
+        // request is approved, so a rejected position leaves no entitlement.
+        systemAccess,
       })
     }
     onOpenChange(false)
@@ -152,6 +168,8 @@ function PositionFormDialog({
             <Label htmlFor="description">Description</Label>
             <Textarea id="description" {...register('description')} placeholder="Optional" rows={3} />
           </div>
+
+          {!isEdit && <SystemAccessFields value={access} onChange={setAccess} />}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
