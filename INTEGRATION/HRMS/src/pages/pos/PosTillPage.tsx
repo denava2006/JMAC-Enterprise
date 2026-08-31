@@ -536,7 +536,14 @@ export default function PosTillPage() {
                   amountCentavos={onlinePayment.amountCentavos}
                   reference={onlinePayment.reference}
                   onPaid={setPaidSaleId}
-                  onDismiss={() => setOnlinePayment(null)}
+                  onDismiss={() => {
+                    // A fresh key, or the retry is a dead end. The key is
+                    // derived from the cart, so an unchanged cart would reuse
+                    // the key of the attempt that just failed and the server
+                    // would refuse it as already terminal, forever.
+                    attemptRef.current = null
+                    setOnlinePayment(null)
+                  }}
                 />
               ) : (
                 <p className="rounded-lg border border-border bg-muted/30 p-2 text-xs text-muted-foreground">

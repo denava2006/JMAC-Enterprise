@@ -527,4 +527,41 @@ describe('online payments', () => {
     fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
     expect(screen.getByText('JMAC-POS-ABCDEF012345')).toBeTruthy()
   })
+
+  it('mints a fresh checkout key after a failed payment is dismissed', () => {
+    // The key is derived from the cart, so retrying an unchanged cart would
+    // otherwise reuse the key of the attempt that just failed -- and the server
+    // refuses a terminal attempt, leaving the cashier permanently stuck on a
+    // sale they can never take.
+    state.onlineResult = {
+      attemptId: 'a1', checkoutUrl: 'https://checkout.test/abc',
+      amountCentavos: 11000, reference: 'JMAC-POS-ABCDEF012345',
+    }
+    state.attempt = { id: 'a1', status: 'failed', sale_id: null }
+    startOnline()
+    fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
+
+    const firstKey = (lastOnlineArgs as { checkoutKey: string }).checkoutKey
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the till' }))
+    fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
+
+    const secondKey = (lastOnlineArgs as { checkoutKey: string }).checkoutKey
+    expect(secondKey).not.toBe(firstKey)
+  })
+
+  it('keeps the cart when a payment fails, so cash is still an option', () => {
+    state.onlineResult = {
+      attemptId: 'a1', checkoutUrl: 'https://checkout.test/abc',
+      amountCentavos: 11000, reference: 'JMAC-POS-ABCDEF012345',
+    }
+    state.attempt = { id: 'a1', status: 'expired', sale_id: null }
+    startOnline()
+    fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the till' }))
+
+    selectMethod('Cash')
+    expect(screen.getByLabelText('Cash received')).toBeTruthy()
+  })
+
 })
