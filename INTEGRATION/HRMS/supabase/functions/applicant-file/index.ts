@@ -65,7 +65,13 @@ Deno.serve(async (req: Request) => {
       p_bucket: bucket,
       p_path: path,
     })
-    if (ownsError) return json({ error: ownsError.message }, 400)
+    // The database's own message is not the applicant's business: it can name
+    // tables and columns. Log it where an operator can read it and hand back
+    // the same refusal they would get for any other bad request.
+    if (ownsError) {
+      console.error('applicant_owns_file failed:', ownsError.message)
+      return json({ error: 'That file cannot be downloaded from here.' }, 400)
+    }
 
     // Deliberately the same message whether the pairing was wrong or the file
     // simply isn't theirs — telling them apart would confirm which reference
@@ -77,7 +83,8 @@ Deno.serve(async (req: Request) => {
       .createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
 
     if (signError || !signed?.signedUrl) {
-      return json({ error: signError?.message ?? 'Could not prepare that download.' }, 400)
+      console.error('createSignedUrl failed:', signError?.message ?? 'no url returned')
+      return json({ error: 'Could not prepare that download.' }, 400)
     }
 
     // SUPABASE_URL inside the runtime is the container-internal gateway
@@ -90,6 +97,9 @@ Deno.serve(async (req: Request) => {
 
     return json({ path: signedPath, expiresIn: SIGNED_URL_TTL_SECONDS })
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'Unexpected error.' }, 500)
+    // Never surface the thrown message: at this point it could be anything the
+    // runtime produced, including connection strings in a driver error.
+    console.error('applicant-file unhandled:', err instanceof Error ? err.message : err)
+    return json({ error: 'Could not prepare that download.' }, 500)
   }
 })
