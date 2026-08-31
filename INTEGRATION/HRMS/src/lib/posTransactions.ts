@@ -33,7 +33,9 @@ export interface TransactionRow {
   subtotal: number
   fees_total: number
   total_amount: number
-  payment_method: PaymentMethod
+  /** What the SALE holds, so 'card', 'qrph' and 'paymaya' appear here too.
+   *  Render it with paymentLabel. */
+  payment_method: string
   payment_reference: string | null
   amount_tendered: number | null
   change_given: number | null
@@ -89,7 +91,7 @@ export function summarise(rows: TransactionRow[]): { sales: number; units: numbe
   }
 }
 
-export function paymentLabel(method: PaymentMethod): string {
+export function paymentLabel(method: string): string {
   return saleMethodLabel(method)
 }
 

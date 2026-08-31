@@ -260,8 +260,9 @@ export default function PosTillPage() {
   const pay = () => {
     if (errors.length > 0 || checkout.isPending || createOnline.isPending || !branchId) return
 
-    const online = onlineMethodOf(method)
-    if (online) {
+    if (isOnlineMethod(method)) {
+      const online = onlineMethodOf(method)
+      if (!online) return
       // The till sends products and quantities only. The amount is priced by
       // the database inside the Edge Function, so nothing here can influence
       // what the customer is charged.
@@ -501,7 +502,7 @@ export default function PosTillPage() {
 
             <div className="flex flex-col gap-1.5">
               <Label>Payment</Label>
-              <Select value={method} onValueChange={(value) => setMethod(value as PaymentMethod)}>
+              <Select value={method} onValueChange={(value) => setMethod(value as TillMethod)}>
                 <SelectTrigger aria-label="Payment method">
                   <SelectValue />
                 </SelectTrigger>

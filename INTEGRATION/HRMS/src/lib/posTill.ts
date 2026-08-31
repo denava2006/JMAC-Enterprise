@@ -64,7 +64,7 @@ export const ONLINE_METHOD_LABEL: Record<OnlineMethod, string> = {
  *  PayMongo has to confirm. */
 export type TillMethod = PaymentMethod | `online:${OnlineMethod}`
 
-export function isOnlineMethod(method: TillMethod): boolean {
+export function isOnlineMethod(method: TillMethod): method is `online:${OnlineMethod}` {
   return method.startsWith('online:')
 }
 
@@ -285,7 +285,7 @@ export interface CheckoutAttempt {
 export function attemptFingerprint(input: {
   branchId: string | null
   items: { product_id: string; quantity: number }[]
-  method: PaymentMethod
+  method: TillMethod
   reference: string | null
   tendered: number | null
 }): string {
