@@ -396,6 +396,41 @@ begin
   if txt is not null then raise exception 'FAIL 10b an API role can call the internal trigger(s): %', txt; end if;
   raise notice 'PASS 10a the HR surface denies anon, and its triggers reach no API role';
 
+  ------------------------------------- 11. the Administrator bootstrap door
+  -- Exactly one Administrator, and the bootstrap function cannot make another.
+  select count(*) into n from public.profiles where role = 'admin';
+  if n <> 1 then raise exception 'FAIL 11a expected exactly 1 Administrator, found %', n; end if;
+
+  begin
+    perform public.bootstrap_first_administrator('anyone@example.com');
+    raise exception 'FAIL 11b bootstrap created a second Administrator';
+  exception when others then
+    if SQLERRM not like 'ADMIN_ALREADY_EXISTS%' then raise; end if;
+  end;
+  raise notice 'PASS 11a exactly one Administrator, and bootstrap refuses to create another';
+
+  -- The guard it has to switch off is on, and stays on.
+  select t.tgenabled into txt from pg_trigger t
+   where t.tgrelid = 'public.profiles'::regclass and t.tgname = 'trg_protect_admin_accounts';
+  if txt is null or txt = 'D' then
+    raise exception 'FAIL 11c the admin-protection trigger is disabled'; end if;
+
+  -- And it still does its job: nobody may be promoted to admin by an update.
+  begin
+    update public.profiles set role = 'admin' where id = staff_id;
+    raise exception 'FAIL 11d a profile was promoted to Administrator';
+  exception when others then
+    if SQLERRM like 'FAIL 11d%' then raise; end if;
+  end;
+  raise notice 'PASS 11b the admin-protection trigger is enabled and still refuses promotion';
+
+  -- The bootstrap door is reachable by no API role.
+  if has_function_privilege('anon', 'public.bootstrap_first_administrator(text)', 'execute')
+     or has_function_privilege('authenticated', 'public.bootstrap_first_administrator(text)', 'execute') then
+    raise exception 'FAIL 11e an API role can call the Administrator bootstrap';
+  end if;
+  raise notice 'PASS 11c the bootstrap function is reachable by no API role';
+
   raise notice '--- all HR privilege contract checks passed ---';
 end $$;
 

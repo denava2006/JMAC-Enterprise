@@ -64,6 +64,41 @@ export function useApplicationDetail(applicationId: string | undefined) {
   })
 }
 
+/**
+ * Whether the applicant was actually told.
+ *
+ * The outbox records an intention to notify in the same transaction as the
+ * decision; delivery happens afterwards and can fail. HR needs to know which,
+ * because "we emailed them" and "we tried to email them" lead to different
+ * next actions.
+ *
+ * The RPC deliberately returns no provider error text -- a Brevo message can
+ * name internals, and "Failed" plus a timestamp is what a person can act on.
+ */
+export interface ApplicantNotification {
+  id: string
+  event_type: string
+  status: 'pending' | 'processing' | 'sent' | 'failed'
+  attempts: number
+  created_at: string
+  sent_at: string | null
+  has_error: boolean
+}
+
+export function useApplicantNotifications(applicationId: string | undefined) {
+  return useQuery({
+    queryKey: ['applicant-notifications', applicationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_applicant_notifications', {
+        _application_id: applicationId as string,
+      })
+      if (error) throw error
+      return (data ?? []) as unknown as ApplicantNotification[]
+    },
+    enabled: !!applicationId,
+  })
+}
+
 export function useApplicationHistory(applicationId: string | undefined) {
   return useQuery({
     queryKey: ['application-history', applicationId],

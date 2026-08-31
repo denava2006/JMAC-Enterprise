@@ -34,6 +34,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      applicant_notification_outbox: {
+        Row: {
+          application_id: string
+          attempts: number
+          created_at: string
+          dedupe_key: string
+          event_type: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          recipient_email: string
+          recipient_name: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["applicant_notification_status"]
+          updated_at: string
+        }
+        Insert: {
+          application_id: string
+          attempts?: number
+          created_at?: string
+          dedupe_key: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          recipient_email: string
+          recipient_name: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["applicant_notification_status"]
+          updated_at?: string
+        }
+        Update: {
+          application_id?: string
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          recipient_email?: string
+          recipient_name?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["applicant_notification_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applicant_notification_outbox_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       applicants: {
         Row: {
           address: string | null
@@ -2554,6 +2613,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      bootstrap_first_administrator: {
+        Args: { _email: string }
+        Returns: string
+      }
       can_review_pos_request: {
         Args: { _request_type: Database["public"]["Enums"]["pos_request_type"] }
         Returns: boolean
@@ -2619,6 +2682,15 @@ export type Database = {
       employment_permits_operational_work: {
         Args: { _status: Database["public"]["Enums"]["employment_status"] }
         Returns: boolean
+      }
+      enqueue_applicant_notification: {
+        Args: {
+          _application_id: string
+          _dedupe_key: string
+          _event_type: string
+          _payload?: Json
+        }
+        Returns: string
       }
       generate_application_reference: { Args: never; Returns: string }
       generate_employee_number: { Args: never; Returns: string }
@@ -2727,6 +2799,18 @@ export type Database = {
           subtotal: number
           total_amount: number
           total_count: number
+        }[]
+      }
+      get_applicant_notifications: {
+        Args: { _application_id: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          event_type: string
+          has_error: boolean
+          id: string
+          sent_at: string
+          status: string
         }[]
       }
       get_branch_catalogue_management: {
@@ -3399,6 +3483,11 @@ export type Database = {
     }
     Enums: {
       account_status: "active" | "inactive"
+      applicant_notification_status:
+        | "pending"
+        | "processing"
+        | "sent"
+        | "failed"
       application_status:
         | "submitted"
         | "under_review"
@@ -3619,6 +3708,12 @@ export const Constants = {
   public: {
     Enums: {
       account_status: ["active", "inactive"],
+      applicant_notification_status: [
+        "pending",
+        "processing",
+        "sent",
+        "failed",
+      ],
       application_status: [
         "submitted",
         "under_review",

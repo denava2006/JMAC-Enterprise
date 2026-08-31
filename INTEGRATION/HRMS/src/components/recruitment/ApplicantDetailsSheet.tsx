@@ -31,10 +31,13 @@ import { formatAddress } from '@/components/AddressFields'
 import { ResumeViewer } from '@/components/recruitment/ResumeViewer'
 import {
   useApplicationDetail,
-  useApplicationHistory,
+  useApplicationHistory,
+  useApplicantNotifications,
+
   useMarkQualified,
   useRejectApplicant,
 } from '@/hooks/useRecruitment'
+import type { ApplicantNotification } from '@/hooks/useRecruitment'
 import { APPLICATION_STATUS_LABEL, APPLICATION_STATUS_VARIANT } from '@/lib/applicationStatusLabels'
 
 const HISTORY_EVENT_LABEL: Record<string, string> = {
@@ -155,6 +158,67 @@ function DetailsSkeleton() {
   )
 }
 
+
+/** What the applicant was told, and whether it arrived.
+ *
+ * Compact on purpose: this is a delivery indicator, not a mail client. It
+ * shows the event, the state and when it was sent -- never the address, the
+ * body, or the provider's error, which stays server-side for an operator. */
+function NotificationDelivery({ items }: { items: ApplicantNotification[] | undefined }) {
+  if (!items || items.length === 0) return null
+
+  const LABEL: Record<string, string> = {
+    application_submitted: 'Application received',
+    application_shortlisted: 'Shortlisted',
+    interview_scheduled: 'Interview scheduled',
+    interview_rescheduled: 'Interview rescheduled',
+    interview_cancelled: 'Interview cancelled',
+    offer_sent: 'Job offer',
+    application_hired: 'Hired',
+    application_rejected: 'Application update',
+    application_closed: 'Application closed',
+    deployment_completed: 'Onboarding complete',
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Applicant notifications
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {items.map((n) => (
+          <div
+            key={n.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+          >
+            <span className="text-sm text-foreground">{LABEL[n.event_type] ?? n.event_type}</span>
+            <span className="flex items-center gap-2 text-xs">
+              {n.status === 'sent' ? (
+                <>
+                  <Badge variant="success">Sent</Badge>
+                  <span className="text-muted-foreground">
+                    {n.sent_at ? new Date(n.sent_at).toLocaleString(undefined,
+                      { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                  </span>
+                </>
+              ) : n.status === 'failed' ? (
+                <>
+                  <Badge variant="destructive">Failed</Badge>
+                  <span className="text-muted-foreground">
+                    {n.attempts} attempt{n.attempts === 1 ? '' : 's'}
+                  </span>
+                </>
+              ) : (
+                <Badge variant="muted">{n.status === 'processing' ? 'Sending' : 'Pending'}</Badge>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function ApplicantDetailsSheet({
   applicationId,
   open,
@@ -166,6 +230,7 @@ export function ApplicantDetailsSheet({
 }) {
   const { data: application, isLoading } = useApplicationDetail(applicationId ?? undefined)
   const { data: history } = useApplicationHistory(applicationId ?? undefined)
+  const { data: notifications } = useApplicantNotifications(applicationId ?? undefined)
   const markQualified = useMarkQualified()
   const rejectApplicant = useRejectApplicant()
   const [rejectOpen, setRejectOpen] = React.useState(false)
@@ -280,6 +345,8 @@ export function ApplicantDetailsSheet({
                       </div>
                     </div>
                   </section>
+
+                  <NotificationDelivery items={notifications} />
 
                   <section className="flex flex-col gap-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
