@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, FileText, Sparkles, Upload, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, FileCheck2, FileText, Sparkles, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,6 +21,7 @@ import { useWorkSchedules } from '@/hooks/useWorkSchedules'
 import { formatScheduleTime, formatWorkingDays } from '@/lib/attendanceCalculations'
 import {
   useApplicationForEmployeeCreation,
+  useGovernmentIdViewer,
   useCreateEmployee,
   useCreateEmployeeAccount,
   useUploadEmployeeDocument,
@@ -185,6 +186,8 @@ export default function CreateEmployeePage() {
 
   const [step, setStep] = React.useState(0)
   const [autoFilledFields, setAutoFilledFields] = React.useState<Set<string>>(new Set())
+  const applicant = applicationData?.applicant
+  const viewDocument = useGovernmentIdViewer()
   const [staged, setStaged] = React.useState<StagedDocument[]>([])
   const [pendingDocType, setPendingDocType] = React.useState<string>(DOCUMENT_TYPE_OPTIONS[0])
   const [pendingFile, setPendingFile] = React.useState<File | null>(null)
@@ -251,6 +254,8 @@ export default function CreateEmployeePage() {
       // Collected on the application, so HR is not asked to retype a date the
       // applicant already gave -- and one the system already checked.
       ...(applicant.birth_date ? { birthDate: applicant.birth_date } : {}),
+      ...(applicant.gender ? { gender: applicant.gender } : {}),
+      ...(applicant.nationality ? { nationality: applicant.nationality } : {}),
       ...(jobPosting?.department_id ? { departmentId: jobPosting.department_id } : {}),
       ...(jobPosting?.position_id ? { positionId: jobPosting.position_id } : {}),
       ...(offer
@@ -856,6 +861,33 @@ export default function CreateEmployeePage() {
                 <p className="text-sm text-muted-foreground">
                   Upload any employee documents now, or skip this step and add them later from the employee's details page.
                 </p>
+
+                {/* The applicant already attached a government ID, and it is
+                    already filed against this employee when the record is
+                    created. Showing it here is the difference between HR
+                    reviewing a document and HR asking for it a second time. */}
+                {applicant?.government_id_path && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-success/40 bg-success/5 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <FileCheck2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">Government ID</p>
+                        <p className="text-xs text-muted-foreground">
+                          Submitted with this application — no need to upload it again.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      loading={viewDocument.isPending}
+                      onClick={() => viewDocument.mutate(applicant.government_id_path as string)}
+                    >
+                      View
+                    </Button>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">

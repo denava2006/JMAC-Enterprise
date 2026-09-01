@@ -198,10 +198,12 @@ export type Database = {
           applicant_cover_letter: string | null
           applicant_email: string | null
           applicant_first_name: string | null
+          applicant_gender: string | null
           applicant_government_id_path: string | null
           applicant_id: string
           applicant_last_name: string | null
           applicant_middle_name: string | null
+          applicant_nationality: string | null
           applicant_phone: string | null
           applicant_province: string | null
           applicant_resume_url: string | null
@@ -225,10 +227,12 @@ export type Database = {
           applicant_cover_letter?: string | null
           applicant_email?: string | null
           applicant_first_name?: string | null
+          applicant_gender?: string | null
           applicant_government_id_path?: string | null
           applicant_id: string
           applicant_last_name?: string | null
           applicant_middle_name?: string | null
+          applicant_nationality?: string | null
           applicant_phone?: string | null
           applicant_province?: string | null
           applicant_resume_url?: string | null
@@ -252,10 +256,12 @@ export type Database = {
           applicant_cover_letter?: string | null
           applicant_email?: string | null
           applicant_first_name?: string | null
+          applicant_gender?: string | null
           applicant_government_id_path?: string | null
           applicant_id?: string
           applicant_last_name?: string | null
           applicant_middle_name?: string | null
+          applicant_nationality?: string | null
           applicant_phone?: string | null
           applicant_province?: string | null
           applicant_resume_url?: string | null
@@ -3639,6 +3645,14 @@ export type Database = {
         Args: { p_period_id: string }
         Returns: undefined
       }
+      reconcile_hr_privilege: {
+        Args: { _profile_id: string }
+        Returns: undefined
+      }
+      reconcile_pos_access: {
+        Args: { _profile_id: string }
+        Returns: undefined
+      }
       record_application_milestone: {
         Args: { _application_id: string; _event: string; _occurred_at?: string }
         Returns: undefined
@@ -3688,46 +3702,31 @@ export type Database = {
         }
         Returns: undefined
       }
-      submit_job_application:
-        | {
-            Args: {
-              p_address: string
-              p_cover_letter?: string
-              p_email: string
-              p_first_name: string
-              p_job_posting_id: string
-              p_last_name: string
-              p_phone: string
-              p_resume_path: string
-            }
-            Returns: {
-              applicant_id: string
-              application_id: string
-            }[]
-          }
-        | {
-            Args: {
-              p_address: string
-              p_barangay?: string
-              p_birth_date?: string
-              p_city?: string
-              p_cover_letter?: string
-              p_email: string
-              p_first_name: string
-              p_government_id_path?: string
-              p_job_posting_id: string
-              p_last_name: string
-              p_middle_name?: string
-              p_phone: string
-              p_province?: string
-              p_resume_path: string
-            }
-            Returns: {
-              applicant_id: string
-              application_id: string
-              reference_code: string
-            }[]
-          }
+      submit_job_application: {
+        Args: {
+          p_address: string
+          p_barangay?: string
+          p_birth_date?: string
+          p_city?: string
+          p_cover_letter?: string
+          p_email: string
+          p_first_name: string
+          p_gender?: string
+          p_government_id_path?: string
+          p_job_posting_id: string
+          p_last_name: string
+          p_middle_name?: string
+          p_nationality?: string
+          p_phone: string
+          p_province?: string
+          p_resume_path: string
+        }
+        Returns: {
+          applicant_id: string
+          application_id: string
+          reference_code: string
+        }[]
+      }
       sync_employment_statuses: { Args: never; Returns: undefined }
       validate_pos_payment_reference: {
         Args: { _payment_method: string; _payment_reference: string }

@@ -25,6 +25,8 @@ export interface SubmittedApplicant {
   birth_date: string | null
   /** Object path in the private government-ids bucket -- never a URL. */
   government_id_path: string | null
+  gender: string | null
+  nationality: string | null
 }
 
 /** The application's own immutable snapshot columns. */
@@ -42,6 +44,8 @@ export interface ApplicationIdentitySnapshot {
   applicant_cover_letter?: string | null
   applicant_birth_date?: string | null
   applicant_government_id_path?: string | null
+  applicant_gender?: string | null
+  applicant_nationality?: string | null
 }
 
 /** The applicants row: one per email, rewritten by each new submission. */
@@ -91,18 +95,24 @@ export function resolveSubmittedApplicant(
     // application submitted before these were collected simply has none.
     birth_date: application?.applicant_birth_date ?? null,
     government_id_path: application?.applicant_government_id_path ?? null,
+    // No fallback: neither was ever stored on the contact record, so an
+    // application from before they were collected simply has none.
+    gender: application?.applicant_gender ?? null,
+    nationality: application?.applicant_nationality ?? null,
   }
 }
 
 /** Form fields that can be carried over from an application, and the submitted
- *  value behind each. Gender, civil status and nationality are deliberately
- *  absent: an application never asks for them, so they are HR's to enter and
- *  must never be shown as though the applicant had supplied them.
+ *  value behind each.
  *
- *  Birth date IS here now -- the application collects it, because an applicant
- *  must be 18 and the date is checked at submission. */
+ *  Civil status is the one that remains HR's: no application asks for it, so it
+ *  must never be shown as though the applicant had supplied it. Birth date,
+ *  gender and nationality were all on that list once and are not any more --
+ *  the application collects each of them now, which is the point. */
 export const IMPORTABLE_FIELDS = {
   birthDate: 'birth_date',
+  gender: 'gender',
+  nationality: 'nationality',
   firstName: 'first_name',
   middleName: 'middle_name',
   lastName: 'last_name',

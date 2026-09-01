@@ -59,7 +59,7 @@ begin
     perform public.submit_job_application(
       job_a, 'ZZ', 'NoDob', 'zz.nodob.' || tag || '@jmac-test.invalid', '0917',
       'Addr', 'resumes/' || tag || '-r.pdf', null, null, 'Cavite', 'Imus', 'B1',
-      null, 'government-ids/' || tag || '-id.pdf');
+      null, 'government-ids/' || tag || '-id.pdf', 'Male', 'Filipino');
     raise exception 'FAIL  1a an application was accepted with no date of birth';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
@@ -71,7 +71,7 @@ begin
     perform public.submit_job_application(
       job_a, 'ZZ', 'Underage', 'zz.under.' || tag || '@jmac-test.invalid', '0917',
       'Addr', 'resumes/' || tag || '-r2.pdf', null, null, 'Cavite', 'Imus', 'B1',
-      (adult + interval '1 day')::date, 'government-ids/' || tag || '-id2.pdf');
+      (adult + interval '1 day')::date, 'government-ids/' || tag || '-id2.pdf', 'Male', 'Filipino');
     raise exception 'FAIL  1b somebody one day short of 18 was accepted';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
@@ -85,7 +85,7 @@ begin
     perform public.submit_job_application(
       job_a, 'ZZ', 'NoId', 'zz.noid.' || tag || '@jmac-test.invalid', '0917',
       'Addr', 'resumes/' || tag || '-r3.pdf', null, null, 'Cavite', 'Imus', 'B1',
-      adult, null);
+      adult, null, 'Male', 'Filipino');
     raise exception 'FAIL  2a an application was accepted with no government ID';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
@@ -98,7 +98,7 @@ begin
     perform public.submit_job_application(
       job_a, 'ZZ', 'SameFile', 'zz.same.' || tag || '@jmac-test.invalid', '0917',
       'Addr', 'resumes/' || tag || '-dup.pdf', null, null, 'Cavite', 'Imus', 'B1',
-      adult, 'resumes/' || tag || '-dup.pdf');
+      adult, 'resumes/' || tag || '-dup.pdf', 'Male', 'Filipino');
     raise exception 'FAIL  2b the resume was accepted as the government ID';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
@@ -112,7 +112,7 @@ begin
     job_a, 'ZZ', 'Milestone', email, '09171234567',
     'Blk 7 Lot 3', 'resumes/' || tag || '-cv.pdf', null, 'Mid',
     'Cavite', 'Dasmariñas', 'Santa Maria', adult,
-    'government-ids/' || tag || '-id.pdf');
+    'government-ids/' || tag || '-id.pdf', 'Male', 'Filipino');
   raise notice 'PASS  3a somebody exactly 18 today may apply';
 
   select applicant_birth_date::text into txt from public.applications where id = app;

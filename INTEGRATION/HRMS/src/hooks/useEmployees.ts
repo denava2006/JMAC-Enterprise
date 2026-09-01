@@ -160,6 +160,7 @@ export function useApplicationForEmployeeCreation(applicationId: string | undefi
           applicant_email, applicant_phone,
           applicant_province, applicant_city, applicant_barangay, applicant_address,
           applicant_birth_date, applicant_government_id_path,
+          applicant_gender, applicant_nationality,
           applicants (first_name, middle_name, last_name, email, phone, address, province, city, barangay),
           job_postings (department_id, position_id),
           job_offers (employment_type, salary_grade_id, proposed_salary, currency, work_schedule_id, created_at),
@@ -549,6 +550,28 @@ export function useEmployeeDocumentSignedUrl(path: string | null | undefined) {
     },
     enabled: !!path,
     staleTime: 4 * 60 * 1000,
+  })
+}
+
+/**
+ * Open a government ID.
+ *
+ * The bucket is private, so this mints a short-lived signed URL exactly as the
+ * employee-document viewer does. A public URL would be a link that keeps
+ * working for anyone who ever saw it -- on somebody's proof of identity.
+ *
+ * A mutation rather than a query because it is an action HR takes: the URL
+ * should not sit prefetched in the cache for a document nobody opened.
+ */
+export function useGovernmentIdViewer() {
+  return useMutation({
+    mutationFn: async (path: string) => {
+      const { data, error } = await supabase.storage.from('government-ids').createSignedUrl(path, 300)
+      if (error) throw error
+      return data.signedUrl
+    },
+    onSuccess: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
+    onError: () => toast.error('Could not open that document. Please try again.'),
   })
 }
 

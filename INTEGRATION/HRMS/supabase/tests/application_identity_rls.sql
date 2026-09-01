@@ -67,7 +67,7 @@ begin
     'Blk 5 Lot 9, Real Subdivision',
     'resumes/zz-' || tag || '-a.pdf', null,
     'Ong', 'Cavite', 'Dasmariñas', 'Santa Maria',
-    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '-a.pdf');
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '-a.pdf', 'Male', 'Filipino');
   reset role;
 
   select applicant_first_name || '|' || coalesce(applicant_middle_name,'') || '|' || applicant_last_name
@@ -96,7 +96,7 @@ begin
     'Blk 1 Lot 2, Test Subdivision',
     'resumes/zz-' || tag || '-b.pdf', null,
     null, 'Cavite', 'Imus', 'Barangay 1',
-    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '-b.pdf');
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '-b.pdf', 'Male', 'Filipino');
   reset role;
 
   -- The person record is deliberately reused: it is the same human being.

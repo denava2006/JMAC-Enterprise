@@ -147,6 +147,10 @@ const ID_EXTENSION_FOR_TYPE: Record<string, string> = {
 
 const MAX_ID_BYTES = 5 * 1024 * 1024
 
+/** Exactly what Create Employee offers, so an application's answer transfers
+ *  onto the employee record without translation. */
+export const APPLICANT_GENDER_OPTIONS = ['Male', 'Female', 'Other'] as const
+
 export function validateGovernmentIdFile(file: File | undefined | null): string | null {
   if (!file) return 'Please attach a valid government ID.'
   if (!ID_EXTENSION_FOR_TYPE[file.type]) {
@@ -231,6 +235,8 @@ export interface SubmitApplicationInput {
   barangay: string
   coverLetter?: string
   birthDate: string
+  gender: string
+  nationality: string
   resumeFile: File
   governmentIdFile: File
 }
@@ -246,6 +252,9 @@ const FRIENDLY_APPLICATION_ERRORS: Record<string, string> = {
   BIRTH_DATE_INVALID: 'Please check your date of birth.',
   GOVERNMENT_ID_REQUIRED: 'Please attach a valid government ID.',
   RESUME_REQUIRED: 'Please attach your resume.',
+  GENDER_REQUIRED: 'Please select your gender.',
+  GENDER_INVALID: 'Please select your gender.',
+  NATIONALITY_REQUIRED: 'Please enter your nationality.',
 }
 
 export function useSubmitApplication() {
@@ -270,6 +279,8 @@ export function useSubmitApplication() {
         p_cover_letter: input.coverLetter || undefined,
         p_birth_date: input.birthDate,
         p_government_id_path: governmentIdPath,
+        p_gender: input.gender,
+        p_nationality: input.nationality,
       })
 
       if (error) {

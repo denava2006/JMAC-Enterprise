@@ -23,6 +23,8 @@ const application: ApplicationIdentitySnapshot = {
   applicant_cover_letter: 'Written for the role I applied to.',
   applicant_birth_date: '1999-04-12',
   applicant_government_id_path: 'government-ids/real-application.pdf',
+  applicant_gender: 'Male',
+  applicant_nationality: 'Filipino',
 }
 
 // The same person's contact record after a LATER application on the same email
@@ -86,14 +88,14 @@ describe('resolveSubmittedApplicant', () => {
 
   it('never yields undefined for a field the form will bind to', () => {
     const empty = resolveSubmittedApplicant(null, null)
-    const { resume_url, cover_letter, birth_date, government_id_path, ...text } = empty
+    const { resume_url, cover_letter, birth_date, government_id_path, gender, nationality, ...text } =
+      empty
     for (const value of Object.values(text)) expect(value).toBe('')
-    // Documents and the date of birth are genuinely absent rather than blank:
-    // an empty string would bind to a date input as a real, wrong value.
-    expect(resume_url).toBeNull()
-    expect(cover_letter).toBeNull()
-    expect(birth_date).toBeNull()
-    expect(government_id_path).toBeNull()
+    // Absent rather than blank. An empty string would bind to a date input as a
+    // real, wrong value, and would show as a chosen gender rather than none.
+    for (const value of [resume_url, cover_letter, birth_date, government_id_path, gender, nationality]) {
+      expect(value).toBeNull()
+    }
   })
 })
 
@@ -127,14 +129,14 @@ describe('importedFields', () => {
     // Gender, civil status and nationality are asked for on the employee form
     // only. They must stay plainly unfilled.
     //
-    // Birth date used to be on this list and no longer is: the application
-    // collects it, because an applicant has to be 18 and the date is checked
-    // when they submit.
+    // Birth date, gender and nationality were all on this list once. The
+    // application collects each of them now, which is the point -- civil status
+    // is the one thing left that HR genuinely has to supply.
     const importable: string[] = Object.keys(IMPORTABLE_FIELDS)
-    for (const manual of ['gender', 'civilStatus', 'nationality']) {
-      expect(importable).not.toContain(manual)
+    expect(importable).not.toContain('civilStatus')
+    for (const collected of ['birthDate', 'gender', 'nationality']) {
+      expect(importable).toContain(collected)
     }
-    expect(importable).toContain('birthDate')
   })
 })
 

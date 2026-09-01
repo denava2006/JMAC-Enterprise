@@ -14,34 +14,7 @@ import { CalendarWidget } from '@/components/layout/CalendarWidget'
 import { ClockWidget } from '@/components/layout/ClockWidget'
 import { useMyEmployeeRecord } from '@/hooks/useEmployeePortal'
 import { availablePortals, portalForPath } from '@/lib/portals'
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Administrator',
-  hr_staff: 'HR Staff',
-}
-
-/** The short form of a role, for the corner of the header. */
-const ROLE_SHORT: Record<string, string> = {
-  admin: 'Admin',
-  hr_manager: 'HRM',
-  hr_staff: 'HR Staff',
-}
-
-/**
- * A short identity for the header, and only for the header.
- *
- * A full legal name -- four parts, sometimes five -- pushed the header wide and
- * squeezed everything beside it. This shortens the DISPLAY: "HRM Clark", not a
- * change to anybody's recorded name. The full name stays on the employee
- * record, the applicant record, the account menu below this, and every audit
- * entry, because those are the places it means something.
- */
-export function compactIdentity(fullName: string | null | undefined, role: string | undefined): string {
-  const first = (fullName ?? '').trim().split(/\s+/)[0] ?? ''
-  const short = role ? ROLE_SHORT[role] : undefined
-  if (!first) return short ?? ''
-  return short ? `${short} ${first}` : first
-}
+import { compactIdentity } from '@/lib/displayName'
 
 function initials(name: string) {
   return name
@@ -50,6 +23,11 @@ function initials(name: string) {
     .slice(0, 2)
     .join('')
     .toUpperCase()
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Administrator',
+  hr_staff: 'HR Staff',
 }
 
 export function Navbar() {

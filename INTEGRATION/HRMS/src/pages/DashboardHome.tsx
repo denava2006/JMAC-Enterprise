@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext'
+import { firstName } from '@/lib/displayName'
 import { WelcomeSection } from '@/components/dashboard/WelcomeSection'
 import { QuickActions } from '@/components/dashboard/QuickActions'
 import { OrganizationOverviewSection, RecruitmentOverviewSection, EmployeeOverviewSection } from '@/components/dashboard/OverviewSections'
@@ -27,7 +28,7 @@ export default function DashboardHome() {
 
   return (
     <div className="flex flex-col gap-4">
-      <WelcomeSection name={profile?.full_name ?? 'there'} subtitle="Here's the current state of your organization." />
+      <WelcomeSection name={firstName(profile?.full_name)} subtitle="Here's the current state of your organization." />
 
       <QuickActions isAdmin={isAdmin} />
 

@@ -57,7 +57,7 @@ begin
     job_id, 'ZZ', 'Notify', 'zz.notify.' || tag || '@jmac-test.invalid',
     '09171234567', '1 Test St', 'resumes/zz-' || tag || '.pdf', null,
     null, 'Cavite', 'Imus', 'Barangay 1',
-    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '.pdf');
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '.pdf', 'Male', 'Filipino');
   reset role;
 
   select count(*) into n from public.applicant_notification_outbox

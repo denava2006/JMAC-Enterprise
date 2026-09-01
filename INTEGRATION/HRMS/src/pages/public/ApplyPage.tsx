@@ -8,6 +8,7 @@ import { AlertCircle, ArrowLeft, FileText, Upload, X, Briefcase, Clock } from 'l
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { AddressFields, type AddressValue } from '@/components/AddressFields'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +23,7 @@ import {
   isAcceptingApplications,
   validateResumeFile,
   validateGovernmentIdFile,
+  APPLICANT_GENDER_OPTIONS,
 } from '@/hooks/usePublicCareers'
 
 // Letters with single spaces, hyphens, or apostrophes between them — no digits,
@@ -68,6 +70,11 @@ const applicationSchema = z.object({
       const eighteenth = new Date(dob.getFullYear() + 18, dob.getMonth(), dob.getDate())
       return eighteenth <= new Date()
     }, 'Applicants must be at least 18 years old.'),
+  gender: z
+    .string()
+    .min(1, 'Gender is required')
+    .refine((v) => (APPLICANT_GENDER_OPTIONS as readonly string[]).includes(v), 'Select a valid option'),
+  nationality: z.string().trim().min(1, 'Nationality is required').max(100),
 })
 type ApplicationFormValues = z.infer<typeof applicationSchema>
 
@@ -288,6 +295,8 @@ export default function ApplyPage() {
         barangay: values.barangay,
         coverLetter: values.coverLetter,
         birthDate: values.birthDate,
+        gender: values.gender,
+        nationality: values.nationality,
         resumeFile,
         governmentIdFile,
       })
@@ -458,6 +467,49 @@ export default function ApplyPage() {
           />
           <p className="text-xs text-muted-foreground">You must be at least 18 years old to apply.</p>
           {errors.birthDate && <p className="text-xs text-destructive">{errors.birthDate.message}</p>}
+        </div>
+
+        {/* Asked here so HR is reviewing the applicant's own answers rather
+            than guessing them, or asking again on their first day. */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gender">
+              Gender <span className="text-destructive">*</span>
+            </Label>
+            <Controller
+              control={control}
+              name="gender"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="gender" invalid={!!errors.gender}>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {APPLICANT_GENDER_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.gender && <p className="text-xs text-destructive">{errors.gender.message}</p>}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="nationality">
+              Nationality <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="nationality"
+              autoComplete="off"
+              invalid={!!errors.nationality}
+              placeholder="Filipino"
+              {...register('nationality')}
+            />
+            {errors.nationality && <p className="text-xs text-destructive">{errors.nationality.message}</p>}
+          </div>
         </div>
 
         <AddressFields

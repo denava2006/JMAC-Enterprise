@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MILESTONE_LABEL } from '@/hooks/useApplicantPortal'
-import { compactIdentity } from '@/components/layout/Navbar'
+import { compactIdentity } from '@/lib/displayName'
 import { canAccessModule } from '@/lib/roles'
 import { IMPORTABLE_FIELDS, importedFields, resolveSubmittedApplicant } from '@/lib/hiring'
 
@@ -71,6 +71,8 @@ describe('what Create Employee carries over', () => {
     applicant_address: 'Blk 2 Lot 4',
     applicant_birth_date: '2000-05-04',
     applicant_government_id_path: 'government-ids/abc.pdf',
+    applicant_gender: 'Female',
+    applicant_nationality: 'Filipino',
   }
 
   it('brings the date of birth the applicant gave', () => {
@@ -84,11 +86,16 @@ describe('what Create Employee carries over', () => {
     expect(id).not.toMatch(/^https?:/)
   })
 
+  it('brings the gender and nationality the applicant stated', () => {
+    const person = resolveSubmittedApplicant(application)
+    expect(person.gender).toBe('Female')
+    expect(person.nationality).toBe('Filipino')
+    expect(importedFields(person)).toEqual(expect.arrayContaining(['gender', 'nationality']))
+  })
+
   it('still does not claim to have imported what no application collects', () => {
-    const importable: string[] = Object.keys(IMPORTABLE_FIELDS)
-    for (const manual of ['gender', 'civilStatus', 'nationality']) {
-      expect(importable).not.toContain(manual)
-    }
+    // Civil status is the last field HR genuinely has to supply.
+    expect(Object.keys(IMPORTABLE_FIELDS)).not.toContain('civilStatus')
   })
 
   it('does not invent a date of birth for an older application', () => {
@@ -177,6 +184,8 @@ describe('the header identity', () => {
   it('is presentation only — the stored name is untouched', () => {
     // compactIdentity is a display helper. Nothing here writes anything, and
     // the full legal name is what every record and audit entry still holds.
+    const helpers = read('src', 'lib', 'displayName.ts')
+    expect(helpers).not.toMatch(/supabase|update|insert/i)
     const navbar = read('src', 'components', 'layout', 'Navbar.tsx')
     expect(navbar).toContain('profile?.full_name')
   })

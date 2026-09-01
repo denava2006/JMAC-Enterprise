@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { CalendarClock, CalendarCheck, Wallet, IdCard, Bell, ListChecks } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { firstName } from '@/lib/displayName'
 import { Badge } from '@/components/ui/badge'
 import { WelcomeSection } from '@/components/dashboard/WelcomeSection'
 import { DashboardSectionCard, MiniStat, DashboardEmptyState, DashboardListSkeleton } from '@/components/dashboard/DashboardPrimitives'
@@ -43,7 +44,8 @@ const TODAY_STATUS_LABEL: Record<string, string> = {
   present: 'Present',
   late: 'Late',
   half_day: 'Half Day',
-  on_leave: 'On Leave',  rest_day: 'Rest Day',
+  on_leave: 'On Leave',
+  rest_day: 'Rest Day',
   official_business: 'Official Business',
   work_from_home: 'Working Remotely',
   absent: 'Absent',
@@ -71,7 +73,7 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="flex flex-col gap-4">
-      <WelcomeSection name={profile?.full_name ?? 'there'} subtitle="Here's a summary of your employment information." />
+      <WelcomeSection name={firstName(profile?.full_name)} subtitle="Here's a summary of your employment information." />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <MiniStat label="Attendance This Month" value={`${monthSummary?.daysPresentThisMonth ?? 0} Days`} isLoading={isLoadingMonth} />
