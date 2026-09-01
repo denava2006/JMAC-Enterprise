@@ -3042,6 +3042,16 @@ export type Database = {
           profile_id: string
         }[]
       }
+      get_expirable_pos_payments: {
+        Args: { _limit?: number }
+        Returns: {
+          amount_centavos: number
+          expires_at: string
+          id: string
+          provider_checkout_session_id: string
+          reference_number: string
+        }[]
+      }
       get_hr_account_candidates: {
         Args: { _hr_role?: string }
         Returns: {
@@ -3328,6 +3338,36 @@ export type Database = {
           system: Database["public"]["Enums"]["entitlement_system"]
         }[]
       }
+      get_public_job_posting: {
+        Args: { _id: string }
+        Returns: {
+          closing_date: string
+          date_posted: string
+          department_name: string
+          description: string
+          employment_type: string
+          id: string
+          position_title: string
+          requirements: string
+          status: string
+          vacancies: number
+        }[]
+      }
+      get_public_job_postings: {
+        Args: never
+        Returns: {
+          closing_date: string
+          date_posted: string
+          department_name: string
+          description: string
+          employment_type: string
+          id: string
+          position_title: string
+          requirements: string
+          status: string
+          vacancies: number
+        }[]
+      }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
       grant_hr_privilege: {
         Args: { _hr_role: string; _profile_id: string }
@@ -3418,7 +3458,7 @@ export type Database = {
           _reason?: string
           _status: Database["public"]["Enums"]["pos_payment_status"]
         }
-        Returns: undefined
+        Returns: boolean
       }
       my_employee_id: { Args: never; Returns: string }
       my_pos_assignments: {
@@ -3462,11 +3502,13 @@ export type Database = {
           day_start: string
         }[]
       }
+      pos_expiry_token: { Args: never; Returns: string }
       pos_fees_are_valid: { Args: { _fees: Json }; Returns: boolean }
       pos_max_cart_lines: { Args: never; Returns: number }
       pos_max_line_quantity: { Args: never; Returns: number }
       pos_page_size: { Args: { _requested: number }; Returns: number }
       pos_payment_is_cash: { Args: { _method: string }; Returns: boolean }
+      pos_payment_ttl_minutes: { Args: never; Returns: number }
       pos_qr_branch_id: { Args: { _object_name: string }; Returns: string }
       pos_report_bounds: {
         Args: { _from_date?: string; _to_date?: string }

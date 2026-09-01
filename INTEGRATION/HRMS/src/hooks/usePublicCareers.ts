@@ -1,26 +1,52 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Tables } from '@/lib/database.types'
 
-export type PublicJobPosting = Tables<'job_postings'> & {
-  departments: { name: string } | null
-  positions: { title: string } | null
+/**
+ * The public Careers data.
+ *
+ * These used to query job_postings directly and embed departments(name) and
+ * positions(title). That failed anonymously with
+ *
+ *   401 {"code":"42501","message":"permission denied for function is_active_staff"}
+ *
+ * because a staff RLS policy on job_postings targeted the `public` role, which
+ * includes anon, so an anonymous request had to evaluate a function it is not
+ * allowed to call. It also only ever worked because anon could read the WHOLE
+ * departments and positions tables.
+ *
+ * Both are gone. The public surface is now two functions that return exactly
+ * the applicant-safe fields and decide visibility server-side, so the shape
+ * here is deliberately NOT the job_postings row: there is no posted_by, no
+ * created_at, no HR metadata to leak onto a public page by accident.
+ */
+export interface PublicJobPosting {
+  id: string
+  department_name: string | null
+  position_title: string | null
+  description: string | null
+  requirements: string | null
+  employment_type: string | null
+  vacancies: number | null
+  status: string
+  closing_date: string | null
+  date_posted: string | null
 }
 
-const JOB_POSTINGS_SELECT = '*, departments(name), positions(title)'
 const QUERY_KEY = ['public-job-postings']
 
-/** Any posting readable here is already status = 'open' — enforced by the anon RLS policy, not client-side filtering. */
+/**
+ * Postings the public may see.
+ *
+ * The server already restricts this to open postings that have not passed
+ * their closing date, so there is no client-side filtering to forget.
+ */
 export function usePublicOpenJobPostings() {
   return useQuery({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('job_postings')
-        .select(JOB_POSTINGS_SELECT)
-        .order('date_posted', { ascending: false, nullsFirst: false })
+      const { data, error } = await supabase.rpc('get_public_job_postings')
       if (error) throw error
-      return data as PublicJobPosting[]
+      return (data ?? []) as PublicJobPosting[]
     },
     staleTime: 60_000,
   })
@@ -30,17 +56,33 @@ export function usePublicJobPosting(jobId: string | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY, jobId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('job_postings')
-        .select(JOB_POSTINGS_SELECT)
-        .eq('id', jobId as string)
-        .maybeSingle()
+      const { data, error } = await supabase.rpc('get_public_job_posting', { _id: jobId as string })
       if (error) throw error
-      return data as PublicJobPosting | null
+      // The function applies the same visibility rule as the list, so a draft,
+      // closed or expired posting comes back as no rows rather than as data.
+      const rows = (data ?? []) as PublicJobPosting[]
+      return rows[0] ?? null
     },
     enabled: !!jobId,
     staleTime: 60_000,
   })
+}
+
+/**
+ * Department names for the Careers filter, derived from the postings already
+ * on screen.
+ *
+ * The filter used to load the entire departments table anonymously, which
+ * exposed the company's org structure to anyone who opened the page. Every
+ * department worth filtering by is one that has a visible posting, so the
+ * postings are the better source and no extra request is needed.
+ */
+export function departmentsFromPostings(postings: PublicJobPosting[] | undefined): string[] {
+  const names = new Set<string>()
+  for (const p of postings ?? []) {
+    if (p.department_name) names.add(p.department_name)
+  }
+  return [...names].sort((a, b) => a.localeCompare(b))
 }
 
 /** True once a posting's own closing date has passed, even if HR hasn't flipped its status to 'closed' yet. */

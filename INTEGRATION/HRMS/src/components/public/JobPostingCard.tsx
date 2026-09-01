@@ -4,7 +4,7 @@ import { Building2, Users, CalendarClock, ArrowRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EMPLOYMENT_TYPE_SHORT_LABEL } from '@/lib/jobPostingLabels'
+import { employmentTypeShortLabel } from '@/lib/jobPostingLabels'
 import type { PublicJobPosting } from '@/hooks/usePublicCareers'
 
 function formatClosingDate(closingDate: string | null) {
@@ -29,12 +29,12 @@ export function JobPostingCard({ posting, index = 0 }: { posting: PublicJobPosti
         <CardContent className="flex flex-1 flex-col gap-4 p-5">
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
-              {posting.departments?.name && <Badge variant="secondary">{posting.departments.name}</Badge>}
-              <Badge variant="outline">{EMPLOYMENT_TYPE_SHORT_LABEL[posting.employment_type]}</Badge>
+              {posting.department_name && <Badge variant="secondary">{posting.department_name}</Badge>}
+              <Badge variant="outline">{employmentTypeShortLabel(posting.employment_type)}</Badge>
             </div>
             <h3 className="font-display text-lg font-semibold leading-snug text-foreground">
               <Link to={`/careers/${posting.id}`} className="hover:text-secondary hover:underline">
-                {posting.positions?.title ?? 'Open Position'}
+                {posting.position_title ?? 'Open Position'}
               </Link>
             </h3>
           </div>

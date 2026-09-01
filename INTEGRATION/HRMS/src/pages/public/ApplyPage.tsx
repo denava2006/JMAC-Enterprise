@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { EMPLOYMENT_TYPE_LABEL } from '@/lib/jobPostingLabels'
+import { employmentTypeLabel } from '@/lib/jobPostingLabels'
 import { RESPONSE_WINDOW_DAYS } from '@/lib/applicationSla'
 import {
   usePublicJobPosting,
@@ -211,7 +211,7 @@ export default function ApplyPage() {
         </div>
         <h1 className="font-display text-2xl font-bold text-foreground">Applications Closed</h1>
         <p className="max-w-md text-muted-foreground">
-          "{posting.positions?.title ?? 'This position'}" is no longer accepting applications. Take a look at our
+          "{posting.position_title ?? 'This position'}" is no longer accepting applications. Take a look at our
           other open roles.
         </p>
         <Button asChild>
@@ -246,7 +246,7 @@ export default function ApplyPage() {
       navigate('/careers/application-success', {
         replace: true,
         state: {
-          jobTitle: posting.positions?.title,
+          jobTitle: posting.position_title ?? undefined,
           referenceCode: submitted?.reference_code,
           email: values.email,
         },
@@ -276,11 +276,11 @@ export default function ApplyPage() {
         <Card className="mt-4">
           <CardContent className="flex flex-col gap-1.5 p-4">
             <div className="flex flex-wrap items-center gap-1.5">
-              {posting.departments?.name && <Badge variant="secondary">{posting.departments.name}</Badge>}
-              <Badge variant="outline">{EMPLOYMENT_TYPE_LABEL[posting.employment_type]}</Badge>
+              {posting.department_name && <Badge variant="secondary">{posting.department_name}</Badge>}
+              <Badge variant="outline">{employmentTypeLabel(posting.employment_type)}</Badge>
             </div>
             <p className="font-display text-base font-semibold text-foreground">
-              {posting.positions?.title ?? 'Open Position'}
+              {posting.position_title ?? 'Open Position'}
             </p>
           </CardContent>
         </Card>

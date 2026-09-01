@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { EMPLOYMENT_TYPE_LABEL } from '@/lib/jobPostingLabels'
+import { employmentTypeLabel } from '@/lib/jobPostingLabels'
 import { usePublicJobPosting, isAcceptingApplications, isPastClosingDate } from '@/hooks/usePublicCareers'
 
 function formatDate(date: string | null) {
@@ -76,12 +76,12 @@ export default function CareerDetailsPage() {
 
       <div className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
-          {posting.departments?.name && <Badge variant="secondary">{posting.departments.name}</Badge>}
-          <Badge variant="outline">{EMPLOYMENT_TYPE_LABEL[posting.employment_type]}</Badge>
+          {posting.department_name && <Badge variant="secondary">{posting.department_name}</Badge>}
+          <Badge variant="outline">{employmentTypeLabel(posting.employment_type)}</Badge>
           {!acceptingApplications && <Badge variant="muted">Applications Closed</Badge>}
         </div>
         <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">
-          {posting.positions?.title ?? 'Open Position'}
+          {posting.position_title ?? 'Open Position'}
         </h1>
       </div>
 

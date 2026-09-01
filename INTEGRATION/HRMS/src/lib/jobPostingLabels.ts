@@ -19,6 +19,23 @@ export const EMPLOYMENT_TYPE_SHORT_LABEL: Record<EmploymentType, string> = {
   part_time: 'Part-Time',
 }
 
+/** Label an employment type that arrived as a plain string.
+ *
+ *  The public Careers payload comes from a database function rather than a
+ *  typed table row, so the value is `string | null` there. Indexing the record
+ *  with it directly is a type error, and silently rendering "undefined" would
+ *  be worse -- so an unrecognised or missing value falls back to a neutral
+ *  word rather than a blank chip. */
+export function employmentTypeShortLabel(value: string | null | undefined): string {
+  if (!value) return 'Not specified'
+  return EMPLOYMENT_TYPE_SHORT_LABEL[value as EmploymentType] ?? value
+}
+
+export function employmentTypeLabel(value: string | null | undefined): string {
+  if (!value) return 'Not specified'
+  return EMPLOYMENT_TYPE_LABEL[value as EmploymentType] ?? value
+}
+
 /** The same stored value answers a slightly different question on a work
  * schedule — "who is this shift for" — so it reads as Full-Time / Part-Time
  * there rather than Regular / Part-Time. One column, two vocabularies. */

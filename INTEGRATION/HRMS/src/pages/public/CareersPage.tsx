@@ -4,8 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { JobPostingCard, JobPostingCardSkeleton, NoOpenPositions } from '@/components/public/JobPostingCard'
-import { usePublicOpenJobPostings } from '@/hooks/usePublicCareers'
-import { useDepartments } from '@/hooks/useDepartments'
+import { usePublicOpenJobPostings, departmentsFromPostings } from '@/hooks/usePublicCareers'
 import { EMPLOYMENT_TYPE_SHORT_LABEL, type EmploymentType } from '@/lib/jobPostingLabels'
 
 const PAGE_SIZE = 9
@@ -13,7 +12,12 @@ const ALL = 'all'
 
 export default function CareersPage() {
   const { data: postings, isLoading, isError } = usePublicOpenJobPostings()
-  const { data: departments } = useDepartments()
+
+  // Derived from the postings on screen rather than fetched. The filter used to
+  // load the entire departments table anonymously, which put the company's org
+  // structure in front of anyone who opened the page -- and every department
+  // worth filtering by is one that already has a visible posting.
+  const departments = React.useMemo(() => departmentsFromPostings(postings), [postings])
 
   const [search, setSearch] = React.useState('')
   const [departmentFilter, setDepartmentFilter] = React.useState(ALL)
@@ -24,12 +28,12 @@ export default function CareersPage() {
     if (!postings) return []
     const term = search.trim().toLowerCase()
     return postings.filter((p) => {
-      if (departmentFilter !== ALL && p.department_id !== departmentFilter) return false
+      if (departmentFilter !== ALL && p.department_name !== departmentFilter) return false
       if (employmentTypeFilter !== ALL && p.employment_type !== employmentTypeFilter) return false
       if (!term) return true
       return (
-        (p.departments?.name ?? '').toLowerCase().includes(term) ||
-        (p.positions?.title ?? '').toLowerCase().includes(term)
+        (p.department_name ?? '').toLowerCase().includes(term) ||
+        (p.position_title ?? '').toLowerCase().includes(term)
       )
     })
   }, [postings, search, departmentFilter, employmentTypeFilter])
@@ -71,9 +75,9 @@ export default function CareersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>All departments</SelectItem>
-            {departments?.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
+            {departments.map((name) => (
+              <SelectItem key={name} value={name}>
+                {name}
               </SelectItem>
             ))}
           </SelectContent>
