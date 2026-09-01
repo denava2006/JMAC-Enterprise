@@ -34,6 +34,7 @@ declare
   person_b  uuid;
   n         integer;
   txt       text;
+  ref_a     text;
   tag       text := left(replace(gen_random_uuid()::text, '-', ''), 8);
   shared    text := 'zz.same.' || left(replace(gen_random_uuid()::text,'-',''),8) || '@jmac-test.invalid';
 begin
@@ -184,6 +185,24 @@ begin
     raise exception 'FAIL  5a the email greets "%", not the person who applied', txt;
   end if;
   raise notice 'PASS  5a an email greets whoever submitted THAT application';
+
+  -- ======================================================================
+  -- 6. Track Application shows the applicant their own name
+  -- ======================================================================
+  --
+  -- The applicant-facing page, and the one place an outsider saw the wrong
+  -- name: she entered her own reference code and was greeted as someone else.
+  -- Read the reference code as staff: an applicant knows it from her own
+  -- email, but anon cannot select the row it came from -- which is the point.
+  select a.reference_code into ref_a from public.applications a where a.id = app_a;
+
+  set local role anon;
+  select applicant_name into txt from public.lookup_application(ref_a, shared);
+  reset role;
+  if txt is distinct from 'Clark Kint De Nava' then
+    raise exception 'FAIL  6a Track Application greets "%"', txt;
+  end if;
+  raise notice 'PASS  6a Track Application greets whoever submitted that application';
 
   raise notice '--- all application identity checks passed ---';
 end $$;

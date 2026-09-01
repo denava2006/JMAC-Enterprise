@@ -84,7 +84,9 @@ export function useTodaysInterviews(interviewerId?: string) {
       return (data ?? []).map(
         (row): TodaysInterview => ({
           id: row.id,
-          applicantName: `${row.applications?.applicants?.first_name ?? ''} ${row.applications?.applicants?.last_name ?? ''}`.trim() || '—',
+          applicantName:
+            `${row.applications?.applicant_first_name ?? row.applications?.applicants?.first_name ?? ''} ${row.applications?.applicant_last_name ?? row.applications?.applicants?.last_name ?? ''}`.trim() ||
+            '—',
           position: row.applications?.job_postings?.positions?.title ?? '—',
           interviewType: row.interview_type,
           scheduledAt: row.scheduled_at,

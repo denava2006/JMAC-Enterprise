@@ -13,6 +13,8 @@ interface UpcomingInterviewRow {
   scheduled_at: string
   interview_type: 'initial' | 'final'
   applications: {
+    applicant_first_name: string | null
+    applicant_last_name: string | null
     applicants: { first_name: string; last_name: string } | null
   } | null
 }
@@ -61,7 +63,7 @@ export function useUpcomingEvents() {
 
       const interviewEvents: CalendarEvent[] = (interviewsRes.data as unknown as UpcomingInterviewRow[]).map((row) => ({
         date: row.scheduled_at,
-        label: `${row.interview_type === 'initial' ? 'Initial' : 'Final'} Interview — ${row.applications?.applicants?.first_name ?? ''} ${row.applications?.applicants?.last_name ?? ''}`.trim(),
+        label: `${row.interview_type === 'initial' ? 'Initial' : 'Final'} Interview — ${row.applications?.applicant_first_name ?? row.applications?.applicants?.first_name ?? ''} ${row.applications?.applicant_last_name ?? row.applications?.applicants?.last_name ?? ''}`.trim(),
         type: 'interview',
       }))
 
