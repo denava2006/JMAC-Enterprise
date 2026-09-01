@@ -72,6 +72,22 @@ function compose(row: OutboxRow): { subject: string; heading: string; lines: str
   const place = p.meeting_link || p.location || ''
   const mode = p.mode === 'online' ? 'Online' : p.mode === 'face_to_face' ? 'In person' : ''
 
+  // "Initial Interview" / "Final Interview" / plain "interview" if a stage ever
+  // arrives that this does not know. The payload has always carried
+  // interview_type and nothing read it, so an applicant with both interviews
+  // received two emails that read identically and could not tell which was
+  // which -- or whether the second had replaced the first.
+  //
+  // The stage is the only thing about the interviewer's side that an applicant
+  // is told. Who runs it, and under what authority, stays internal.
+  const stage =
+    p.interview_type === 'initial'
+      ? 'Initial Interview'
+      : p.interview_type === 'final'
+        ? 'Final Interview'
+        : 'interview'
+  const stageLower = stage === 'interview' ? 'interview' : stage.toLowerCase()
+
   const interviewLines = [
     when ? `Date: ${when}` : '',
     time ? `Time: ${time}` : '',
@@ -113,17 +129,20 @@ function compose(row: OutboxRow): { subject: string; heading: string; lines: str
       }
     case 'interview_scheduled':
       return {
-        subject: 'JMAC Application Update — Interview Scheduled',
-        heading: 'Your interview is scheduled',
-        lines: [`An interview has been scheduled for your application for ${position}.`, ...interviewLines],
+        subject: `JMAC Application Update — ${stage} Scheduled`,
+        heading: `Your ${stageLower} has been scheduled`,
+        lines: [
+          `Your ${stageLower} for ${position} has been scheduled.`,
+          ...interviewLines,
+        ],
         action: 'View the latest details',
       }
     case 'interview_rescheduled':
       return {
-        subject: 'JMAC Application Update — Interview Rescheduled',
-        heading: 'Your interview schedule has changed',
+        subject: `JMAC Application Update — ${stage} Rescheduled`,
+        heading: `Your ${stageLower} has been moved`,
         lines: [
-          `The interview for your application for ${position} has been moved.`,
+          `Your ${stageLower} for ${position} has been moved. This replaces the previous schedule.`,
           'The current schedule is:',
           ...interviewLines,
         ],
@@ -131,11 +150,15 @@ function compose(row: OutboxRow): { subject: string; heading: string; lines: str
       }
     case 'interview_cancelled':
       return {
-        subject: 'JMAC Application Update — Interview Cancelled',
-        heading: 'Your interview has been cancelled',
+        subject: `JMAC Application Update — ${stage} Cancelled`,
+        heading: `Your ${stageLower} has been cancelled`,
         lines: [
-          `The interview for your application for ${position} has been cancelled.`,
-          'If another interview is arranged, you will receive a new notification.',
+          `Your ${stageLower} for ${position} has been cancelled.`,
+          // Said plainly, because a cancelled interview is the moment an
+          // applicant fears the worst. Cancelling an interview is not a
+          // decision on the application, and only the application's own status
+          // change says otherwise.
+          'This is not a decision on your application. If another interview is arranged, you will receive a new notification.',
         ],
         action: 'Track your application',
       }

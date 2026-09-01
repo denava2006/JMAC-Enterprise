@@ -26,6 +26,8 @@ declare
   pos_id    uuid;
   job_id    uuid;
   app_id    uuid;
+  app_id2   uuid;
+  job_id2   uuid;
   appl_id   uuid;
   intv_id   uuid;
   n         integer;
@@ -263,6 +265,141 @@ begin
     raise exception 'FAIL  8b % rows were not left pending -- queuing sent something', n;
   end if;
   raise notice 'PASS  8b queuing never sends; delivery stays the worker''s job';
+
+
+  -- ======================================================================
+  -- 9. Two interviews, two conversations
+  -- ======================================================================
+  --
+  -- Reported as "the final interview was scheduled but no email arrived". It
+  -- had in fact been queued correctly and was delivered by the next cron tick
+  -- three minutes later -- the report was written inside the five-minute
+  -- window. But the question it raised is worth pinning forever: an applicant
+  -- goes through TWO interviews, and the second must never be swallowed by the
+  -- dedupe of the first.
+  --
+  -- The keys are per-interview, not per-application, which is what makes that
+  -- true. If anyone ever "simplifies" them to the application id, this fails.
+  declare
+    iv_initial uuid;
+    iv_final   uuid;
+    k_initial  text;
+    k_final    text;
+  begin
+    -- A second posting, because (applicant_id, job_posting_id) is unique --
+    -- the same guard that refuses a duplicate application in production.
+    insert into public.job_postings
+      (department_id, position_id, description, requirements, employment_type,
+       vacancies, status, posted_by, date_posted, closing_date)
+    values (dept_id, pos_id, 'ZZ Two-stage ' || tag, 'r', 'regular', 1, 'open',
+            admin_id, now(), current_date + 7)
+    returning id into job_id2;
+
+    insert into public.applications (applicant_id, job_posting_id, status, reference_code)
+    select applicant_id, job_id2, 'submitted', 'ZZ-TWO-' || tag
+      from public.applications where id = app_id
+    returning id into app_id2;
+
+    -- Initial interview.
+    insert into public.interviews
+      (application_id, interview_type, scheduled_at, status, mode, location, interviewer_id)
+    values (app_id2, 'initial', now() + interval '2 days', 'scheduled',
+            'face_to_face', 'Head Office', admin_id)
+    returning id into iv_initial;
+
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled';
+    if n <> 1 then
+      raise exception 'FAIL  9a initial interview queued % scheduled emails', n;
+    end if;
+
+    -- Saving it again without moving it is not a new event.
+    update public.interviews set location = 'Head Office - 5th Floor' where id = iv_initial;
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled';
+    if n <> 1 then
+      raise exception 'FAIL  9b re-saving the initial interview queued another';
+    end if;
+
+    -- Passing it is an internal outcome and says nothing to the applicant here.
+    update public.interviews set status = 'passed' where id = iv_initial;
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled';
+    if n <> 1 then
+      raise exception 'FAIL  9c completing the initial interview queued a schedule email';
+    end if;
+    raise notice 'PASS  9a-c the initial interview emails once and stays quiet after';
+
+    -- THE CHECK THIS SUITE EXISTS FOR: a second, different interview.
+    insert into public.interviews
+      (application_id, interview_type, scheduled_at, status, mode, location, interviewer_id)
+    values (app_id2, 'final', now() + interval '9 days', 'scheduled',
+            'face_to_face', 'Cavite Branch', admin_id)
+    returning id into iv_final;
+
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled';
+    if n <> 2 then
+      raise exception 'FAIL  9d the final interview did not produce its own email (% total)', n;
+    end if;
+    raise notice 'PASS  9d the final interview emails too -- the initial does not suppress it';
+
+    -- The two must be told apart by key and by content.
+    select dedupe_key into k_initial from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled'
+       and payload->>'interview_type' = 'initial';
+    select dedupe_key into k_final from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled'
+       and payload->>'interview_type' = 'final';
+
+    if k_initial = k_final then
+      raise exception 'FAIL  9e both interviews share dedupe key %', k_initial;
+    end if;
+    if k_initial <> iv_initial::text or k_final <> iv_final::text then
+      raise exception 'FAIL  9f a dedupe key is not the interview it describes';
+    end if;
+    if k_initial = app_id2::text or k_final = app_id2::text then
+      raise exception 'FAIL  9g a dedupe key is the application -- the second interview would be lost';
+    end if;
+    raise notice 'PASS  9e-g each interview is keyed on itself, never on the application';
+
+    -- Re-saving the final one is not a new event either.
+    update public.interviews set location = 'Cavite Branch - Store' where id = iv_final;
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_scheduled';
+    if n <> 2 then
+      raise exception 'FAIL  9h re-saving the final interview queued another';
+    end if;
+    raise notice 'PASS  9h re-saving the final interview queues nothing further';
+
+    -- Each may be moved, and each move is its own notification.
+    update public.interviews set scheduled_at = now() + interval '3 days' where id = iv_initial;
+    update public.interviews set scheduled_at = now() + interval '10 days' where id = iv_final;
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_rescheduled';
+    if n <> 2 then
+      raise exception 'FAIL  9i % reschedule emails across two interviews, expected 2', n;
+    end if;
+    raise notice 'PASS  9i moving either interview notifies about that interview';
+
+    -- And each may be cancelled independently.
+    update public.interviews set status = 'cancelled' where id = iv_final;
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2 and event_type = 'interview_cancelled';
+    if n <> 1 then
+      raise exception 'FAIL  9j cancelling the final interview queued % emails', n;
+    end if;
+    raise notice 'PASS  9j cancelling one interview notifies about that one only';
+
+    -- Nothing in any of it names the interviewer.
+    select count(*) into n from public.applicant_notification_outbox
+     where application_id = app_id2
+       and payload::text like '%' || admin_id::text || '%';
+    if n <> 0 then
+      raise exception 'FAIL  9k % emails carry the interviewer identity', n;
+    end if;
+    raise notice 'PASS  9k no interview email names who is running it';
+  end;
 
   raise notice '--- all applicant lifecycle notification checks passed ---';
 end $$;
