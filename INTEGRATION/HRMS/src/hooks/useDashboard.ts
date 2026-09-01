@@ -70,7 +70,7 @@ export function useTodaysInterviews(interviewerId?: string) {
       let query = supabase
         .from('interviews')
         .select(
-          'id, scheduled_at, interview_type, interviewer:profiles!interviews_interviewer_id_fkey(full_name), applications(applicants(first_name,last_name), job_postings(positions(title)))'
+          'id, scheduled_at, interview_type, interviewer:profiles!interviews_interviewer_id_fkey(full_name), applications(applicant_first_name, applicant_last_name, applicants(first_name,last_name), job_postings(positions(title)))'
         )
         .eq('status', 'scheduled')
         .gte('scheduled_at', start)

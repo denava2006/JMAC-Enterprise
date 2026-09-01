@@ -121,6 +121,14 @@ begin
   end if;
   raise notice 'PASS  2c-d B does not rewrite A''s address or contact number';
 
+  -- The CV is part of what was submitted. An interviewer opening A must read
+  -- the document A arrived with, not whatever this person uploaded last.
+  select applicant_resume_url into txt from public.applications where id = app_a;
+  if txt <> 'resumes/zz-' || tag || '-a.pdf' then
+    raise exception 'FAIL  2f submitting B replaced A''s resume with: %', txt;
+  end if;
+  raise notice 'PASS  2f an application keeps the CV it was submitted with';
+
   -- B is itself, too.
   select applicant_first_name || '|' || applicant_last_name into txt
     from public.applications where id = app_b;

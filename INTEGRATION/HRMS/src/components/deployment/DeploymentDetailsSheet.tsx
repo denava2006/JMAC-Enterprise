@@ -58,6 +58,7 @@ import {
   deriveDeploymentStage,
 } from '@/lib/deploymentLabels'
 import { RESPONSE_WINDOW_DAYS, daysSince, isAwaitingResponseTooLong } from '@/lib/applicationSla'
+import { resolveSubmittedApplicant } from '@/lib/hiring'
 
 const HISTORY_EVENT_LABEL: Record<string, string> = {
   submitted: 'Application Submitted',
@@ -183,7 +184,10 @@ export function DeploymentDetailsSheet({
 
   if (!application && !isLoading) return null
 
-  const applicant = application?.applicants
+  // The identity this application was submitted with, never the
+  // applicant master -- that row moves with the person's newest
+  // application and would rewrite this screen's history.
+  const applicant = resolveSubmittedApplicant(application, application?.applicants)
   const jobPosting = application?.job_postings
   const offer = application ? getLatestOffer(application) : null
   const contract = application ? getLatestContract(offer) : null

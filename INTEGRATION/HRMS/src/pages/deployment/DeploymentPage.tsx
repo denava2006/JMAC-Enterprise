@@ -140,9 +140,9 @@ export default function DeploymentPage() {
       id: '_searchText',
       accessorFn: (row) =>
         [
-          row.applicants?.first_name,
-          row.applicants?.last_name,
-          row.applicants?.email,
+          row.applicant_first_name,
+          row.applicant_last_name,
+          row.applicant_email,
           row.job_postings?.departments?.name,
           row.job_postings?.positions?.title,
         ]
@@ -155,10 +155,10 @@ export default function DeploymentPage() {
     {
       id: 'applicant',
       header: 'Applicant',
-      accessorFn: (row) => `${row.applicants?.first_name ?? ''} ${row.applicants?.last_name ?? ''}`.trim(),
+      accessorFn: (row) => `${row.applicant_first_name ?? ''} ${row.applicant_last_name ?? ''}`.trim(),
       cell: ({ row }) => (
         <span className="font-medium text-foreground">
-          {row.original.applicants?.first_name} {row.original.applicants?.last_name}
+          {row.original.applicant_first_name} {row.original.applicant_last_name}
         </span>
       ),
     },

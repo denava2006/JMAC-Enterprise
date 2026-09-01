@@ -16,6 +16,11 @@ export interface SubmittedApplicant {
   city: string
   barangay: string
   address: string
+  /** The CV and letter submitted with THIS application. Overwritten on the
+   *  applicants row by every new submission, so an old application would
+   *  otherwise show the newest CV to whoever is interviewing. */
+  resume_url: string | null
+  cover_letter: string | null
 }
 
 /** The application's own immutable snapshot columns. */
@@ -29,6 +34,8 @@ export interface ApplicationIdentitySnapshot {
   applicant_city?: string | null
   applicant_barangay?: string | null
   applicant_address?: string | null
+  applicant_resume_url?: string | null
+  applicant_cover_letter?: string | null
 }
 
 /** The applicants row: one per email, rewritten by each new submission. */
@@ -42,6 +49,8 @@ export interface ApplicantMaster {
   city?: string | null
   barangay?: string | null
   address?: string | null
+  resume_url?: string | null
+  cover_letter?: string | null
 }
 
 /**
@@ -70,6 +79,8 @@ export function resolveSubmittedApplicant(
     city: pick(application?.applicant_city, master?.city),
     barangay: pick(application?.applicant_barangay, master?.barangay),
     address: pick(application?.applicant_address, master?.address),
+    resume_url: application?.applicant_resume_url ?? master?.resume_url ?? null,
+    cover_letter: application?.applicant_cover_letter ?? master?.cover_letter ?? null,
   }
 }
 

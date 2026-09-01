@@ -45,6 +45,7 @@ export type Database = {
           last_error: string | null
           next_attempt_at: string
           payload: Json
+          provider_message_id: string | null
           recipient_email: string
           recipient_name: string
           sent_at: string | null
@@ -61,6 +62,7 @@ export type Database = {
           last_error?: string | null
           next_attempt_at?: string
           payload?: Json
+          provider_message_id?: string | null
           recipient_email: string
           recipient_name: string
           sent_at?: string | null
@@ -77,6 +79,7 @@ export type Database = {
           last_error?: string | null
           next_attempt_at?: string
           payload?: Json
+          provider_message_id?: string | null
           recipient_email?: string
           recipient_name?: string
           sent_at?: string | null
@@ -191,6 +194,7 @@ export type Database = {
           applicant_address: string | null
           applicant_barangay: string | null
           applicant_city: string | null
+          applicant_cover_letter: string | null
           applicant_email: string | null
           applicant_first_name: string | null
           applicant_id: string
@@ -198,6 +202,7 @@ export type Database = {
           applicant_middle_name: string | null
           applicant_phone: string | null
           applicant_province: string | null
+          applicant_resume_url: string | null
           created_at: string
           final_interviewer_id: string | null
           id: string
@@ -214,6 +219,7 @@ export type Database = {
           applicant_address?: string | null
           applicant_barangay?: string | null
           applicant_city?: string | null
+          applicant_cover_letter?: string | null
           applicant_email?: string | null
           applicant_first_name?: string | null
           applicant_id: string
@@ -221,6 +227,7 @@ export type Database = {
           applicant_middle_name?: string | null
           applicant_phone?: string | null
           applicant_province?: string | null
+          applicant_resume_url?: string | null
           created_at?: string
           final_interviewer_id?: string | null
           id?: string
@@ -237,6 +244,7 @@ export type Database = {
           applicant_address?: string | null
           applicant_barangay?: string | null
           applicant_city?: string | null
+          applicant_cover_letter?: string | null
           applicant_email?: string | null
           applicant_first_name?: string | null
           applicant_id?: string
@@ -244,6 +252,7 @@ export type Database = {
           applicant_middle_name?: string | null
           applicant_phone?: string | null
           applicant_province?: string | null
+          applicant_resume_url?: string | null
           created_at?: string
           final_interviewer_id?: string | null
           id?: string

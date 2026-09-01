@@ -31,6 +31,7 @@ import {
 } from '@/hooks/useInterviews'
 import { APPLICATION_STATUS_LABEL, APPLICATION_STATUS_VARIANT, type ApplicationStatus } from '@/lib/applicationStatusLabels'
 import { DERIVED_STAGE_LABEL, DERIVED_STAGE_VARIANT, INTERVIEW_MODE_LABEL, deriveStage } from '@/lib/interviewLabels'
+import { resolveSubmittedApplicant } from '@/lib/hiring'
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString('en-PH', {
@@ -222,7 +223,10 @@ export function InterviewDetailsSheet({
 
   if (!application && !isLoading) return null
 
-  const applicant = application?.applicants
+  // The identity this application was submitted with, never the
+  // applicant master -- that row moves with the person's newest
+  // application and would rewrite this screen's history.
+  const applicant = resolveSubmittedApplicant(application, application?.applicants)
   const jobPosting = application?.job_postings
   const initial = application ? getInterviewByStage(application.interviews, 'initial') : null
   const final = application ? getInterviewByStage(application.interviews, 'final') : null

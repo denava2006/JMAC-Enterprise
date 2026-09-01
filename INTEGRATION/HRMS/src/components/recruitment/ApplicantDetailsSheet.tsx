@@ -39,6 +39,7 @@ import {
 } from '@/hooks/useRecruitment'
 import type { ApplicantNotification } from '@/hooks/useRecruitment'
 import { APPLICATION_STATUS_LABEL, APPLICATION_STATUS_VARIANT } from '@/lib/applicationStatusLabels'
+import { resolveSubmittedApplicant } from '@/lib/hiring'
 
 const HISTORY_EVENT_LABEL: Record<string, string> = {
   submitted: 'Application Submitted',
@@ -243,7 +244,10 @@ export function ApplicantDetailsSheet({
   // read-only, so the screening actions must disappear rather than let HR
   // re-decide an applicant who is already halfway through onboarding.
   const canScreen = application?.status === 'submitted'
-  const applicant = application?.applicants
+  // The identity this application was submitted with, never the
+  // applicant master -- that row moves with the person's newest
+  // application and would rewrite this screen's history.
+  const applicant = resolveSubmittedApplicant(application, application?.applicants)
   const jobPosting = application?.job_postings
 
   const onMarkQualified = () => {

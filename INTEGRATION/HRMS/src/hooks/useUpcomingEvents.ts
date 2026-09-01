@@ -34,7 +34,7 @@ export function useUpcomingEvents() {
       const [interviewsRes, leavesRes, periodsRes] = await Promise.all([
         supabase
           .from('interviews')
-          .select('scheduled_at, interview_type, applications(applicants(first_name, last_name))')
+          .select('scheduled_at, interview_type, applications(applicant_first_name, applicant_last_name, applicants(first_name, last_name))')
           .eq('status', 'scheduled')
           .gte('scheduled_at', new Date().toISOString())
           .order('scheduled_at', { ascending: true })

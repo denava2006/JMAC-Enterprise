@@ -19,6 +19,8 @@ const application: ApplicationIdentitySnapshot = {
   applicant_city: 'Dasmariñas',
   applicant_barangay: 'Santa Maria',
   applicant_address: 'Blk 5 Lot 9, Real Subdivision',
+  applicant_resume_url: 'resumes/real-application.pdf',
+  applicant_cover_letter: 'Written for the role I applied to.',
 }
 
 // The same person's contact record after a LATER application on the same email
@@ -33,6 +35,8 @@ const masterAfterLaterApplication: ApplicantMaster = {
   city: 'Imus',
   barangay: 'Barangay 1',
   address: 'Blk 1 Lot 2, Test Subdivision',
+  resume_url: 'resumes/some-later-application.pdf',
+  cover_letter: 'A different letter entirely.',
 }
 
 describe('resolveSubmittedApplicant', () => {
@@ -51,6 +55,14 @@ describe('resolveSubmittedApplicant', () => {
     expect(person.phone).toBe('09171112222')
     expect(person.city).toBe('Dasmariñas')
     expect(person.address).toBe('Blk 5 Lot 9, Real Subdivision')
+  })
+
+  it('keeps the CV that was submitted with it', () => {
+    // An interviewer opening this application must read the document it was
+    // actually submitted with, not whatever the candidate uploaded last.
+    const person = resolveSubmittedApplicant(application, masterAfterLaterApplication)
+    expect(person.resume_url).toBe('resumes/real-application.pdf')
+    expect(person.cover_letter).toBe('Written for the role I applied to.')
   })
 
   it('falls back to the contact record only where the application has no snapshot', () => {
@@ -72,7 +84,11 @@ describe('resolveSubmittedApplicant', () => {
 
   it('never yields undefined for a field the form will bind to', () => {
     const empty = resolveSubmittedApplicant(null, null)
-    for (const value of Object.values(empty)) expect(value).toBe('')
+    const { resume_url, cover_letter, ...text } = empty
+    for (const value of Object.values(text)) expect(value).toBe('')
+    // Documents are genuinely absent rather than blank.
+    expect(resume_url).toBeNull()
+    expect(cover_letter).toBeNull()
   })
 })
 

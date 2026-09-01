@@ -6,6 +6,7 @@ import { useSystemSettings } from '@/hooks/useSystemSettings'
 import { useDeploymentApplicationDetail, getLatestOffer, getLatestContract } from '@/hooks/useDeployment'
 import { EMPLOYMENT_TYPE_LABEL } from '@/lib/jobPostingLabels'
 import { formatMoney, type CurrencyCode } from '@/lib/currency'
+import { resolveSubmittedApplicant } from '@/lib/hiring'
 
 function formatDate(value: string | null) {
   if (!value) return '—'
@@ -44,7 +45,7 @@ export default function ContractPrintPage() {
     )
   }
 
-  const applicant = application.applicants
+  const applicant = resolveSubmittedApplicant(application, application.applicants)
   const jobPosting = application.job_postings
   const companyName = settings?.company_name || 'JMAC Enterprise'
 
