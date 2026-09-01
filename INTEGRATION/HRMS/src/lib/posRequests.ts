@@ -57,11 +57,15 @@ export interface QueuedRequest extends ManagerRequest {
 export const REQUEST_TYPE_LABEL: Record<PosRequestType, string> = {
   restock: 'Restock',
   carry_existing_product: 'Start carrying',
+  new_product: 'New product',
 }
 
 export const REQUEST_TYPE_DESCRIPTION: Record<PosRequestType, string> = {
   restock: 'More of a product this branch already carries.',
   carry_existing_product: 'A product the business sells that this branch does not stock yet.',
+  // A proposal. Approving it creates the product and lists it here at zero
+  // stock -- it does not stock it.
+  new_product: 'A product the business does not sell yet, proposed by this branch.',
 }
 
 export const REQUEST_STATUS_LABEL: Record<PosRequestStatus, string> = {

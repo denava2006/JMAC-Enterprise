@@ -1952,8 +1952,11 @@ export type Database = {
           branch_name_snapshot: string
           created_at: string
           id: string
-          product_id: string
+          product_id: string | null
           product_name_snapshot: string
+          proposed_category_id: string | null
+          proposed_description: string | null
+          proposed_selling_price: number | null
           reason: string
           request_type: Database["public"]["Enums"]["pos_request_type"]
           requested_at: string
@@ -1972,8 +1975,11 @@ export type Database = {
           branch_name_snapshot: string
           created_at?: string
           id?: string
-          product_id: string
+          product_id?: string | null
           product_name_snapshot: string
+          proposed_category_id?: string | null
+          proposed_description?: string | null
+          proposed_selling_price?: number | null
           reason: string
           request_type: Database["public"]["Enums"]["pos_request_type"]
           requested_at?: string
@@ -1992,8 +1998,11 @@ export type Database = {
           branch_name_snapshot?: string
           created_at?: string
           id?: string
-          product_id?: string
+          product_id?: string | null
           product_name_snapshot?: string
+          proposed_category_id?: string | null
+          proposed_description?: string | null
+          proposed_selling_price?: number | null
           reason?: string
           request_type?: Database["public"]["Enums"]["pos_request_type"]
           requested_at?: string
@@ -2020,6 +2029,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_inventory_requests_proposed_category_id_fkey"
+            columns: ["proposed_category_id"]
+            isOneToOne: false
+            referencedRelation: "pos_product_categories"
             referencedColumns: ["id"]
           },
         ]
@@ -2746,6 +2762,17 @@ export type Database = {
       }
       create_pos_carry_request: {
         Args: { _branch_id: string; _product_id: string; _reason: string }
+        Returns: string
+      }
+      create_pos_new_product_request: {
+        Args: {
+          _branch_id: string
+          _category_id: string
+          _description?: string
+          _name: string
+          _reason: string
+          _selling_price: number
+        }
         Returns: string
       }
       create_pos_stock_request: {
@@ -3749,7 +3776,7 @@ export type Database = {
         | "cancelled"
       pos_product_status: "draft" | "active" | "archived"
       pos_request_status: "pending" | "approved" | "declined" | "cancelled"
-      pos_request_type: "restock" | "carry_existing_product"
+      pos_request_type: "restock" | "carry_existing_product" | "new_product"
       pos_role: "manager" | "cashier"
       pos_sale_status: "completed"
       report_format: "pdf" | "docx" | "excel"
@@ -3990,7 +4017,7 @@ export const Constants = {
       ],
       pos_product_status: ["draft", "active", "archived"],
       pos_request_status: ["pending", "approved", "declined", "cancelled"],
-      pos_request_type: ["restock", "carry_existing_product"],
+      pos_request_type: ["restock", "carry_existing_product", "new_product"],
       pos_role: ["manager", "cashier"],
       pos_sale_status: ["completed"],
       report_format: ["pdf", "docx", "excel"],

@@ -163,7 +163,10 @@ describe('labels', () => {
   })
 
   it('labels every type and status', () => {
-    expect(Object.keys(REQUEST_TYPE_LABEL)).toHaveLength(2)
+    // Three since new-product proposals arrived: a brand-new branch could not
+    // otherwise ask for anything at all.
+    expect(Object.keys(REQUEST_TYPE_LABEL)).toHaveLength(3)
+    expect(REQUEST_TYPE_LABEL.new_product).toBe('New product')
     expect(Object.keys(REQUEST_STATUS_LABEL)).toHaveLength(4)
     for (const label of Object.values(REQUEST_STATUS_LABEL)) expect(label).not.toMatch(/_/)
   })

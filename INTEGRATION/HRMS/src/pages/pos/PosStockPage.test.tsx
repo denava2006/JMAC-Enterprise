@@ -188,6 +188,9 @@ describe('what a cashier sees', () => {
     // (A cashier has no nav item for this page either -- this is the
     // typed-the-URL case.)
     state.rows = []
+    // A cashier, not a manager: that is what makes this the "no stock view"
+    // case rather than "this branch is empty".
+    state.posRole = 'cashier'
     renderPage()
 
     expect(screen.getByText(/shown on the POS screen/)).toBeTruthy()
@@ -214,5 +217,42 @@ describe('branch scoping', () => {
     state.branchIds = []
     renderPage()
     expect(screen.getByText(/not assigned to a branch/)).toBeTruthy()
+  })
+})
+
+describe('an authorized branch with nothing in it', () => {
+  it('says the branch is empty, not that the account has no access', () => {
+    // The hosted bug. A manager of a brand-new branch was told "There is no
+    // stock view for this account", which reads as a permission problem. Zero
+    // rows and no authority are different conditions and now say so.
+    state.rows = []
+    state.posRole = 'manager'
+    renderPage()
+
+    expect(screen.getByText('No products are stocked at this branch yet.')).toBeTruthy()
+    expect(screen.queryByText(/no stock view for this account/)).toBeNull()
+  })
+
+  it('offers the way out rather than leaving a dead end', () => {
+    state.rows = []
+    state.posRole = 'manager'
+    renderPage()
+
+    // Two of them, and both correct: the shared Inventory header always offers
+    // one, and the empty state repeats it where the eye already is.
+    const links = screen.getAllByRole('link', { name: 'New request' })
+    expect(links.length).toBeGreaterThanOrEqual(1)
+    for (const link of links) {
+      expect(link.getAttribute('href')).toContain('/pos/requests')
+    }
+  })
+
+  it('still tells a cashier this page is not theirs', () => {
+    state.rows = []
+    state.posRole = 'cashier'
+    renderPage()
+
+    expect(screen.getByText(/no stock view for this account/)).toBeTruthy()
+    expect(screen.queryByText('No products are stocked at this branch yet.')).toBeNull()
   })
 })

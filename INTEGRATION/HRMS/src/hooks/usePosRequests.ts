@@ -189,3 +189,43 @@ export function useReviewRequest() {
     onError: (error) => toast.error(error.message),
   })
 }
+
+/**
+ * Propose a product the catalogue does not have yet.
+ *
+ * A proposal, not a creation: pos_products is enterprise-wide, so the row is
+ * made by an Administrator on approval. This exists because a brand-new branch
+ * could otherwise ask for nothing at all -- restock needs a product the branch
+ * already carries, and carry needs one the catalogue already has.
+ *
+ * Cost is deliberately not collected. A manager suggests a selling price; the
+ * real cost enters through receiving, which is where the sale reads it from.
+ */
+export function useCreateNewProductRequest() {
+  const invalidate = useInvalidateRequests()
+  return useMutation({
+    mutationFn: async (input: {
+      branchId: string
+      name: string
+      categoryId: string
+      sellingPrice: number
+      reason: string
+      description?: string | null
+    }) => {
+      const { error } = await supabase.rpc('create_pos_new_product_request', {
+        _branch_id: input.branchId,
+        _name: input.name,
+        _category_id: input.categoryId,
+        _selling_price: input.sellingPrice,
+        _reason: input.reason,
+        _description: input.description ?? undefined,
+      })
+      if (error) throw new Error(describeRequestError(error))
+    },
+    onSuccess: () => {
+      invalidate()
+      toast.success('Product proposed for review')
+    },
+    onError: (error) => toast.error(error.message),
+  })
+}

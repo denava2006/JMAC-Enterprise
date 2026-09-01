@@ -1,12 +1,14 @@
 import * as React from 'react'
-import { AlertTriangle, History, Info } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { PosInventoryTabs } from '@/components/pos/PosInventoryTabs'
+import { PosInventoryHeader } from '@/components/pos/PosInventoryHeader'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranches } from '@/hooks/useBranches'
 import { useBranchInventory, useBranchMovements, useSetLowStockThreshold } from '@/hooks/usePosInventory'
@@ -51,7 +53,10 @@ export default function PosStockPage() {
   }, [branchId, myBranches])
 
   const { data: rows, isLoading } = useBranchInventory(branchId || undefined)
-  const [showHistory, setShowHistory] = React.useState(false)
+  // ?history=1 is how the Requests tab's History button gets here; the two
+  // views share one history implementation rather than each having its own.
+  const [searchParams] = useSearchParams()
+  const [showHistory, setShowHistory] = React.useState(searchParams.get('history') === '1')
   const { data: movements } = useBranchMovements(branchId || undefined, showHistory)
   const setThreshold = useSetLowStockThreshold()
 
@@ -84,15 +89,14 @@ export default function PosStockPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">Inventory</h2>
-          <p className="text-sm text-muted-foreground">
-            What this branch is holding, and the level at which it counts as low.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {myBranches.length > 1 && (
+      <PosInventoryHeader
+        description="Manage branch stock and inventory requests."
+        showTabs={!isAdministrator}
+        branchId={branchId}
+        historyOpen={showHistory}
+        onToggleHistory={() => setShowHistory((open) => !open)}
+        branchPicker={
+          myBranches.length > 1 ? (
             <Select value={branchId} onValueChange={setBranchId}>
               <SelectTrigger className="w-52" aria-label="Branch">
                 <SelectValue />
@@ -105,19 +109,9 @@ export default function PosStockPage() {
                 ))}
               </SelectContent>
             </Select>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowHistory((open) => !open)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground hover:bg-muted"
-          >
-            <History className="h-4 w-4" />
-            {showHistory ? 'Hide history' : 'History'}
-          </button>
-        </div>
-
-      {!isAdministrator && <PosInventoryTabs />}
-      </div>
+          ) : undefined
+        }
+      />
 
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -133,13 +127,39 @@ export default function PosStockPage() {
       ) : sorted.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              There is no stock view for this account.
-            </p>
-            <p className="max-w-md text-xs text-muted-foreground">
-              Stock levels for the products you sell are shown on the POS screen, next to each
-              product. This page is for the branch's POS Manager.
-            </p>
+            {/* Zero rows has two completely different causes and used to have
+                one message. A manager of an empty branch was told there was no
+                stock view for their account -- which reads as "you are not
+                allowed here" -- when the truth was that the branch had nothing
+                in it yet. managesThisBranch separates them, using the same
+                predicate the database uses, so the screen and the server agree
+                about which of the two it is. */}
+            {managesThisBranch ? (
+              <>
+                <p className="text-sm text-foreground">
+                  No products are stocked at this branch yet.
+                </p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  Ask to carry a product the business already sells, or propose a new one. Stock
+                  arrives later, when a request is received.
+                </p>
+                <Button asChild size="sm" className="mt-2">
+                  <Link to={branchId ? `/pos/requests?branch=${branchId}` : '/pos/requests'}>
+                    New request
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  There is no stock view for this account.
+                </p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  Stock levels for the products you sell are shown on the POS screen, next to each
+                  product. This page is for the branch's POS Manager.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
