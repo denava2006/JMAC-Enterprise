@@ -90,7 +90,10 @@ export default function EmployeesPage() {
 
   const [departmentFilter, setDepartmentFilter] = React.useState(ALL)
   const [positionFilter, setPositionFilter] = React.useState(ALL)
-  const [statusFilter, setStatusFilter] = React.useState(ALL)
+  // Employees opens on the people who currently work here. Resigned, terminated
+  // and retired records are kept forever and stay one click away, but they are
+  // history: they should not pad the headcount anyone sees first.
+  const [statusFilter, setStatusFilter] = React.useState<string>('active')
   const [typeFilter, setTypeFilter] = React.useState(ALL)
   const [dateFrom, setDateFrom] = React.useState('')
   const [dateTo, setDateTo] = React.useState('')
@@ -144,7 +147,18 @@ export default function EmployeesPage() {
   const rows = React.useMemo(() => {
     return allRows.filter((row) => {
       if (statusFilter === PENDING_EMPLOYEE_STATUS) return row.kind === 'pending'
-      if (row.kind === 'pending') return statusFilter === ALL && departmentFilter === ALL && positionFilter === ALL && typeFilter === ALL && !dateFrom && !dateTo
+      // A deployed applicant with no employees row yet is incoming, not departed,
+      // so the default Active view keeps showing them -- that row is the only
+      // entry point to Create Employee, and hiding it would strand the hire.
+      if (row.kind === 'pending')
+        return (
+          (statusFilter === ALL || statusFilter === 'active') &&
+          departmentFilter === ALL &&
+          positionFilter === ALL &&
+          typeFilter === ALL &&
+          !dateFrom &&
+          !dateTo
+        )
       if (departmentFilter !== ALL && row.departmentId !== departmentFilter) return false
       if (positionFilter !== ALL && row.positionId !== positionFilter) return false
       if (statusFilter !== ALL && row.employmentStatus !== statusFilter) return false
@@ -284,11 +298,19 @@ export default function EmployeesPage() {
           density="compact"
           searchPlaceholder="Search by name, employee ID, or email..."
           searchColumn="_searchText"
-          emptyTitle={statusFilter === PENDING_EMPLOYEE_STATUS ? 'No pending employee records' : 'No employees yet'}
+          emptyTitle={
+            statusFilter === PENDING_EMPLOYEE_STATUS
+              ? 'No pending employee records'
+              : allRows.length === 0
+                ? 'No employees yet'
+                : 'No employees match these filters'
+          }
           emptyDescription={
             statusFilter === PENDING_EMPLOYEE_STATUS
               ? 'Deployed applicants awaiting a completed employee record will appear here.'
-              : 'Create your first employee record to get started.'
+              : allRows.length === 0
+                ? 'Create your first employee record to get started.'
+                : 'This view shows active employees by default. Change the status filter to see resigned, terminated or retired records.'
           }
           onRowClick={(row) =>
             navigate(row.kind === 'pending' ? `/dashboard/employees/new?applicationId=${row.id}` : `/dashboard/employees/${row.id}`)

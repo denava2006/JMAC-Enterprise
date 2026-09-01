@@ -29,7 +29,8 @@ import {
 import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPE_SHORT_LABEL } from '@/lib/jobPostingLabels'
 import { DEFAULT_CURRENCY } from '@/lib/currency'
 import { AddressFields, formatAddress, type AddressValue } from '@/components/AddressFields'
-import { CIVIL_STATUS_OPTIONS, DOCUMENT_TYPE_OPTIONS, EMPLOYMENT_STATUS_LABEL, SELECTABLE_EMPLOYMENT_STATUSES } from '@/lib/employeeLabels'
+import { CIVIL_STATUS_OPTIONS, DOCUMENT_TYPE_OPTIONS, EMPLOYMENT_STATUS_LABEL } from '@/lib/employeeLabels'
+import { importedFields } from '@/lib/hiring'
 import type { EmploymentStatus } from '@/lib/enums'
 
 // Letters with single spaces, hyphens, or apostrophes between them — no digits,
@@ -145,7 +146,6 @@ function StepIndicator({ step }: { step: number }) {
   )
 }
 
-const AUTO_FILLABLE_FIELDS = ['firstName', 'middleName', 'lastName', 'phone', 'email', 'province', 'city', 'barangay', 'address'] as const
 
 function PersonalInfoSkeleton() {
   return (
@@ -230,7 +230,7 @@ export default function CreateEmployeePage() {
   // actually offered).
   const importedApplicantRef = React.useRef(false)
   React.useEffect(() => {
-    const applicant = applicationData?.applicants
+    const applicant = applicationData?.applicant
     if (!applicant || importedApplicantRef.current) return
     importedApplicantRef.current = true
 
@@ -239,15 +239,15 @@ export default function CreateEmployeePage() {
 
     reset({
       ...getValues(),
-      firstName: applicant.first_name ?? '',
-      middleName: applicant.middle_name ?? '',
-      lastName: applicant.last_name ?? '',
-      phone: applicant.phone ?? '',
-      email: applicant.email ?? '',
-      address: applicant.address ?? '',
-      province: applicant.province ?? '',
-      city: applicant.city ?? '',
-      barangay: applicant.barangay ?? '',
+      firstName: applicant.first_name,
+      middleName: applicant.middle_name,
+      lastName: applicant.last_name,
+      phone: applicant.phone,
+      email: applicant.email,
+      address: applicant.address,
+      province: applicant.province,
+      city: applicant.city,
+      barangay: applicant.barangay,
       ...(jobPosting?.department_id ? { departmentId: jobPosting.department_id } : {}),
       ...(jobPosting?.position_id ? { positionId: jobPosting.position_id } : {}),
       ...(offer
@@ -262,7 +262,7 @@ export default function CreateEmployeePage() {
     })
     setAutoFilledFields(
       new Set([
-        ...AUTO_FILLABLE_FIELDS,
+        ...importedFields(applicant),
         ...(jobPosting?.department_id ? (['departmentId'] as const) : []),
         ...(jobPosting?.position_id ? (['positionId'] as const) : []),
         ...(offer ? (['employmentType', 'salaryGradeId', 'basicSalary'] as const) : []),
@@ -732,28 +732,16 @@ export default function CreateEmployeePage() {
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label>
-                      Employment Status <span className="text-destructive">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="employmentStatus"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger invalid={!!errors.employmentStatus}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SELECTABLE_EMPLOYMENT_STATUSES.map((value) => (
-                              <SelectItem key={value} value={value}>
-                                {EMPLOYMENT_STATUS_LABEL[value]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    {errors.employmentStatus && <p className="text-xs text-destructive">{errors.employmentStatus.message}</p>}
+                    <Label>Employment Status</Label>
+                    <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-muted/40 px-3">
+                      <Badge variant="success" className="px-1.5 py-0 text-[10px] font-normal">
+                        {EMPLOYMENT_STATUS_LABEL.active}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">New employees always start here</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Resigned, terminated and retired are recorded later, from the employee&apos;s record.
+                    </p>
                   </div>
                 </div>
 

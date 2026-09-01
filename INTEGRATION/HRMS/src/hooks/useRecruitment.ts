@@ -8,6 +8,9 @@ import { APPLICATION_STATUS_LABEL } from '@/lib/applicationStatusLabels'
 
 const APPLICATION_SELECT = `
   *,
+  applicant_first_name, applicant_middle_name, applicant_last_name,
+  applicant_email, applicant_phone, applicant_province, applicant_city,
+  applicant_barangay, applicant_address,
   applicants (id, first_name, last_name, email, phone, address, province, city, barangay, resume_url, cover_letter),
   job_postings (id, department_id, position_id, departments (name), positions (title)),
   reviewer:profiles!applications_reviewed_by_fkey (full_name)

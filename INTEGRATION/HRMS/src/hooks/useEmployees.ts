@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { resolveSubmittedApplicant } from '@/lib/hiring'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Tables, TablesUpdate } from '@/lib/database.types'
 import type { EmploymentStatus } from '@/lib/enums'
@@ -84,6 +85,11 @@ export interface PendingEmployee {
   lastName: string
   email: string
   phone: string | null
+  /** Address as SUBMITTED on the application, so Create Employee no longer
+   *  makes HR retype what the applicant already gave. */
+  province: string | null
+  city: string | null
+  barangay: string | null
   address: string | null
   deployedAt: string
 }
@@ -102,7 +108,15 @@ export function usePendingEmployees() {
       const [deployedRes, linkedRes] = await Promise.all([
         supabase
           .from('applications')
-          .select('id, updated_at, applicants(first_name, middle_name, last_name, email, phone, address)')
+          // The application's OWN snapshot, not the applicant master. A person
+          // may apply twice from one address; the master holds whatever they
+          // typed most recently, and reading it here put the wrong name on a
+          // real employee record. Province, city and barangay are included
+          // because Create Employee asks for them and the old query did not
+          // fetch them at all -- HR retyped what the applicant had submitted.
+          .select(
+            'id, updated_at, applicant_first_name, applicant_middle_name, applicant_last_name, applicant_email, applicant_phone, applicant_province, applicant_city, applicant_barangay, applicant_address'
+          )
           .eq('status', 'deployed'),
         supabase.from('employees').select('application_id').not('application_id', 'is', null),
       ])
@@ -114,12 +128,15 @@ export function usePendingEmployees() {
         .filter((a) => !linkedApplicationIds.has(a.id))
         .map((a) => ({
           applicationId: a.id,
-          firstName: a.applicants?.first_name ?? '',
-          middleName: a.applicants?.middle_name ?? null,
-          lastName: a.applicants?.last_name ?? '',
-          email: a.applicants?.email ?? '',
-          phone: a.applicants?.phone ?? null,
-          address: a.applicants?.address ?? null,
+          firstName: a.applicant_first_name ?? '',
+          middleName: a.applicant_middle_name ?? null,
+          lastName: a.applicant_last_name ?? '',
+          email: a.applicant_email ?? '',
+          phone: a.applicant_phone ?? null,
+          province: a.applicant_province ?? null,
+          city: a.applicant_city ?? null,
+          barangay: a.applicant_barangay ?? null,
+          address: a.applicant_address ?? null,
           deployedAt: a.updated_at,
         })) satisfies PendingEmployee[]
     },
@@ -139,6 +156,9 @@ export function useApplicationForEmployeeCreation(applicationId: string | undefi
         .from('applications')
         .select(
           `id,
+          applicant_first_name, applicant_middle_name, applicant_last_name,
+          applicant_email, applicant_phone,
+          applicant_province, applicant_city, applicant_barangay, applicant_address,
           applicants (first_name, middle_name, last_name, email, phone, address, province, city, barangay),
           job_postings (department_id, position_id),
           job_offers (employment_type, salary_grade_id, proposed_salary, currency, work_schedule_id, created_at),
@@ -153,7 +173,9 @@ export function useApplicationForEmployeeCreation(applicationId: string | undefi
       // offer originally proposed if HR changed the shift on the way through.
       const deployment = data.deployment_records as unknown as { work_schedule_id: string | null } | null
       const workScheduleId = deployment?.work_schedule_id ?? latestOffer?.work_schedule_id ?? null
-      return { ...data, latestOffer, workScheduleId }
+
+      const applicant = resolveSubmittedApplicant(data, data.applicants)
+      return { ...data, applicant, latestOffer, workScheduleId }
     },
     enabled: !!applicationId,
   })

@@ -332,8 +332,28 @@ Deno.serve(async (req: Request) => {
         })
 
         if (res.ok) {
+          // Brevo returns { messageId }. It is the key its delivery log, bounce
+          // list and event webhook are all keyed by -- the only way to answer
+          // "did this actually arrive?" later. Parsing it must never fail the
+          // send: the message is already accepted, and treating an unreadable
+          // body as failure would deliver it twice.
+          let providerMessageId: string | null = null
+          try {
+            const accepted = await res.json()
+            const id = accepted?.messageId ?? accepted?.messageIds?.[0]
+            if (typeof id === 'string') providerMessageId = id.slice(0, 200)
+          } catch {
+            providerMessageId = null
+          }
+
           await admin.from('applicant_notification_outbox')
-            .update({ status: 'sent', sent_at: new Date().toISOString(), attempts, last_error: null })
+            .update({
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              attempts,
+              last_error: null,
+              provider_message_id: providerMessageId,
+            })
             .eq('id', row.id)
           sent += 1
         } else {
@@ -372,8 +392,37 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // When an applicant reports a missing email, the first question asked is
+    // whether the daily sending allowance ran out. That is answerable rather
+    // than guessable, so this reports what the provider says instead. Off by
+    // default: the five-minute cron has no reason to spend a call on it.
+    let quota: Record<string, unknown> | undefined
+    if (new URL(req.url).searchParams.get('diagnostics') === '1' && brevoKey) {
+      try {
+        const acct = await fetch('https://api.brevo.com/v3/account', {
+          headers: { 'api-key': brevoKey, accept: 'application/json' },
+        })
+        if (acct.ok) {
+          const info = await acct.json()
+          // Plan shape only -- no keys, no addresses, no account identifiers.
+          const plans = Array.isArray(info?.plan) ? info.plan : []
+          quota = {
+            plans: plans.map((pl: Record<string, unknown>) => ({
+              type: pl?.type ?? null,
+              credits: pl?.credits ?? null,
+              creditsType: pl?.creditsType ?? null,
+            })),
+          }
+        } else {
+          quota = { error: `provider returned HTTP ${acct.status}` }
+        }
+      } catch {
+        quota = { error: 'provider unreachable' }
+      }
+    }
+
     // Counts only. No addresses, no payloads, no provider text.
-    return json({ considered: rows.length, sent, failed })
+    return json({ considered: rows.length, sent, failed, ...(quota ? { quota } : {}) })
   } catch (err) {
     console.error('send-applicant-notifications unhandled:', err instanceof Error ? err.message : err)
     return json({ error: 'Could not process the notification queue.' }, 500)

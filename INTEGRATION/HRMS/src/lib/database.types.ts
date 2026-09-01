@@ -188,7 +188,16 @@ export type Database = {
       }
       applications: {
         Row: {
+          applicant_address: string | null
+          applicant_barangay: string | null
+          applicant_city: string | null
+          applicant_email: string | null
+          applicant_first_name: string | null
           applicant_id: string
+          applicant_last_name: string | null
+          applicant_middle_name: string | null
+          applicant_phone: string | null
+          applicant_province: string | null
           created_at: string
           final_interviewer_id: string | null
           id: string
@@ -202,7 +211,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          applicant_address?: string | null
+          applicant_barangay?: string | null
+          applicant_city?: string | null
+          applicant_email?: string | null
+          applicant_first_name?: string | null
           applicant_id: string
+          applicant_last_name?: string | null
+          applicant_middle_name?: string | null
+          applicant_phone?: string | null
+          applicant_province?: string | null
           created_at?: string
           final_interviewer_id?: string | null
           id?: string
@@ -216,7 +234,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          applicant_address?: string | null
+          applicant_barangay?: string | null
+          applicant_city?: string | null
+          applicant_email?: string | null
+          applicant_first_name?: string | null
           applicant_id?: string
+          applicant_last_name?: string | null
+          applicant_middle_name?: string | null
+          applicant_phone?: string | null
+          applicant_province?: string | null
           created_at?: string
           final_interviewer_id?: string | null
           id?: string
@@ -2704,6 +2731,7 @@ export type Database = {
           street: string
         }[]
       }
+      applicant_notify_token: { Args: never; Returns: string }
       applicant_owns_file: {
         Args: {
           p_bucket: string
