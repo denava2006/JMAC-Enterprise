@@ -455,3 +455,10 @@ verify_jwt = false
 # if it leaked, all it can do is expire already-overdue checkout sessions.
 [functions.expire-pos-payments]
 verify_jwt = false
+
+# pg_cron drives applicant notification delivery and cannot present a Supabase
+# JWT. It authenticates with its own token from Vault, checked in constant time
+# inside the function. This also closes the previous hole: the default JWT check
+# was satisfied by the PUBLIC anon key, so anyone could trigger a delivery run.
+[functions.send-applicant-notifications]
+verify_jwt = false
