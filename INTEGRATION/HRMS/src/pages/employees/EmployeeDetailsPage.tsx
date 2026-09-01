@@ -307,7 +307,7 @@ export default function EmployeeDetailsPage() {
                     <Button
                       variant="outline"
                       loading={sendReset.isPending}
-                      onClick={() => sendReset.mutate({ email: account.email })}
+                      onClick={() => sendReset.mutate({ email: account.email, activated: !!account.activated_at })}
                     >
                       <KeyRound className="h-4 w-4" />
                       {account.activated_at ? 'Send password reset' : 'Resend setup link'}

@@ -18,6 +18,13 @@ interface AuthContextValue {
   initializing: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  /** Re-read the profile for the current session.
+   *
+   *  Needed after the account changes underneath the client: setting a first
+   *  password stamps activated_at from a database trigger, so the cached
+   *  profile still says the account is un-activated. Routing on that stale copy
+   *  sends the employee straight back to the setup page they just completed. */
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = React.createContext<AuthContextValue | undefined>(undefined)
@@ -116,6 +123,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  const refreshProfile = React.useCallback(async () => {
+    const { data } = await supabase.auth.getSession()
+    if (!data.session) return
+    const [nextProfile, nextPosAccess] = await Promise.all([
+      fetchProfile(data.session.user.id),
+      fetchPosAccess(),
+    ])
+    setProfile(nextProfile)
+    setPosAccess(nextPosAccess)
+  }, [])
+
   const signIn = React.useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
@@ -171,8 +189,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient])
 
   const value = React.useMemo(
-    () => ({ session, profile, posAccess, initializing, signIn, signOut }),
-    [session, profile, posAccess, initializing, signIn, signOut]
+    () => ({ session, profile, posAccess, initializing, signIn, signOut, refreshProfile }),
+    [session, profile, posAccess, initializing, signIn, signOut, refreshProfile]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

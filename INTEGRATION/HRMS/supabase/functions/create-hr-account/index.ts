@@ -21,6 +21,29 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+/**
+ * Where the invitation link comes back to.
+ *
+ * inviteUserByEmail with no redirectTo falls back to the project's Site URL,
+ * which is the public landing page. The invited employee arrives there holding
+ * a valid session and no indication that they were meant to choose a password
+ * -- and because the landing page is public, no route guard runs to correct it.
+ * That is the whole bug: the setup page existed and the guards were right, but
+ * nothing ever sent anyone to it.
+ *
+ * Configured rather than hardcoded so local development points at localhost.
+ * Supabase still refuses any redirect outside the project's allow-list, so this
+ * cannot be turned into an open redirect by changing one variable.
+ */
+const SETUP_PASSWORD_PATH = '/auth/setup-password'
+
+function setupPasswordUrl(): string {
+  const base = (Deno.env.get('APP_URL') ?? '').trim().replace(/\/+$/, '')
+  if (!base) return ''
+  return `${base}${SETUP_PASSWORD_PATH}`
+}
+
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -127,9 +150,15 @@ Deno.serve(async (req: Request) => {
     if (!profileId) {
       // No login yet. Invite rather than assign a password: the employee sets
       // their own, and nothing reusable is ever transmitted or stored.
+      const redirectTo = setupPasswordUrl()
+      if (!redirectTo) {
+        console.error('APP_URL is not configured; refusing to send an invitation.')
+        return json({ error: 'APP_URL is not configured for this project.' }, 503)
+      }
+
       const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
         employee.email,
-        { data: { full_name: fullName } }
+        { data: { full_name: fullName }, redirectTo }
       )
 
       if (inviteError || !invited?.user) {

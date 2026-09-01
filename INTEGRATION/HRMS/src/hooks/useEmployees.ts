@@ -8,7 +8,7 @@ import type { CurrencyCode } from '@/lib/currency'
 import { toast } from '@/components/ui/sonner'
 import { describeFunctionError } from '@/lib/functionErrors'
 import { describeWorkforceError } from '@/lib/workforce'
-import { RESET_PASSWORD_PATH } from '@/lib/passwordRecovery'
+import { RESET_PASSWORD_PATH, SETUP_PASSWORD_PATH } from '@/lib/passwordRecovery'
 
 function friendlyEmployeeError(error: Error): string {
   if (error.message.includes('employees_email_key')) return 'An employee with this email already exists.'
@@ -378,14 +378,24 @@ export function useUpdateEmployee() {
  */
 export function useSendPasswordReset() {
   return useMutation({
-    mutationFn: async ({ email }: { email: string }) => {
+    // `activated` distinguishes the two things this button does. An account
+    // that has never been used is not resetting anything -- it still has to be
+    // set up, and must land on the setup page rather than one that talks about
+    // resetting a password the employee never had.
+    mutationFn: async ({ email, activated = true }: { email: string; activated?: boolean }) => {
+      const path = activated ? RESET_PASSWORD_PATH : SETUP_PASSWORD_PATH
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${RESET_PASSWORD_PATH}`,
+        redirectTo: `${window.location.origin}${path}`,
       })
       if (error) throw error
-      return email
+      return { email, activated }
     },
-    onSuccess: (email) => toast.success(`A password reset link has been sent to ${email}.`),
+    onSuccess: ({ email, activated }) =>
+      toast.success(
+        activated
+          ? `A password reset link has been sent to ${email}.`
+          : `A new account setup link has been sent to ${email}.`
+      ),
     onError: (error) =>
       toast.error(
         /smtp|email/i.test(error.message)

@@ -12,6 +12,21 @@
  */
 export const RESET_PASSWORD_PATH = '/auth/reset-password'
 
+/**
+ * Where a first-time account setup link comes back to.
+ *
+ * Separate from RESET_PASSWORD_PATH on purpose. Somebody who has never had a
+ * password is not "resetting" one, and the page that greets them says so. It is
+ * also the route ProtectedRoute sends an un-activated employee to, so the
+ * invitation must land on the same place the guards would.
+ *
+ * An invitation with no explicit redirect falls back to the project's Site URL,
+ * which is the public landing page -- a signed-in employee stranded on a
+ * marketing page with no indication they were meant to choose a password. That
+ * is what this constant exists to prevent.
+ */
+export const SETUP_PASSWORD_PATH = '/auth/setup-password'
+
 /** What Supabase appends to the redirect when a link has already been used or
  *  has expired. Both arrive in the URL fragment, not the query string. */
 export interface RecoveryLinkError {

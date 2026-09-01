@@ -90,7 +90,10 @@ function SuccessState() {
 
   React.useEffect(() => {
     if (secondsLeft <= 0) {
-      navigate('/login', { replace: true })
+      // Into the app, not back out to a login form. The invitation already
+      // authenticated them and they have just chosen a password; /home resolves
+      // to whichever portal this account actually holds.
+      navigate('/home', { replace: true })
       return
     }
     const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000)
@@ -125,6 +128,7 @@ function CheckingState() {
 }
 
 function SetupPasswordForm({ firstLogin }: { firstLogin: boolean }) {
+  const { refreshProfile } = useAuth()
   const [showPassword, setShowPassword] = React.useState(false)
   const [showConfirm, setShowConfirm] = React.useState(false)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
@@ -152,7 +156,10 @@ function SetupPasswordForm({ firstLogin }: { firstLogin: boolean }) {
     // is no longer permitted to write it. See
     // 20260731130000_employees_must_set_own_password.sql.
     void data
-    await supabase.auth.signOut()
+    // Re-read it before going anywhere: the trigger has just changed the row
+    // this client is holding a stale copy of, and every route guard reads
+    // activated_at. Without this the employee is bounced back to this page.
+    await refreshProfile()
     setActivated(true)
   }
 

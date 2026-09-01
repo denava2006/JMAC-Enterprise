@@ -410,6 +410,19 @@ inspector_port = 8084
 # The Deno major version to use.
 deno_version = 2
 
+[edge_runtime.secrets]
+# Where an account-setup invitation comes back to. The invite functions refuse
+# to send without it rather than letting Supabase fall back to the Site URL,
+# which is the public landing page -- that fallback is what stranded an invited
+# employee on the marketing page with a valid session and no password prompt.
+#
+# Not a secret; it lives here because this is where function environment is
+# declared. Production sets its own value (the deployed origin) as a function
+# secret. This value is one of the additional_redirect_urls above, which is what
+# makes Supabase honour it -- site_url itself uses 127.0.0.1, and both spellings
+# are allow-listed, so a local invitation opens the local app either way.
+APP_URL = "http://localhost:5173"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
