@@ -43,6 +43,7 @@ const state: {
   role: UserRole
   branchIds: string[]
   catalogue: CatalogueRow[]
+  imageUrls: Record<string, string>
   fees: Fee[]
   onlineResult: { attemptId: string; checkoutUrl: string | null; amountCentavos: number; reference: string } | null
   onlineError: string | null
@@ -52,6 +53,7 @@ const state: {
   role: 'employee',
   branchIds: [BRANCH_A],
   catalogue: [],
+  imageUrls: {},
   fees: [],
   onlineResult: null,
   onlineError: null,
@@ -93,7 +95,7 @@ vi.mock('@/hooks/useBranches', () => ({
 
 vi.mock('@/hooks/usePosCatalogue', () => ({
   usePosCatalogue: () => ({ data: state.catalogue, isLoading: false }),
-  useProductImageUrls: () => ({ data: {}, isLoading: false }),
+  useProductImageUrls: () => ({ data: state.imageUrls, isLoading: false }),
 }))
 
 vi.mock('@/hooks/usePosTill', () => ({
@@ -156,6 +158,7 @@ afterEach(() => {
   state.role = 'employee'
   state.branchIds = [BRANCH_A]
   state.catalogue = []
+  state.imageUrls = {}
   state.fees = []
   state.onlineResult = null
   state.onlineError = null
@@ -182,7 +185,69 @@ describe('the product grid', () => {
 
     expect(screen.getByText('Cola 1.5L')).toBeTruthy()
     expect(screen.getByText('₱100.00')).toBeTruthy()
-    expect(screen.getByText('10')).toBeTruthy()
+    // "10 in stock" rather than a bare 10: a lone number beside a price reads
+    // as a second price at a glance, which is the glance a till gets.
+    expect(screen.getByText('10 in stock')).toBeTruthy()
+  })
+
+  it('gives every product card the same shape', () => {
+    // A till is scanned, not read. If one card is taller than its neighbour the
+    // price stops being in the same place and the grid stops being scannable --
+    // so the invariants are asserted rather than eyeballed.
+    state.imageUrls = { 'img/p1.png': 'https://signed.test/p1.png' }
+    state.catalogue = [
+      row({ product_id: 'p1', name: 'Short', image_path: 'img/p1.png' }),
+      row({
+        product_id: 'p2',
+        name: 'A considerably longer product name that will wrap onto two lines',
+      }),
+      row({ product_id: 'p3', name: 'No Picture', image_path: null }),
+    ]
+    const { container } = renderTill()
+
+    const cards = Array.from(container.querySelectorAll('button[aria-label^="Add "]'))
+    expect(cards).toHaveLength(3)
+
+    for (const card of cards) {
+      // Full height of its grid row, so a short card cannot shrink.
+      expect(card.className).toContain('h-full')
+
+      // The image area is a fixed ratio on every card, with or without a
+      // picture -- a missing image must not collapse the box.
+      // Matched on the class string rather than a CSS selector: escaping
+      // Tailwind's bracket syntax for querySelector is its own source of
+      // false passes.
+      const media = Array.from(card.querySelectorAll('div')).find((d) =>
+        d.className.includes('aspect-[4/3]')
+      )
+      expect(media, 'every card has a fixed-ratio image area').toBeTruthy()
+
+      // The name occupies two lines whether or not it needs them, which is what
+      // keeps price and stock on one line across the grid.
+      const name = card.querySelector('.line-clamp-2')
+      expect(name).toBeTruthy()
+      expect((name as HTMLElement).className).toContain('min-h-')
+
+      // Price and stock are pinned to the bottom.
+      expect(card.querySelector('.mt-auto')).toBeTruthy()
+    }
+
+    // A real picture fills its container rather than sitting small in the middle.
+    const img = container.querySelector('img')
+    expect(img).toBeTruthy()
+    expect(img!.className).toContain('object-cover')
+    expect(img!.className).toContain('h-full')
+    expect(img!.className).toContain('w-full')
+  })
+
+  it('keeps the grid a grid when only one product exists', () => {
+    // One product must not stretch across the row -- it should look like the
+    // first of several, because that is what it is.
+    state.catalogue = [row()]
+    const { container } = renderTill()
+    const grid = container.querySelector('.grid.auto-rows-fr')
+    expect(grid).toBeTruthy()
+    expect(grid!.className).toContain('grid-cols-2')
   })
 
   it('marks a low or sold-out product and refuses to add a sold-out one', () => {
@@ -193,7 +258,8 @@ describe('the product grid', () => {
     renderTill()
 
     expect(screen.getByText('2 left')).toBeTruthy()
-    expect(screen.getByText('Out')).toBeTruthy()
+    // Said in full. "Out" beside a price is ambiguous at a glance.
+    expect(screen.getByText('Out of stock')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Add Sold Out' }) as HTMLButtonElement).disabled).toBe(true)
   })
 

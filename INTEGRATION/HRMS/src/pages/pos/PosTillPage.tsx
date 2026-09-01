@@ -2,10 +2,15 @@ import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Image as ImageIcon, Minus, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/MoneyInput'
 import { OnlinePaymentPanel } from '@/components/pos/OnlinePaymentPanel'
-import { useCreateOnlineCheckout, useRefreshAfterOnlineSale } from '@/hooks/usePosPayment'
+import {
+  useCreateOnlineCheckout,
+  useRefreshAfterOnlineSale,
+  usePaymentAttempt,
+} from '@/hooks/usePosPayment'
 import { useSaleDetail } from '@/hooks/usePosTransactions'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -157,6 +162,14 @@ export default function PosTillPage() {
   }, [branches, posAccess.branchIds, isAdministrator])
 
   const [branchId, setBranchId] = React.useState('')
+
+  // Choosing the branch for the first time is not the cashier switching branch.
+  // The distinction matters because the two look identical to an effect
+  // watching branchId: the page mounts with '', resolves to the cashier's
+  // branch a tick later, and an effect that treats every change as "the cashier
+  // moved" then abandons whatever the page was holding -- including a payment
+  // just recovered from the URL.
+  const branchInitialised = React.useRef(false)
   React.useEffect(() => {
     if (!branchId && myBranches.length > 0) setBranchId(myBranches[0].id)
   }, [branchId, myBranches])
@@ -188,8 +201,14 @@ export default function PosTillPage() {
   const paidSale = useSaleDetail(paidSaleId)
 
   // Switching branch abandons the cart: the prices, stock and fees all belong
-  // to the branch it was built at.
+  // to the branch it was built at. The FIRST resolution of branchId is skipped,
+  // because that is the page waking up rather than a decision anybody made.
   React.useEffect(() => {
+    if (!branchId) return
+    if (!branchInitialised.current) {
+      branchInitialised.current = true
+      return
+    }
     setCart([])
     setTendered('')
     setOnlinePayment(null)
@@ -231,6 +250,11 @@ export default function PosTillPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const returnedAttempt = searchParams.get('attempt')
 
+  // The URL is the recovery key, and it is held until the attempt actually
+  // finishes. Copying it into state and clearing it immediately made recovery
+  // depend on that state surviving the next few milliseconds -- which it did
+  // not, because branch hydration wiped it. Holding it means a refresh, a
+  // re-render, or a branch resolving late all resume the same attempt.
   React.useEffect(() => {
     if (!returnedAttempt) return
     setOnlinePayment((current) =>
@@ -238,9 +262,29 @@ export default function PosTillPage() {
         ? current
         : { checkoutKey: returnedAttempt, checkoutUrl: null, amountCentavos: 0, reference: null }
     )
-    // Cleared so a refresh, or the next sale, does not reopen a finished
-    // payment -- the panel itself is now driven by the attempt's real status.
-    setSearchParams({}, { replace: true })
+  }, [returnedAttempt])
+
+  // Watched at page level, not inside the payment panel. The receipt has to
+  // appear whether or not that panel happens to be mounted -- it was the panel
+  // going away that lost the sale in the first place.
+  const recoveredAttempt = usePaymentAttempt(returnedAttempt, Boolean(returnedAttempt))
+
+  React.useEffect(() => {
+    const row = recoveredAttempt.data
+    if (!row) return
+
+    // Paid AND finalised. Either alone proves nothing: a paid attempt whose
+    // webhook has not landed yet has no sale to show, and paid_unfulfilled has
+    // a sale that must not be presented as an ordinary success.
+    if (row.status === 'paid' && row.sale_id) {
+      setPaidSaleId((current) => current ?? row.sale_id)
+    }
+  }, [recoveredAttempt.data])
+
+  /** Let go of the recovery key. Called when the attempt has finished and the
+   *  cashier has seen the outcome -- never merely because it was read. */
+  const clearRecovery = React.useCallback(() => {
+    if (returnedAttempt) setSearchParams({}, { replace: true })
   }, [returnedAttempt, setSearchParams])
 
   const attemptRef = React.useRef<CheckoutAttempt | null>(null)
@@ -263,12 +307,15 @@ export default function PosTillPage() {
       setReceipt(paidSale.data)
       setCart([])
       setTendered('')
-        setOnlinePayment(null)
+      setOnlinePayment(null)
       setPaidSaleId(null)
       attemptRef.current = null
+      // The receipt is on screen, so the key has done its job. Released only
+      // here -- releasing it earlier is what made recovery fragile.
+      clearRecovery()
       refreshAfterOnlineSale()
     }
-  }, [paidSale.data, refreshAfterOnlineSale])
+  }, [paidSale.data, refreshAfterOnlineSale, clearRecovery])
 
   const pay = () => {
     if (errors.length > 0 || checkout.isPending || createOnline.isPending || !branchId) return
@@ -389,41 +436,83 @@ export default function PosTillPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            // A till is scanned, not read. Every card is the same size so the
+            // eye can learn where things are: the picture in the same place,
+            // the price in the same corner, however long the product's name.
+            // auto-rows-fr does the work -- without it one two-line name makes
+            // its whole row taller and the grid stops being a grid.
+            <div className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               {visible.map((p) => {
                 const url = p.image_path ? imageUrls?.[p.image_path] : undefined
                 const taken = inCart(p.product_id)
                 const soldOut = p.available_quantity === 0
                 const maxed = taken >= p.available_quantity
+                const unavailable = soldOut || maxed
                 return (
                   <button
                     key={p.product_id}
                     type="button"
-                    disabled={soldOut || maxed}
+                    disabled={unavailable}
                     aria-label={`Add ${p.name}`}
                     onClick={() => setCart((c) => addToCart(c, p))}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                    className={cn(
+                      'group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-all',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                      unavailable
+                        ? // Dimmed enough to read as unavailable, not so far that
+                          // the cashier cannot tell what it is or how many are left.
+                          'cursor-not-allowed opacity-70'
+                        : 'hover:border-secondary/60 hover:shadow-sm active:scale-[0.99]'
+                    )}
                   >
-                    <div className="flex h-16 items-center justify-center rounded-md bg-muted/40">
+                    {/* Fixed ratio, so the image area is identical on every card
+                        whatever the source picture happens to measure. */}
+                    <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-muted/40">
                       {url ? (
-                        <img src={url} alt={p.name} className="h-14 object-contain" />
+                        <img
+                          src={url}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                        />
                       ) : (
-                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                        // Same box, never a collapsed one: a product without a
+                        // picture must not change the shape of the grid.
+                        <div className="flex h-full w-full items-center justify-center">
+                          <ImageIcon className="h-7 w-7 text-muted-foreground/60" />
+                        </div>
+                      )}
+                      {soldOut && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                          <Badge variant="destructive">Out of stock</Badge>
+                        </div>
                       )}
                     </div>
-                    <div>
-                      <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
-                      <p className="text-xs text-muted-foreground">{p.category_name}</p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">{peso(p.selling_price)}</span>
-                      {soldOut ? (
-                        <Badge variant="destructive">Out</Badge>
-                      ) : p.is_low_stock ? (
-                        <Badge variant="warning">{p.available_quantity} left</Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">{p.available_quantity}</span>
-                      )}
+
+                    <div className="flex flex-1 flex-col gap-0.5 p-3">
+                      {/* Two lines, always. A short name leaves the space empty
+                          rather than pulling the price up to meet it. */}
+                      <p className="line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-tight text-foreground">
+                        {p.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{p.category_name}</p>
+
+                      {/* mt-auto pins this to the bottom, so price and stock sit
+                          on one line across the whole grid. */}
+                      <div className="mt-auto flex items-end justify-between gap-2 pt-2">
+                        <span className="text-base font-semibold tabular-nums text-foreground">
+                          {peso(p.selling_price)}
+                        </span>
+                        {soldOut ? null : p.is_low_stock ? (
+                          <Badge variant="warning">{p.available_quantity} left</Badge>
+                        ) : maxed ? (
+                          <Badge variant="muted">All in cart</Badge>
+                        ) : (
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {p.available_quantity} in stock
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 )
@@ -542,10 +631,16 @@ export default function PosTillPage() {
             {isOnlineMethod(method) ? (
               onlinePayment ? (
                 <OnlinePaymentPanel
+                  // On a recovered attempt the locally created values are gone
+                  // -- the page reloaded -- so the stored row supplies them.
+                  // Showing a payment of PHP 0.00 because the browser navigated
+                  // would be alarming and wrong.
                   checkoutKey={onlinePayment.checkoutKey}
-                  checkoutUrl={onlinePayment.checkoutUrl}
-                  amountCentavos={onlinePayment.amountCentavos}
-                  reference={onlinePayment.reference}
+                  checkoutUrl={onlinePayment.checkoutUrl ?? recoveredAttempt.data?.checkout_url ?? null}
+                  amountCentavos={
+                    onlinePayment.amountCentavos || recoveredAttempt.data?.amount_centavos || 0
+                  }
+                  reference={onlinePayment.reference ?? recoveredAttempt.data?.reference_number ?? null}
                   onPaid={setPaidSaleId}
                   onDismiss={() => {
                     // A fresh key, or the retry is a dead end. The key is
