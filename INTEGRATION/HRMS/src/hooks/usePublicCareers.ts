@@ -114,14 +114,54 @@ export function validateResumeFile(file: File): string | null {
   return null
 }
 
+/** The extension a stored resume gets, decided by its VALIDATED type rather
+ *  than by whatever the file was called. A filename is applicant-supplied
+ *  text: "cv.pdf.exe" would otherwise be stored as an .exe object. */
+const EXTENSION_FOR_TYPE: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+}
+
+/** Storage tells us why it refused. These are the two reasons an applicant can
+ *  do something about; everything else stays generic, because the detail would
+ *  be about our bucket rather than about their file. */
+function describeUploadFailure(message: string): string {
+  const text = message.toLowerCase()
+  if (text.includes('exceeded') || text.includes('too large') || text.includes('payload')) {
+    return `Resume is too large. Maximum size is ${MAX_RESUME_BYTES / (1024 * 1024)} MB.`
+  }
+  if (text.includes('mime') || text.includes('content type') || text.includes('not supported')) {
+    return 'Unsupported file type. Upload a PDF or DOCX.'
+  }
+  return 'We could not upload your resume. Please try again.'
+}
+
 async function uploadResume(jobPostingId: string, file: File): Promise<string> {
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? 'pdf'
+  // Re-checked here even though the form checks too: this is the last point
+  // before the file leaves the browser, and the type decides the stored name.
+  const rejection = validateResumeFile(file)
+  if (rejection) throw new Error(rejection)
+
+  const extension = EXTENSION_FOR_TYPE[file.type]
+  if (!extension) throw new Error('Unsupported file type. Upload a PDF or DOCX.')
+
+  // The whole object name is generated: a job id we already trust, and a fresh
+  // uuid. Nothing an applicant typed reaches the path, so two people uploading
+  // "resume.pdf" cannot collide and neither can overwrite the other -- and
+  // upsert:false means a repeat would be refused rather than silently replace.
   const path = `${jobPostingId}/${crypto.randomUUID()}.${extension}`
+
   const { error } = await supabase.storage.from('resumes').upload(path, file, {
     contentType: file.type,
     upsert: false,
   })
-  if (error) throw new Error('Could not upload your resume. Please try again.')
+
+  if (error) {
+    // The technical reason is worth keeping, but only where a developer looks.
+    console.error('Resume upload failed:', error.message)
+    throw new Error(describeUploadFailure(error.message))
+  }
   return path
 }
 
