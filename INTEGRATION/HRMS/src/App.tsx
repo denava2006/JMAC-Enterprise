@@ -56,6 +56,7 @@ import PayslipPrintPage from '@/pages/payroll/PayslipPrintPage'
 import ReportsPage from '@/pages/reports/ReportsPage'
 import GenerateReportPage from '@/pages/reports/GenerateReportPage'
 import ReportPrintPage from '@/pages/reports/ReportPrintPage'
+import EmployeeDashboard from '@/pages/employee-portal/EmployeeDashboard'
 import MyAttendancePage from '@/pages/employee-portal/MyAttendancePage'
 import MyLeavePage from '@/pages/employee-portal/MyLeavePage'
 import MyPayrollPage from '@/pages/employee-portal/MyPayrollPage'
@@ -357,10 +358,20 @@ export default function App() {
                 }
               />
 
+              {/* Self-service starts here rather than at /dashboard, which is
+                  the HR dashboard for anyone who also works in HR. */}
+              <Route
+                path="my-dashboard"
+                element={
+                  <ProtectedRoute requireEmployee>
+                    <EmployeeDashboard />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="my-attendance"
                 element={
-                  <ProtectedRoute allowedRoles={['employee']}>
+                  <ProtectedRoute requireEmployee>
                     <MyAttendancePage />
                   </ProtectedRoute>
                 }
@@ -368,7 +379,7 @@ export default function App() {
               <Route
                 path="my-leave"
                 element={
-                  <ProtectedRoute allowedRoles={['employee']}>
+                  <ProtectedRoute requireEmployee>
                     <MyLeavePage />
                   </ProtectedRoute>
                 }
@@ -376,7 +387,7 @@ export default function App() {
               <Route
                 path="my-payroll"
                 element={
-                  <ProtectedRoute allowedRoles={['employee']}>
+                  <ProtectedRoute requireEmployee>
                     <MyPayrollPage />
                   </ProtectedRoute>
                 }

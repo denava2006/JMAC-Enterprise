@@ -36,7 +36,7 @@ describe('portalsFor', () => {
   })
 
   it('does not give an employee the back office', () => {
-    expect(portalsFor('employee', NO_POS_ACCESS)).toEqual(['employee'])
+    expect(portalsFor('employee', NO_POS_ACCESS, true)).toEqual(['employee'])
   })
 
   it('grants the POS from the assignment, never from the role', () => {
@@ -60,7 +60,7 @@ describe('portalsFor', () => {
   })
 
   it('gives a cashier the POS and self-service, and no HR modules', () => {
-    expect(portalsFor('employee', withPos('branch-1'))).toEqual(['pos', 'employee'])
+    expect(portalsFor('employee', withPos('branch-1'), true)).toEqual(['pos', 'employee'])
   })
 
   it('gives an unknown or missing role nothing', () => {
@@ -86,11 +86,13 @@ describe('defaultPortalPath', () => {
     // Not '/pos/till'. A cashier wants the till and a manager wants their
     // dashboard, and that test belongs in one place -- the /pos index route --
     // rather than being duplicated here and in App.tsx.
-    expect(defaultPortalPath('employee', withPos('branch-1'))).toBe('/pos')
+    expect(defaultPortalPath('employee', withPos('branch-1'), true)).toBe('/pos')
   })
 
   it('lands an employee without POS access in self-service', () => {
-    expect(defaultPortalPath('employee', NO_POS_ACCESS)).toBe('/dashboard')
+    // Its own route now. /dashboard is the HR dashboard for anyone who also
+    // works in HR, so self-service cannot share it.
+    expect(defaultPortalPath('employee', NO_POS_ACCESS, true)).toBe('/dashboard/my-dashboard')
   })
 
   it('still has somewhere to send an account holding no portal', () => {
@@ -126,7 +128,7 @@ describe('canAccessPortal', () => {
 describe('availablePortals', () => {
   it('offers nothing to switch between when only one portal is held', () => {
     expect(availablePortals('hr_staff', NO_POS_ACCESS)).toHaveLength(1)
-    expect(availablePortals('employee', NO_POS_ACCESS)).toHaveLength(1)
+    expect(availablePortals('employee', NO_POS_ACCESS, true)).toHaveLength(1)
   })
 
   it('offers an administrator a single workspace, so no switcher appears', () => {
@@ -136,7 +138,7 @@ describe('availablePortals', () => {
   })
 
   it('offers the till before self-service to a cashier', () => {
-    expect(availablePortals('employee', withPos('b1')).map((p) => p.key)).toEqual(['pos', 'employee'])
+    expect(availablePortals('employee', withPos('b1'), true).map((p) => p.key)).toEqual(['pos', 'employee'])
   })
 })
 
@@ -198,13 +200,13 @@ describe('branch/role pairs', () => {
 
 describe('where POS staff land', () => {
   it('is the POS portal, whose index route decides between till and dashboard', () => {
-    expect(defaultPortalPath('employee', withPos('branch-1'))).toBe('/pos')
+    expect(defaultPortalPath('employee', withPos('branch-1'), true)).toBe('/pos')
   })
 
   it('is the same entry point whether they manage a branch or work a till', () => {
     // The landing path does not encode the POS role; PosIndexRedirect does.
     const cashier = { hasAccess: true, branchIds: ['b1'], assignments: [{ branchId: 'b1', role: 'cashier' as const }] }
     const manager = { hasAccess: true, branchIds: ['b1'], assignments: [{ branchId: 'b1', role: 'manager' as const }] }
-    expect(defaultPortalPath('employee', cashier)).toBe(defaultPortalPath('employee', manager))
+    expect(defaultPortalPath('employee', cashier, true)).toBe(defaultPortalPath('employee', manager, true))
   })
 })

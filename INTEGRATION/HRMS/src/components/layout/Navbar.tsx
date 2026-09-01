@@ -40,7 +40,7 @@ export function Navbar() {
   // switcher offering a single destination is just a menu item that does
   // nothing. It lists only what this account may reach, so it can never be the
   // route into a portal the guards would refuse.
-  const portals = availablePortals(profile?.role, posAccess)
+  const portals = availablePortals(profile?.role, posAccess, !!profile?.employee_id)
   const currentPortal = portalForPath(pathname)
 
   return (

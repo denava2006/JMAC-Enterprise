@@ -16,5 +16,5 @@ import { defaultPortalPath } from '@/lib/portals'
  */
 export function PortalRedirect() {
   const { profile, posAccess } = useAuth()
-  return <Navigate to={defaultPortalPath(profile?.role, posAccess)} replace />
+  return <Navigate to={defaultPortalPath(profile?.role, posAccess, !!profile?.employee_id)} replace />
 }

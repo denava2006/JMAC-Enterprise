@@ -14,7 +14,7 @@ export interface Portal {
 }
 
 export const PORTALS: Record<PortalKey, Portal> = {
-  admin: { key: 'admin', label: 'HR Workspace', path: '/dashboard' },
+  admin: { key: 'admin', label: 'Human Resources', path: '/dashboard' },
   // Straight to the selling screen. A cashier signing in wants the till, not a
   // landing page describing that a till exists.
   // '/pos', not a specific screen: the index route decides where POS staff
@@ -26,7 +26,10 @@ export const PORTALS: Record<PortalKey, Portal> = {
   // (see Sidebar's employeeNav) rather than a separate route root. It is still
   // a distinct portal -- an employee never sees an HR module -- the separation
   // is just enforced by role-gated routes instead of a different path prefix.
-  employee: { key: 'employee', label: 'My Workspace', path: '/dashboard' },
+  // Its own landing route, not '/dashboard'. An HR Manager holds both this and
+  // the back office, and two portals sharing one path cannot be switched
+  // between or told apart in the switcher.
+  employee: { key: 'employee', label: 'My Workspace', path: '/dashboard/my-dashboard' },
 }
 
 /** The order a landing portal is chosen in when someone holds more than one.
@@ -108,27 +111,60 @@ export function hasAnyManagerAssignment(pos: PosAccess): boolean {
  * For everyone else the POS comes from an actual assignment, which is the same
  * rule the database applies.
  */
-export function portalsFor(role: UserRole | undefined, pos: PosAccess): PortalKey[] {
-  if (role === 'admin') return ['admin']
-
+export function portalsFor(
+  role: UserRole | undefined,
+  pos: PosAccess,
+  /** Whether this account is linked to an employee record. Self-service is
+   *  about a person's own employment, so this -- not their role -- is what
+   *  decides whether they have any. */
+  hasEmployeeRecord = false
+): PortalKey[] {
   const held: PortalKey[] = []
+
+  if (role === 'admin') {
+    held.push('admin')
+    // Administrators are usually not employees, and the ESS pages would have
+    // no record to read. One who IS an employee keeps their own self-service
+    // rather than being the single role that cannot see its own payslip.
+    if (hasEmployeeRecord) held.push('employee')
+    return held
+  }
+
   if (role === 'hr_manager' || role === 'hr_staff') held.push('admin')
   if (pos.assignments.length > 0) held.push('pos')
-  if (role === 'employee') held.push('employee')
+
+  // Additive, deliberately. HR staff and cashiers are employees who also do a
+  // privileged job; their own attendance, leave and payslips do not stop
+  // existing because they were granted HR privilege, and losing that privilege
+  // must not take their employment records with it.
+  //
+  // The employee record is the whole condition, including for role 'employee'.
+  // Granting the portal on the role alone contradicted the route guard, which
+  // asks for employment: an employee-role account with no linked record was
+  // landed on self-service, refused there, sent to /home, and landed on
+  // self-service again -- a redirect loop. The portal and the guard have to be
+  // answering the same question.
+  if (hasEmployeeRecord) held.push('employee')
+
   return held
 }
 
-export function availablePortals(role: UserRole | undefined, pos: PosAccess): Portal[] {
-  const held = portalsFor(role, pos)
+export function availablePortals(
+  role: UserRole | undefined,
+  pos: PosAccess,
+  hasEmployeeRecord = false
+): Portal[] {
+  const held = portalsFor(role, pos, hasEmployeeRecord)
   return PORTAL_PRIORITY.filter((key) => held.includes(key)).map((key) => PORTALS[key])
 }
 
 export function canAccessPortal(
   role: UserRole | undefined,
   pos: PosAccess,
-  portal: PortalKey
+  portal: PortalKey,
+  hasEmployeeRecord = false
 ): boolean {
-  return portalsFor(role, pos).includes(portal)
+  return portalsFor(role, pos, hasEmployeeRecord).includes(portal)
 }
 
 /** Where to send someone immediately after sign-in.
@@ -137,8 +173,12 @@ export function canAccessPortal(
  * the password is accepted the profile and POS queries have not resolved yet,
  * so a cashier would be computed into the back office and then bounced out of
  * it. Under ProtectedRoute both are loaded before the decision is made. */
-export function defaultPortalPath(role: UserRole | undefined, pos: PosAccess): string {
-  const held = portalsFor(role, pos)
+export function defaultPortalPath(
+  role: UserRole | undefined,
+  pos: PosAccess,
+  hasEmployeeRecord = false
+): string {
+  const held = portalsFor(role, pos, hasEmployeeRecord)
   const landing = PORTAL_PRIORITY.find((key) => held.includes(key))
   // No portal at all (an inactive or half-provisioned account) still needs
   // somewhere to go. /dashboard renders its own "nothing to show you" state,
@@ -148,5 +188,15 @@ export function defaultPortalPath(role: UserRole | undefined, pos: PosAccess): s
 
 /** Which portal a path belongs to, for marking the switcher. */
 export function portalForPath(pathname: string): PortalKey {
-  return pathname === '/pos' || pathname.startsWith('/pos/') ? 'pos' : 'admin'
+  if (pathname === '/pos' || pathname.startsWith('/pos/')) return 'pos'
+  // Self-service lives under /dashboard but is a separate context: "My
+  // Attendance" is this person's own record, "Attendance" is the organization's.
+  // The prefix is what tells the two apart for navigation and the switcher.
+  if (pathname.startsWith(`${ESS_PREFIX}`)) return 'employee'
+  return 'admin'
 }
+
+/** Everything under here is somebody's own record rather than the
+ *  organization's. Shared so the routes, the sidebar and the switcher cannot
+ *  disagree about which pages are self-service. */
+export const ESS_PREFIX = '/dashboard/my-'

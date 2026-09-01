@@ -16,6 +16,13 @@ interface ProtectedRouteProps {
    * workspace that hides HR from them. Their POS modules live in their own
    * sidebar instead. */
   blockRoles?: UserRole[]
+  /** Require a linked employee record.
+   *
+   * Self-service is about a person's own employment, so the question is whether
+   * they HAVE employment -- not what privilege they hold. Gating these pages by
+   * role is what removed self-service from HR staff, who are employees too, and
+   * would have handed it to an Administrator with no employee record to read. */
+  requireEmployee?: boolean
 }
 
 export function ProtectedRoute({
@@ -23,6 +30,7 @@ export function ProtectedRoute({
   allowedRoles,
   requirePos,
   blockRoles,
+  requireEmployee,
 }: ProtectedRouteProps) {
   const { session, profile, posAccess, initializing } = useAuth()
 
@@ -58,6 +66,12 @@ export function ProtectedRoute({
   // Refusals land on /home rather than /dashboard so the redirect resolves to
   // whichever portal this account actually holds -- sending a cashier who
   // guessed an HR URL to /dashboard would only bounce them again.
+  if (requireEmployee && !profile.employee_id) {
+    // No employment to show. /home resolves to whatever this account does hold,
+    // which for an Administrator is the back office.
+    return <Navigate to="/home" replace />
+  }
+
   if (allowedRoles && !allowedRoles.includes(profile.role)) {
     return <Navigate to="/home" replace />
   }

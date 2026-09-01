@@ -19,7 +19,7 @@ function pos(branchIds: string[] = [], role: PosRole = 'cashier'): PosAccess {
 // "given this signed-in account, where does the router put them".
 const authState: {
   session: unknown
-  profile: { role: UserRole; activated_at: string | null } | null
+  profile: { role: UserRole; activated_at: string | null; employee_id: string | null } | null
   posAccess: PosAccess
   initializing: boolean
 } = {
@@ -38,9 +38,16 @@ const { PortalRedirect } = await import('@/components/PortalRedirect')
 // Imported after the AuthContext mock, like the two above: it reads posAccess.
 const { PosIndexRedirect } = await import('@/components/pos/PosIndexRedirect')
 
-function signIn(role: UserRole, posAccess: PosAccess = NO_POS_ACCESS) {
+/** `employeeId` is what makes an account an employee. Self-service follows the
+ *  employment record rather than the role, so a test that wants self-service
+ *  has to say the account actually has one. */
+function signIn(
+  role: UserRole,
+  posAccess: PosAccess = NO_POS_ACCESS,
+  employeeId: string | null = null
+) {
   authState.session = { user: { id: 'u1' } }
-  authState.profile = { role, activated_at: '2026-01-01T00:00:00Z' }
+  authState.profile = { role, activated_at: '2026-01-01T00:00:00Z', employee_id: employeeId }
   authState.posAccess = posAccess
   authState.initializing = false
 }
@@ -101,6 +108,16 @@ function renderApp(initialPath: string) {
           element={
             <ProtectedRoute>
               <p>back office</p>
+            </ProtectedRoute>
+          }
+        />
+        {/* Self-service has its own landing route now: an HR Manager holds both
+            this and the back office, so they cannot share /dashboard. */}
+        <Route
+          path="/dashboard/my-dashboard"
+          element={
+            <ProtectedRoute requireEmployee>
+              <p>my workspace</p>
             </ProtectedRoute>
           }
         />
@@ -231,9 +248,9 @@ describe('/home decides the portal', () => {
   })
 
   it('lands an employee without POS access in self-service', () => {
-    signIn('employee')
+    signIn('employee', NO_POS_ACCESS, 'emp-1')
     renderApp('/home')
-    expect(screen.getByText('back office')).toBeTruthy()
+    expect(screen.getByText('my workspace')).toBeTruthy()
   })
 })
 
