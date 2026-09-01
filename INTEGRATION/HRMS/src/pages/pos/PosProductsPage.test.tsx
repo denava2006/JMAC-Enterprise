@@ -153,12 +153,25 @@ describe('the new product to stocked product path', () => {
     expect(screen.getByText(/approving a request does not add stock/i)).toBeTruthy()
   })
 
-  it('offers adding a product as a request rather than a create form', () => {
+  it('lets a manager add a product here rather than sending them to ask', () => {
+    // Reversed deliberately. Adding a product used to be a request an
+    // Administrator answered, which meant a new branch could not open without
+    // somebody else driving. Deciding what this branch sells is the manager's
+    // job; what they still cannot do is conjure stock, which the checks above
+    // cover.
     state.rows = [row()]
     renderPage()
-    expect(screen.getByRole('link', { name: /Add a product/ }).getAttribute('href')).toBe(
-      '/pos/requests'
-    )
+
+    const button = screen.getByRole('button', { name: /Add Product/i })
+    expect(button).toBeTruthy()
+    expect(button.getAttribute('href')).toBeNull()
+  })
+
+  it('offers no product controls to a cashier', () => {
+    state.assignments = [{ branchId: BRANCH_A, role: 'cashier' }]
+    state.rows = [row()]
+    renderPage()
+    expect(screen.queryByRole('button', { name: /Add Product/i })).toBeNull()
   })
 })
 

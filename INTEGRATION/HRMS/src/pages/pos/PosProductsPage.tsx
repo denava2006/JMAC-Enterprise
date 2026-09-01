@@ -12,7 +12,25 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranches } from '@/hooks/useBranches'
 import { useBranchInventory } from '@/hooks/usePosInventory'
-import { useBranchCatalogueManagement, useSetBranchAvailability } from '@/hooks/usePosCatalogue'
+import {
+  useBranchCatalogueManagement,
+  useSetBranchAvailability,
+  useCarryableCatalogue,
+  useAddProductToBranch,
+  useCreateBranchProduct,
+  useCreatePosCategory,
+  usePosCategories,
+} from '@/hooks/usePosCatalogue'
+import { Label } from '@/components/ui/label'
+import { MoneyInput } from '@/components/MoneyInput'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { peso } from '@/lib/posInventory'
 import { isPosManagerAt } from '@/lib/portals'
 
@@ -48,6 +66,207 @@ import { isPosManagerAt } from '@/lib/portals'
 
 const ALL = 'all'
 
+
+/**
+ * Putting something on this branch's shelves.
+ *
+ * Search first, create second, in that order deliberately. The catalogue is
+ * company-wide: two branches inventing "Coke 1.5L" separately would be two
+ * products, two price lists and two sets of numbers that never reconcile. So
+ * the manager sees what already exists before they are offered a blank form,
+ * and a name that collides is answered by offering the existing product rather
+ * than by refusing.
+ *
+ * Neither path creates stock. A branch that has agreed to sell something still
+ * has none of it until receiving says otherwise, which is why both routes end
+ * at zero and not offered.
+ */
+function AddProductDialog({ branchId, onClose }: { branchId: string; onClose: () => void }) {
+  const [query, setQuery] = React.useState('')
+  const [creating, setCreating] = React.useState(false)
+  const [name, setName] = React.useState('')
+  const [categoryId, setCategoryId] = React.useState('')
+  const [price, setPrice] = React.useState('')
+  const [newCategory, setNewCategory] = React.useState('')
+
+  const { data: carryable, isLoading } = useCarryableCatalogue(branchId)
+  const { data: categories } = usePosCategories()
+  const addToBranch = useAddProductToBranch()
+  const createProduct = useCreateBranchProduct()
+  const createCategory = useCreatePosCategory()
+
+  const matches = React.useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const rows = carryable ?? []
+    if (!q) return rows.slice(0, 25)
+    return rows.filter((r) => r.product_name.toLowerCase().includes(q)).slice(0, 25)
+  }, [carryable, query])
+
+  const priceValue = Number(price)
+  const canCreate = name.trim().length > 0 && !!categoryId && priceValue > 0
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{creating ? 'Create a product' : 'Add a product to this branch'}</DialogTitle>
+          <DialogDescription>
+            {creating
+              ? 'This adds the product to the company catalogue and starts carrying it here.'
+              : 'Search what the company already sells. Nothing here creates stock.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {!creating ? (
+          <div className="flex flex-col gap-3">
+            <Input
+              autoFocus
+              placeholder="Search the catalogue…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+              {isLoading ? (
+                <p className="p-3 text-sm text-muted-foreground">Loading…</p>
+              ) : matches.length === 0 ? (
+                <p className="p-3 text-sm text-muted-foreground">
+                  {query.trim()
+                    ? 'Nothing in the catalogue matches that.'
+                    : 'This branch already carries everything in the catalogue.'}
+                </p>
+              ) : (
+                matches.map((row) => (
+                  <div
+                    key={row.product_id}
+                    className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{row.product_name}</p>
+                      <p className="text-xs text-muted-foreground">{row.category_name}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      loading={addToBranch.isPending}
+                      onClick={() =>
+                        addToBranch.mutate({ branchId, productId: row.product_id }, { onSuccess: onClose })
+                      }
+                    >
+                      Add to Branch
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <p className="text-xs text-muted-foreground">Not in the list?</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setName(query.trim())
+                  setCreating(true)
+                }}
+              >
+                Create New Product
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new_product_name">Product name</Label>
+              <Input
+                id="new_product_name"
+                value={name}
+                maxLength={200}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new_product_category">Category</Label>
+              <Select value={categoryId} onValueChange={setCategoryId}>
+                <SelectTrigger id="new_product_category">
+                  <SelectValue placeholder="Choose a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(categories ?? [])
+                    .filter((c) => c.is_active)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+              {/* So an empty branch is never a dead end: General always exists,
+                  and a manager who needs a different shelf can name one here
+                  rather than waiting for an Administrator. */}
+              <div className="flex items-center gap-2 pt-1">
+                <Input
+                  placeholder="or create a category…"
+                  value={newCategory}
+                  maxLength={80}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={newCategory.trim().length === 0}
+                  loading={createCategory.isPending}
+                  onClick={() =>
+                    createCategory.mutate(newCategory.trim(), {
+                      onSuccess: (id) => {
+                        setCategoryId(id)
+                        setNewCategory('')
+                      },
+                    })
+                  }
+                >
+                  Create
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new_product_price">Selling price at this branch</Label>
+              <MoneyInput id="new_product_price" value={price} onValueChange={setPrice} />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              The product starts with no stock and is not offered until you enable it.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={creating ? () => setCreating(false) : onClose}>
+            {creating ? 'Back' : 'Cancel'}
+          </Button>
+          {creating && (
+            <Button
+              disabled={!canCreate}
+              loading={createProduct.isPending}
+              onClick={() =>
+                createProduct.mutate(
+                  { branchId, name: name.trim(), categoryId, sellingPrice: priceValue },
+                  { onSuccess: onClose }
+                )
+              }
+            >
+              Create Product
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function PosProductsPage() {
   const { profile, posAccess } = useAuth()
   const { data: branches } = useBranches()
@@ -64,6 +283,7 @@ export default function PosProductsPage() {
   }, [branchId, myBranches])
 
   const { data: rows, isLoading } = useBranchInventory(branchId || undefined)
+  const [adding, setAdding] = React.useState(false)
   const { data: priced } = useBranchCatalogueManagement(branchId || undefined)
   const setAvailability = useSetBranchAvailability()
 
@@ -136,15 +356,17 @@ export default function PosProductsPage() {
             </Select>
           )}
           {managesThisBranch && (
-            <Button asChild>
-              <Link to="/pos/requests">
-                <Plus className="h-4 w-4" />
-                Add a product
-              </Link>
+            <Button onClick={() => setAdding(true)}>
+              <Plus className="h-4 w-4" />
+              Add Product
             </Button>
           )}
         </div>
       </div>
+
+      {adding && branchId && (
+        <AddProductDialog branchId={branchId} onClose={() => setAdding(false)} />
+      )}
 
       {outOfStock > 0 && (
         <Card>

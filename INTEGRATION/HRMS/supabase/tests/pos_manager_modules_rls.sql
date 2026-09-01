@@ -154,15 +154,19 @@ begin
   end if;
   raise notice 'PASS  2a a manager may stop and resume offering a product at their branch';
 
+  -- Pricing their own branch is now part of the job. Reversed deliberately:
+  -- see pos_manager_catalogue_rls for the full shape of that authority, and
+  -- for where it stops.
   set local role authenticated;
-  begin
-    update public.pos_branch_products set selling_price_override = 1.00
-     where branch_id = branch_a and product_id = prod;
-    raise exception 'FAIL  2b a manager set a branch selling price';
-  exception when raise_exception then
-    if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'PASS  2b a manager cannot set a branch selling price';
-  end;
+  update public.pos_branch_products set selling_price_override = 1.00
+   where branch_id = branch_a and product_id = prod;
+  get diagnostics n = row_count;
+  reset role;
+  if n <> 1 then
+    raise exception 'FAIL  2b a manager could not price their own branch';
+  end if;
+  raise notice 'PASS  2b a manager may set the selling price at their own branch';
+
   reset role;
 
   -- Another branch's listing is not theirs to touch, whatever they send.

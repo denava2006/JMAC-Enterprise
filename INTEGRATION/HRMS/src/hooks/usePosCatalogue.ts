@@ -455,3 +455,149 @@ export function useSetBranchPrice() {
     onError: (error) => toast.error(error.message),
   })
 }
+
+/* ------------------------------------------------------ a manager's catalogue
+ *
+ * A branch manager can decide what their own branch sells: carry something the
+ * company already lists, create something it does not, and price it here.
+ * Every one of these goes through an RPC that re-checks the branch from the
+ * caller's own assignments -- the branch id in the payload is a request, not a
+ * permission -- and none of them can see or set cost.
+ */
+
+/** Products the company sells that this branch does not carry yet. */
+export function useCarryableCatalogue(branchId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...POS_CATALOGUE_KEY, 'carryable', branchId ?? 'none'],
+    enabled: !!branchId && enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_pos_carryable_products', {
+        _branch_id: branchId!,
+      })
+      if (error) throw error
+      return (data ?? []) as unknown as {
+        product_id: string
+        product_name: string
+        category_name: string
+      }[]
+    },
+  })
+}
+
+const POS_CATALOGUE_ERRORS: Record<string, string> = {
+  POS_BRANCH_FORBIDDEN: 'You can only manage the branch you are assigned to.',
+  POS_PRODUCT_NOT_FOUND: 'That product is no longer available.',
+  POS_PRODUCT_ALREADY_CARRIED: 'This branch already carries that product.',
+  POS_PRODUCT_NAME_REQUIRED: 'Give the product a name.',
+  POS_PRICE_INVALID: 'Enter a valid selling price.',
+  POS_CATEGORY_NOT_FOUND: 'Choose a category.',
+  POS_CATEGORY_FORBIDDEN: 'You do not have permission to manage categories.',
+  POS_CATEGORY_NAME_REQUIRED: 'Give the category a name.',
+  POS_CATEGORY_EXISTS: 'A category with that name already exists.',
+  POS_PRODUCT_NOT_CARRIED: 'This branch does not carry that product.',
+}
+
+/** The database reports a duplicate as POS_PRODUCT_EXISTS:<id> so the screen
+ *  can offer the product that already exists instead of just refusing. */
+export function existingProductIdFrom(message: string): string | null {
+  const match = /POS_PRODUCT_EXISTS:([0-9a-f-]{36})/.exec(message)
+  return match ? match[1] : null
+}
+
+function posCatalogueMessage(message: string): string {
+  if (existingProductIdFrom(message)) {
+    return 'That product already exists in the catalogue — add it to this branch instead.'
+  }
+  const key = Object.keys(POS_CATALOGUE_ERRORS).find((k) => message.includes(k))
+  return key ? POS_CATALOGUE_ERRORS[key] : 'That did not work. Please try again.'
+}
+
+export function useAddProductToBranch() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ branchId, productId }: { branchId: string; productId: string }) => {
+      const { error } = await supabase.rpc('add_pos_product_to_branch', {
+        _branch_id: branchId,
+        _product_id: productId,
+      })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Added to this branch. It has no stock and is not being offered yet.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function useCreateBranchProduct() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      branchId: string
+      name: string
+      categoryId: string
+      sellingPrice: number
+    }) => {
+      const { data, error } = await supabase.rpc('create_pos_product_for_branch', {
+        _branch_id: input.branchId,
+        _name: input.name,
+        _category_id: input.categoryId,
+        _selling_price: input.sellingPrice,
+      })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+      return data as unknown as string
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Product created. It has no stock and is not being offered yet.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function useSetBranchSellingPrice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      branchId,
+      productId,
+      price,
+    }: {
+      branchId: string
+      productId: string
+      price: number | null
+    }) => {
+      const { error } = await supabase.rpc('set_pos_branch_selling_price', {
+        _branch_id: branchId,
+        _product_id: productId,
+        // Null clears the override and returns this branch to the base price.
+        // The generated signature types it as required; the function itself
+        // accepts null and documents that meaning.
+        _price: price as number,
+      })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Price updated for this branch.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function useCreatePosCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await supabase.rpc('create_pos_category', { _name: name })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+      return data as unknown as string
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Category created.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}

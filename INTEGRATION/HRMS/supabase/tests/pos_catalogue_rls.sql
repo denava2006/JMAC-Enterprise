@@ -345,14 +345,46 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   if n <> 0 then raise exception 'FAIL  8c POS manager changed ANOTHER branch''s availability'; end if;
   raise notice 'PASS  8c POS manager cannot change another branch''s availability';
 
-  -- Pricing is not theirs, even at their own branch.
+  -- Pricing IS theirs, at the branch they manage.
+  --
+  -- This reverses what this check used to assert. Reserving the branch price
+  -- for an Administrator meant a manager had to ask permission to price their
+  -- own shelf; what the branch charges is the manager's job. What has not
+  -- changed is anything below: the company-wide price, the cost, and every
+  -- other branch stay out of reach.
+  update public.pos_branch_products set selling_price_override = 1
+    where branch_id = branch_a and product_id = cola_id;
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'FAIL  8d a manager could not price their own branch';
+  end if;
+  raise notice 'PASS  8d a manager may set the selling price at their own branch';
+
+  -- Another branch's price is still none of their business.
   begin
     update public.pos_branch_products set selling_price_override = 1
-      where branch_id = branch_a and product_id = cola_id;
-    raise exception 'FAIL  8d POS manager set a branch selling price';
-  exception when raise_exception then
+      where branch_id = branch_b and product_id = cola_id;
+    get diagnostics n = row_count;
+    if n <> 0 then
+      raise exception 'FAIL  8e a manager priced ANOTHER branch';
+    end if;
+    raise notice 'PASS  8e a manager cannot price a branch they do not manage';
+  exception when insufficient_privilege or raise_exception then
     if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'PASS  8d POS manager cannot set a branch selling price';
+    raise notice 'PASS  8e a manager cannot price a branch they do not manage';
+  end;
+
+  -- And the cost is still not a thing they can write.
+  begin
+    update public.pos_products set default_unit_cost = 1 where id = cola_id;
+    get diagnostics n = row_count;
+    if n <> 0 then
+      raise exception 'FAIL  8f a manager changed a product cost';
+    end if;
+    raise notice 'PASS  8f a manager cannot change what a product costs';
+  exception when insufficient_privilege or raise_exception then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'PASS  8f a manager cannot change what a product costs';
   end;
 
   perform set_config('request.jwt.claims', json_build_object('sub', manager_id, 'role', 'authenticated')::text, true);

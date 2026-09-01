@@ -2719,6 +2719,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_pos_product_to_branch: {
+        Args: { _branch_id: string; _product_id: string }
+        Returns: string
+      }
       adjust_pos_stock: {
         Args: {
           _branch_id: string
@@ -2813,6 +2817,7 @@ export type Database = {
         Args: { _branch_id: string; _product_id: string; _reason: string }
         Returns: string
       }
+      create_pos_category: { Args: { _name: string }; Returns: string }
       create_pos_new_product_request: {
         Args: {
           _branch_id: string
@@ -2820,6 +2825,15 @@ export type Database = {
           _description?: string
           _name: string
           _reason: string
+          _selling_price: number
+        }
+        Returns: string
+      }
+      create_pos_product_for_branch: {
+        Args: {
+          _branch_id: string
+          _category_id: string
+          _name: string
           _selling_price: number
         }
         Returns: string
@@ -3661,6 +3675,10 @@ export type Database = {
         Args: { p_reason: string; p_request_id: string }
         Returns: undefined
       }
+      rename_pos_category: {
+        Args: { _category_id: string; _name: string }
+        Returns: undefined
+      }
       reorder_pos_category: {
         Args: { _category_id: string; _direction: number }
         Returns: undefined
@@ -3692,6 +3710,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_pos_branch_selling_price: {
+        Args: { _branch_id: string; _price: number; _product_id: string }
+        Returns: undefined
       }
       set_position_entitlement: {
         Args: {
