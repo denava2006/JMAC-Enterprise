@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Json } from '@/lib/database.types'
 import { parseFees, type Fee } from '@/lib/posFees'
-import { describeCheckoutError, type PaymentMethod } from '@/lib/posTill'
+import { describeCheckoutError, type StoredPaymentMethod } from '@/lib/posTill'
 
 /**
  * The till's data.
@@ -36,7 +36,9 @@ export interface Receipt {
   fees: { name: string; type: string; value: number; amount: number }[]
   fees_total: number
   total_amount: number
-  payment_method: PaymentMethod
+  /** What the sale STORED, which includes methods the till no longer offers.
+   *  Render it with saleMethodLabel, never by indexing the menu. */
+  payment_method: string
   payment_reference: string | null
   amount_tendered: number | null
   change_given: number | null
@@ -63,7 +65,7 @@ export function useBranchFees(branchId: string | undefined) {
 export interface CheckoutInput {
   branchId: string
   items: { product_id: string; quantity: number }[]
-  method: PaymentMethod
+  method: StoredPaymentMethod
   checkoutKey: string
   reference?: string | null
   tendered?: number | null

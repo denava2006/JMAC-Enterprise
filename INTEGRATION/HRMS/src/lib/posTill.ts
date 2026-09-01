@@ -15,63 +15,57 @@ import { computeFees, round2, sumFees, type AppliedFee, type Fee } from '@/lib/p
  * cash tender with "Cash received is less than the total".
  */
 
-export const PAYMENT_METHODS = ['cash', 'gcash', 'maya', 'bank', 'other'] as const
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
+/**
+ * Payment method values a SALE may already hold.
+ *
+ * This is history, not a menu. 'maya', 'bank' and 'other' are no longer
+ * offered and 'gcash' is no longer typed in by hand, but sales carrying those
+ * values exist and their receipts, reports and audit rows must keep rendering.
+ * The database CHECK still accepts every one of them for the same reason.
+ * Render one with saleMethodLabel; never index a menu by it.
+ */
+export const LEGACY_PAYMENT_METHODS = ['cash', 'gcash', 'maya', 'paymaya', 'card', 'qrph', 'bank', 'other'] as const
+export type StoredPaymentMethod = (typeof LEGACY_PAYMENT_METHODS)[number]
 
 /**
- * What the till OFFERS. These are the methods where the money has already
- * moved somewhere else and the cashier is recording it.
+ * Payments JMAC collects through PayMongo.
  *
- * GCash and Maya say so explicitly, because the online group offers those same
- * two brands and the two are settled completely differently. Two options
- * reading plain "Maya" would be ambiguous on screen and indistinguishable to a
- * screen reader. Use SALE_METHOD_LABEL to render a method a sale already has.
+ * 'paymaya' rather than 'maya' because that is PayMongo's identifier for it;
+ * the legacy 'maya' value is untouched so historical sales stay valid.
  */
-export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
-  cash: 'Cash',
-  gcash: 'GCash (record reference)',
-  maya: 'Maya (record reference)',
-  bank: 'Bank transfer',
-  other: 'Other',
-}
-
-/**
- * Payments JMAC collects through PayMongo, as opposed to the methods above --
- * which record a payment that happened somewhere else and whose reference the
- * cashier types in.
- *
- * The distinction matters because the two are settled completely differently.
- * A manual GCash payment is already done when the cashier rings it up; an
- * online GCash payment does not exist until PayMongo says so, and the sale is
- * created by a webhook rather than by pressing a button. Keeping both means a
- * branch that is not using PayMongo loses nothing.
- *
- * 'paymaya' rather than 'maya' because that is PayMongo's identifier for it.
- * The legacy 'maya' value is untouched so historical sales stay valid.
- */
-export const ONLINE_METHODS = ['card', 'gcash', 'paymaya', 'qrph'] as const
+export const ONLINE_METHODS = ['gcash', 'paymaya', 'card', 'qrph'] as const
 export type OnlineMethod = (typeof ONLINE_METHODS)[number]
 
-export const ONLINE_METHOD_LABEL: Record<OnlineMethod, string> = {
-  card: 'Card',
+/**
+ * What the till offers, and the whole of it.
+ *
+ * Five methods: cash, and four that PayMongo settles. There used to be a
+ * second GCash and a second Maya on this menu -- the "record reference"
+ * variants, where the money had already moved elsewhere and a cashier typed
+ * the reference in. Those are gone, along with Bank transfer and Other.
+ *
+ * That removes the reason the values were once prefixed with `online:`. The
+ * prefix existed only to keep two entries reading "GCash" apart; with one of
+ * each left, the value a cashier picks IS the method the provider settles, and
+ * the extra encoding was a hazard rather than a help.
+ *
+ * Cash stays completely independent of PayMongo: it is the one method that
+ * finishes at the till instead of waiting for a signed webhook.
+ */
+export const TILL_METHODS = ['cash', 'gcash', 'paymaya', 'card', 'qrph'] as const
+export type TillMethod = (typeof TILL_METHODS)[number]
+
+export const TILL_METHOD_LABEL: Record<TillMethod, string> = {
+  cash: 'Cash',
   gcash: 'GCash',
   paymaya: 'Maya',
+  card: 'Card',
   qrph: 'QR Ph',
 }
 
-/** What the till's selector holds. The `online:` prefix keeps the two GCash
- *  entries apart: one is a reference the cashier types, the other is a payment
- *  PayMongo has to confirm. */
-export type TillMethod = PaymentMethod | `online:${OnlineMethod}`
-
-export function isOnlineMethod(method: TillMethod): method is `online:${OnlineMethod}` {
-  return method.startsWith('online:')
-}
-
-export function onlineMethodOf(method: TillMethod): OnlineMethod | null {
-  if (!isOnlineMethod(method)) return null
-  const value = method.slice('online:'.length) as OnlineMethod
-  return ONLINE_METHODS.includes(value) ? value : null
+/** Everything except cash is settled by the provider. */
+export function isOnlineMethod(method: TillMethod): method is OnlineMethod {
+  return method !== 'cash'
 }
 
 /** The provider's floor. Below this it refuses the checkout session, so the
@@ -195,7 +189,6 @@ export function cartToItems(cart: CartLine[]): { product_id: string; quantity: n
 export interface TillValidationInput {
   cart: CartLine[]
   method: TillMethod
-  reference: string
   tendered: string
   total: number
 }
@@ -207,7 +200,7 @@ export interface TillValidationInput {
  */
 export function validateSale(input: TillValidationInput): string[] {
   const errors: string[] = []
-  const { cart, method, reference, tendered, total } = input
+  const { cart, method, tendered, total } = input
 
   if (cart.length === 0) errors.push('The cart is empty.')
   if (cart.length > MAX_CART_LINES) {
@@ -232,7 +225,7 @@ export function validateSale(input: TillValidationInput): string[] {
     if (total < MIN_ONLINE_TOTAL) {
       errors.push(`An online payment must be at least ${MIN_ONLINE_TOTAL.toFixed(2)}.`)
     }
-  } else if (method === 'cash') {
+  } else {
     // parseMoney, not Number: Number('1e5') is 100000 and Number(' 12 ') is 12,
     // so a field that looked like it rejected letters would still have accepted
     // them in the value that reached the database.
@@ -245,18 +238,6 @@ export function validateSale(input: TillValidationInput): string[] {
       errors.push(`Cash received cannot exceed ${MAX_TENDERED.toLocaleString()}.`)
     } else if (amount < total) {
       errors.push('Cash received is less than the total.')
-    }
-  } else {
-    const manual = method as Exclude<PaymentMethod, 'cash'>
-    const trimmed = reference.trim()
-    if (!trimmed) {
-      errors.push(`A reference is required for ${PAYMENT_METHOD_LABEL[manual]} payments.`)
-    } else if ((manual === 'gcash' || manual === 'maya') && !/^[0-9]{6,32}$/.test(trimmed)) {
-      errors.push(`A ${PAYMENT_METHOD_LABEL[manual]} reference must be 6-32 digits.`)
-    } else if (manual === 'bank' && !/^[A-Za-z0-9 -]{6,64}$/.test(trimmed)) {
-      errors.push('A bank reference must be 6-64 letters, numbers, spaces or hyphens.')
-    } else if (manual === 'other' && trimmed.length > 64) {
-      errors.push('A reference must be 1-64 characters.')
     }
   }
 

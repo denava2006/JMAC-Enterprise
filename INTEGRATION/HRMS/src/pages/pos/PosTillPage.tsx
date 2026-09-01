@@ -16,9 +16,6 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
-  SelectGroup,
-  SelectLabel,
-  SelectSeparator,
 } from '@/components/ui/select'
 import {
   Dialog,
@@ -33,13 +30,10 @@ import { useBranches } from '@/hooks/useBranches'
 import { usePosCatalogue, useProductImageUrls } from '@/hooks/usePosCatalogue'
 import { useBranchFees, useCheckout, type Receipt } from '@/hooks/usePosTill'
 import {
-  PAYMENT_METHODS,
-  ONLINE_METHODS,
-  ONLINE_METHOD_LABEL,
+  TILL_METHODS,
+  TILL_METHOD_LABEL,
   saleMethodLabel,
   isOnlineMethod,
-  onlineMethodOf,
-  PAYMENT_METHOD_LABEL,
   addToCart,
   attemptFingerprint,
   cartToItems,
@@ -174,7 +168,6 @@ export default function PosTillPage() {
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [search, setSearch] = React.useState('')
   const [method, setMethod] = React.useState<TillMethod>('cash')
-  const [reference, setReference] = React.useState('')
   const [tendered, setTendered] = React.useState('')
   const [receipt, setReceipt] = React.useState<Receipt | null>(null)
 
@@ -198,7 +191,6 @@ export default function PosTillPage() {
   React.useEffect(() => {
     setCart([])
     setTendered('')
-    setReference('')
     setOnlinePayment(null)
   }, [branchId])
 
@@ -225,7 +217,7 @@ export default function PosTillPage() {
   }, [products, search])
 
   const totals = cartTotals(cart, fees)
-  const errors = validateSale({ cart, method, reference, tendered, total: totals.total })
+  const errors = validateSale({ cart, method, tendered, total: totals.total })
   const change =
     method === 'cash' && tendered.trim() !== '' ? changeDue(totals.total, Number(tendered)) : null
 
@@ -235,7 +227,8 @@ export default function PosTillPage() {
     branchId: branchId || null,
     items: cartToItems(cart),
     method,
-    reference: method === 'cash' || isOnlineMethod(method) ? null : reference.trim() || null,
+    // No offered method carries a typed reference any more.
+    reference: null,
     tendered: method === 'cash' && tendered.trim() !== '' ? Number(tendered) : null,
   })
   attemptRef.current = nextAttempt(attemptRef.current, fingerprint, newCheckoutKey)
@@ -249,8 +242,7 @@ export default function PosTillPage() {
       setReceipt(paidSale.data)
       setCart([])
       setTendered('')
-      setReference('')
-      setOnlinePayment(null)
+        setOnlinePayment(null)
       setPaidSaleId(null)
       attemptRef.current = null
       refreshAfterOnlineSale()
@@ -261,8 +253,6 @@ export default function PosTillPage() {
     if (errors.length > 0 || checkout.isPending || createOnline.isPending || !branchId) return
 
     if (isOnlineMethod(method)) {
-      const online = onlineMethodOf(method)
-      if (!online) return
       // The till sends products and quantities only. The amount is priced by
       // the database inside the Edge Function, so nothing here can influence
       // what the customer is charged.
@@ -270,7 +260,7 @@ export default function PosTillPage() {
         {
           branchId,
           items: cartToItems(cart),
-          method: online,
+          method,
           checkoutKey: attemptRef.current!.key,
         },
         {
@@ -293,7 +283,7 @@ export default function PosTillPage() {
         items: cartToItems(cart),
         method,
         checkoutKey: attemptRef.current!.key,
-        reference: method === 'cash' ? null : reference.trim(),
+        reference: null,
         tendered: method === 'cash' ? Number(tendered) : null,
       },
       {
@@ -301,8 +291,7 @@ export default function PosTillPage() {
           setReceipt(result)
           setCart([])
           setTendered('')
-          setReference('')
-          // The sale is committed; the next one must not reuse its key.
+                // The sale is committed; the next one must not reuse its key.
           attemptRef.current = null
         },
       }
@@ -507,24 +496,14 @@ export default function PosTillPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PAYMENT_METHODS.map((m) => (
+                  {/* Five, flat, no groups. Every non-cash method here is
+                      settled by PayMongo, so there is nothing left to
+                      disambiguate with a heading. */}
+                  {TILL_METHODS.map((m) => (
                     <SelectItem key={m} value={m}>
-                      {PAYMENT_METHOD_LABEL[m]}
+                      {TILL_METHOD_LABEL[m]}
                     </SelectItem>
                   ))}
-                  {/* Two GCash entries is deliberate and they are not the same
-                      thing: the one above records a payment the customer
-                      already made and read out, this one collects the payment
-                      through JMAC and waits for PayMongo to confirm it. */}
-                  <SelectSeparator />
-                  <SelectGroup>
-                    <SelectLabel>Collect online (test)</SelectLabel>
-                    {ONLINE_METHODS.map((m) => (
-                      <SelectItem key={'online:' + m} value={'online:' + m}>
-                        {ONLINE_METHOD_LABEL[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
@@ -571,33 +550,7 @@ export default function PosTillPage() {
                   </p>
                 )}
               </div>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="till_reference">Reference</Label>
-                <Input
-                  id="till_reference"
-                  value={reference}
-                  inputMode={method === 'gcash' || method === 'maya' ? 'numeric' : 'text'}
-                  maxLength={64}
-                  onChange={(e) => {
-                    // GCash and Maya references are digits only, and
-                    // validateSale enforces 6-32 of them. Stripping here means
-                    // the field cannot hold something the rules will refuse.
-                    const raw = e.target.value
-                    setReference(
-                      method === 'gcash' || method === 'maya'
-                        ? raw.replace(/[^0-9]/g, '').slice(0, 32)
-                        : raw.slice(0, 64)
-                    )
-                  }}
-                  placeholder={method === 'bank' ? 'TRF 2026-0001' : '1234567890'}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Recorded as the customer read it out. It is not confirmation that the payment
-                  arrived — check your own account.
-                </p>
-              </div>
-            )}
+            ) : null}
 
             {cart.length > 0 && errors.length > 0 && (
               <ul className="flex flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2">

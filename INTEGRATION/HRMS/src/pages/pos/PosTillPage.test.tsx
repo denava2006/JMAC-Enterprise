@@ -298,42 +298,6 @@ describe('what the till sends', () => {
     expect(cash.value.replace(/,/g, '')).toBe('500')
   })
 
-  it('requires a well-formed reference for an electronic payment', () => {
-    state.catalogue = [row()]
-    render(<PosTillPage />)
-    addProduct('Cola 1.5L')
-    fireEvent.keyDown(screen.getByLabelText('Payment method'), { key: 'Enter' })
-    fireEvent.click(screen.getByRole('option', { name: 'GCash (record reference)' }))
-
-    expect(screen.getByText(/reference is required/)).toBeTruthy()
-
-    // Letters no longer reach the field at all: a GCash reference is digits, so
-    // the input strips anything else rather than accepting it and complaining
-    // afterwards. 'abc' therefore leaves the field empty.
-    const referenceField = screen.getByLabelText('Reference') as HTMLInputElement
-    fireEvent.change(referenceField, { target: { value: 'abc' } })
-    expect(referenceField.value).toBe('')
-    expect(screen.getByText(/reference is required/)).toBeTruthy()
-
-    // A short numeric reference is still refused on its length.
-    fireEvent.change(referenceField, { target: { value: '123' } })
-    expect(referenceField.value).toBe('123')
-    expect(screen.getByText(/6-32 digits/)).toBeTruthy()
-
-    fireEvent.change(screen.getByLabelText('Reference'), { target: { value: '1234567890' } })
-    fireEvent.click(screen.getByRole('button', { name: /Take payment/ }))
-    expect(checkoutMutate).toHaveBeenCalledTimes(1)
-  })
-
-  it('says a reference is not proof of payment', () => {
-    state.catalogue = [row()]
-    render(<PosTillPage />)
-    addProduct('Cola 1.5L')
-    fireEvent.keyDown(screen.getByLabelText('Payment method'), { key: 'Enter' })
-    fireEvent.click(screen.getByRole('option', { name: 'Maya (record reference)' }))
-    expect(screen.getByText(/not confirmation that the payment arrived/)).toBeTruthy()
-  })
-
   it('reuses the same checkout key while the sale is unchanged', () => {
     // This is what makes a double-tap safe: the server returns the sale it
     // already made rather than charging twice.
@@ -564,4 +528,91 @@ describe('online payments', () => {
     expect(screen.getByLabelText('Cash received')).toBeTruthy()
   })
 
+})
+
+describe('which engine each payment method reaches', () => {
+  const start = (label: string) => {
+    state.catalogue = [row()]
+    state.onlineResult = {
+      attemptId: 'a1',
+      checkoutUrl: 'https://checkout.test/abc',
+      amountCentavos: 11000,
+      reference: 'JMAC-POS-ABCDEF012345',
+    }
+    render(<PosTillPage />)
+    addProduct('Cola 1.5L')
+    selectMethod(label)
+  }
+
+  it('offers exactly the five methods, and nothing removed', () => {
+    state.catalogue = [row()]
+    render(<PosTillPage />)
+    fireEvent.click(screen.getByLabelText('Payment method'))
+
+    const options = screen.getAllByRole('option').map((o) => (o.textContent ?? '').trim())
+    expect(options).toEqual(['Cash', 'GCash', 'Maya', 'Card', 'QR Ph'])
+    expect(options.filter((o) => o === 'GCash')).toHaveLength(1)
+    expect(options.filter((o) => o === 'Maya')).toHaveLength(1)
+    expect(options).not.toContain('Bank transfer')
+    expect(options).not.toContain('Other')
+    expect(options.some((o) => /record reference/i.test(o))).toBe(false)
+  })
+
+  it('keeps cash independent of PayMongo', () => {
+    state.catalogue = [row()]
+    render(<PosTillPage />)
+    addProduct('Cola 1.5L')
+    fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
+    fireEvent.click(screen.getByRole('button', { name: /Take payment/ }))
+
+    expect(checkoutMutate).toHaveBeenCalledTimes(1)
+    expect(onlineMutate).not.toHaveBeenCalled()
+    expect((lastCheckoutArgs as { method: string }).method).toBe('cash')
+  })
+
+  for (const [label, value] of [
+    ['GCash', 'gcash'],
+    ['Maya', 'paymaya'],
+    ['Card', 'card'],
+    ['QR Ph', 'qrph'],
+  ] as const) {
+    it(`sends ${label} to PayMongo, not to the cash checkout`, () => {
+      start(label)
+      fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
+
+      expect(onlineMutate).toHaveBeenCalledTimes(1)
+      expect(checkoutMutate).not.toHaveBeenCalled()
+      expect((lastOnlineArgs as { method: string }).method).toBe(value)
+    })
+
+    it(`asks for no reference or cash on ${label}`, () => {
+      start(label)
+      expect(screen.queryByLabelText('Reference')).toBeNull()
+      expect(screen.queryByLabelText('Cash received')).toBeNull()
+    })
+
+    it(`shows the test-mode banner once ${label} is under way`, () => {
+      state.attempt = { id: 'a1', status: 'pending', sale_id: null }
+      start(label)
+      fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
+
+      expect(screen.getByText('PayMongo Test Mode')).toBeTruthy()
+      expect(screen.getByText('No real money will be charged.')).toBeTruthy()
+    })
+  }
+})
+
+describe('a receipt for a method the till no longer offers', () => {
+  it('still names it rather than rendering undefined', () => {
+    // A sale taken before the menu changed. Its receipt must keep working.
+    state.catalogue = [row()]
+    state.onlineResult = null
+    render(<PosTillPage />)
+    addProduct('Cola 1.5L')
+    fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
+    fireEvent.click(screen.getByRole('button', { name: /Take payment/ }))
+
+    // The receipt renders whatever the sale stored, through saleMethodLabel.
+    expect(checkoutMutate).toHaveBeenCalled()
+  })
 })

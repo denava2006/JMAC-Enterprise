@@ -12,6 +12,11 @@ import {
   validateSale,
   type CartLine,
   type CatalogueProduct,
+  TILL_METHODS,
+  TILL_METHOD_LABEL,
+  isOnlineMethod,
+  saleMethodLabel,
+  LEGACY_PAYMENT_METHODS,
 } from '@/lib/posTill'
 import type { Fee } from '@/lib/posFees'
 
@@ -115,7 +120,7 @@ describe('cartToItems', () => {
 })
 
 describe('validateSale', () => {
-  const base = { method: 'cash' as const, reference: '', tendered: '1000', total: 500 }
+  const base = { method: 'cash' as const, tendered: '1000', total: 500 }
 
   it('accepts a normal cash sale', () => {
     expect(validateSale({ ...base, cart: [line(product(), 2)] })).toEqual([])
@@ -142,32 +147,19 @@ describe('validateSale', () => {
     ).toContain('Enter the cash received')
   })
 
-  it('requires a reference for electronic payments', () => {
-    expect(
-      validateSale({ ...base, cart: [line(product(), 2)], method: 'gcash', reference: '' }).join(' ')
-    ).toContain('reference is required')
-  })
-
-  it('checks the GCash reference format', () => {
-    const cart = [line(product(), 2)]
-    expect(
-      validateSale({ ...base, cart, method: 'gcash', reference: 'abc' }).join(' ')
-    ).toContain('6-32 digits')
-    expect(validateSale({ ...base, cart, method: 'gcash', reference: '1234567890' })).toEqual([])
-  })
-
-  it('checks the bank reference format', () => {
-    const cart = [line(product(), 2)]
-    expect(validateSale({ ...base, cart, method: 'bank', reference: 'ab' }).join(' ')).toContain(
-      '6-64 letters'
-    )
-    expect(validateSale({ ...base, cart, method: 'bank', reference: 'TRF 2026-0001' })).toEqual([])
+  it('asks for no reference on any offered method', () => {
+    // The reference field went with the "record reference" methods. Every
+    // non-cash method the till offers is settled by PayMongo, which issues its
+    // own reference -- there is nothing for a cashier to type.
+    for (const method of ['gcash', 'paymaya', 'card', 'qrph'] as const) {
+      expect(validateSale({ ...base, cart: [line(product(), 2)], method })).toEqual([])
+    }
   })
 
   it('does not ask for a tender on an electronic payment', () => {
     const cart = [line(product(), 2)]
     expect(
-      validateSale({ ...base, cart, method: 'maya', reference: '123456', tendered: '' })
+      validateSale({ ...base, cart, method: 'paymaya', tendered: '' })
     ).toEqual([])
   })
 })
@@ -242,5 +234,81 @@ describe('describeCheckoutError', () => {
 
   it('never returns an empty string', () => {
     expect(describeCheckoutError(null)).toBe('The sale could not be completed. Please try again.')
+  })
+})
+
+describe('the payment methods the till offers', () => {
+  it('offers exactly five', () => {
+    expect(TILL_METHODS).toHaveLength(5)
+    expect([...TILL_METHODS]).toEqual(['cash', 'gcash', 'paymaya', 'card', 'qrph'])
+  })
+
+  it('reads as Cash, GCash, Maya, Card, QR Ph', () => {
+    expect(TILL_METHODS.map((m) => TILL_METHOD_LABEL[m])).toEqual([
+      'Cash',
+      'GCash',
+      'Maya',
+      'Card',
+      'QR Ph',
+    ])
+  })
+
+  it('offers no duplicate GCash and no duplicate Maya', () => {
+    // Two entries reading the same brand is what the "record reference"
+    // variants used to cause; a screen reader could not tell them apart.
+    const labels = TILL_METHODS.map((m) => TILL_METHOD_LABEL[m])
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(labels.filter((l) => l === 'GCash')).toHaveLength(1)
+    expect(labels.filter((l) => l === 'Maya')).toHaveLength(1)
+  })
+
+  it('offers no Bank transfer and no Other', () => {
+    const labels = TILL_METHODS.map((m) => TILL_METHOD_LABEL[m])
+    expect(labels).not.toContain('Bank transfer')
+    expect(labels).not.toContain('Other')
+    const values = [...TILL_METHODS] as string[]
+    expect(values).not.toContain('bank')
+    expect(values).not.toContain('other')
+    expect(values).not.toContain('maya')
+  })
+
+  it('treats cash as the only method not settled by PayMongo', () => {
+    expect(isOnlineMethod('cash')).toBe(false)
+    for (const method of ['gcash', 'paymaya', 'card', 'qrph'] as const) {
+      expect(isOnlineMethod(method)).toBe(true)
+    }
+  })
+})
+
+describe('rendering a sale that used a method the till no longer offers', () => {
+  it('still names every historical value', () => {
+    // These sales exist. Removing a menu entry must not turn their receipts,
+    // reports or audit rows into "undefined" or a raw enum.
+    expect(saleMethodLabel('maya')).toBe('Maya')
+    expect(saleMethodLabel('bank')).toBe('Bank transfer')
+    expect(saleMethodLabel('other')).toBe('Other')
+    expect(saleMethodLabel('gcash')).toBe('GCash')
+    expect(saleMethodLabel('cash')).toBe('Cash')
+  })
+
+  it('still names the methods that are offered', () => {
+    expect(saleMethodLabel('paymaya')).toBe('Maya')
+    expect(saleMethodLabel('card')).toBe('Card')
+    expect(saleMethodLabel('qrph')).toBe('QR Ph')
+  })
+
+  it('falls back to the stored value rather than rendering nothing', () => {
+    expect(saleMethodLabel('something_new')).toBe('something_new')
+  })
+
+  it('covers every value the database still accepts', () => {
+    // The CHECK on pos_sales.payment_method is deliberately wider than the
+    // menu, because history has to stay valid. Nothing it allows may render
+    // blank.
+    for (const stored of LEGACY_PAYMENT_METHODS) {
+      const label = saleMethodLabel(stored)
+      expect(label).toBeTruthy()
+      expect(label).not.toBe('undefined')
+    }
   })
 })

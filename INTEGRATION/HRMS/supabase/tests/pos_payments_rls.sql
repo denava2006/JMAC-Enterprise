@@ -599,6 +599,48 @@ begin
   update public.system_settings set value = '30'::jsonb where key = 'pos_payment_ttl_minutes';
   raise notice 'PASS 11d-e the TTL is configurable but bounded';
 
+
+  -- ======================================================================
+  -- 12. The till's menu shrank; the database's memory did not
+  -- ======================================================================
+  --
+  -- The cashier can now pick only cash, gcash, paymaya, card and qrph. Sales
+  -- taken before that carry 'maya', 'bank' and 'other', and those rows must
+  -- stay valid and readable -- receipts, reports and audit all render from
+  -- them. So the CHECK stays deliberately wider than the menu.
+  for txt in
+    select unnest(array['cash', 'gcash', 'maya', 'paymaya', 'card', 'qrph', 'bank', 'other'])
+  loop
+    begin
+      insert into public.pos_sales
+        (branch_id, cashier_id, subtotal, fees_total, total_amount, fees,
+         payment_method, payment_reference, amount_tendered, change_given,
+         total_cogs, branch_name, cashier_name, checkout_key, request_fingerprint)
+      values (branch_a, till_user, 1, 0, 1, '[]'::jsonb,
+              txt,
+              case when txt = 'cash' then null else 'JMAC-POS-LEGACY01' end,
+              case when txt = 'cash' then 1 else null end,
+              case when txt = 'cash' then 0 else null end,
+              0, 'B', 'C', gen_random_uuid(), 'fp-' || txt);
+    exception when check_violation then
+      raise exception 'FAIL 12a the database rejected the historical method %', txt;
+    end;
+  end loop;
+  raise notice 'PASS 12a every historical payment method is still storable and readable';
+
+  -- The reference validator likewise still understands the retired methods, so
+  -- a historical row can still be re-validated if anything replays it.
+  if public.validate_pos_payment_reference('maya', '091234567') is null then
+    raise exception 'FAIL 12b the validator forgot the legacy maya format';
+  end if;
+  if public.validate_pos_payment_reference('bank', 'TRF 2026-0001') is null then
+    raise exception 'FAIL 12c the validator forgot the legacy bank format';
+  end if;
+  if public.validate_pos_payment_reference('other', 'anything') is null then
+    raise exception 'FAIL 12d the validator forgot the legacy other format';
+  end if;
+  raise notice 'PASS 12b-d the reference validator still accepts retired methods';
+
   raise notice '--- all POS payment contract checks passed ---';
 end $$;
 
