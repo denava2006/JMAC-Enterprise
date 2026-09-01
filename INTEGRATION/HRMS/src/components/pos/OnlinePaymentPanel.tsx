@@ -54,18 +54,16 @@ export function OnlinePaymentPanel({
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
-      {/* Unmissable, and worded so nobody mistakes a test for a real sale. */}
-      <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2.5 py-1.5">
-        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-          PayMongo Test Mode
-        </p>
-        <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
-          No real money will be charged.
-        </p>
-      </div>
-
       <div className="flex items-baseline justify-between">
-        <span className="text-sm text-muted-foreground">Amount</span>
+        {/* Still said, because mistaking a test for a real sale is expensive --
+            but as a mark beside the amount rather than a panel the cashier has
+            to read past on every transaction. */}
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          Amount
+          <span className="rounded border border-amber-500/50 bg-amber-500/10 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            Test
+          </span>
+        </span>
         <span className="text-lg font-semibold tabular-nums text-foreground">
           {peso(amountCentavos / 100)}
         </span>
@@ -89,12 +87,13 @@ export function OnlinePaymentPanel({
         {describeAttemptStatus(status)}
       </p>
 
+      {/* No "Open payment page" step: the till navigates there as soon as the
+          session exists. This stays only as a way back if the customer closed
+          the page before paying. */}
       {status === 'pending' && checkoutUrl && (
-        <Button asChild className="w-full">
-          {/* noreferrer as well as noopener: the payment page never needs to
-              know which screen sent the customer to it. */}
-          <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
-            Open payment page
+        <Button asChild variant="outline" className="w-full">
+          <a href={checkoutUrl} rel="noopener noreferrer">
+            Reopen payment page
           </a>
         </Button>
       )}

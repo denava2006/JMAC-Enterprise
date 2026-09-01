@@ -1,10 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import type { UserRole } from '@/lib/enums'
 import type { Branch } from '@/hooks/useBranches'
 import type { CatalogueRow } from '@/hooks/usePosCatalogue'
 import type { Receipt } from '@/hooks/usePosTill'
 import type { Fee } from '@/lib/posFees'
+
+/** The till reads the payment-return key off the URL, so it needs router
+ *  context here exactly as it has in the app. */
+const assignSpy = vi.fn()
+// jsdom refuses a real navigation, so the till's one call out is observed here.
+Object.defineProperty(window, 'location', {
+  configurable: true,
+  value: { ...window.location, assign: assignSpy },
+})
+
+function renderTill() {
+  return render(
+    <MemoryRouter>
+      <PosTillPage />
+    </MemoryRouter>
+  )
+}
+
 
 /**
  * The till.
@@ -146,6 +165,7 @@ afterEach(() => {
   onlineMutate.mockReset()
   refetchAttempt.mockReset()
   cancelAttempt.mockReset()
+  assignSpy.mockReset()
   lastCheckoutArgs = null
   lastOnlineArgs = null
 })
@@ -158,7 +178,7 @@ const selectMethod = (label: string) => {
 describe('the product grid', () => {
   it('shows price and remaining stock', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
 
     expect(screen.getByText('Cola 1.5L')).toBeTruthy()
     expect(screen.getByText('₱100.00')).toBeTruthy()
@@ -170,7 +190,7 @@ describe('the product grid', () => {
       row({ product_id: 'p1', name: 'Low One', available_quantity: 2, is_low_stock: true }),
       row({ product_id: 'p2', name: 'Sold Out', available_quantity: 0, is_low_stock: true }),
     ]
-    render(<PosTillPage />)
+    renderTill()
 
     expect(screen.getByText('2 left')).toBeTruthy()
     expect(screen.getByText('Out')).toBeTruthy()
@@ -179,7 +199,7 @@ describe('the product grid', () => {
 
   it('shows no cost anywhere', () => {
     state.catalogue = [row()]
-    const { container } = render(<PosTillPage />)
+    const { container } = renderTill()
     const text = container.textContent ?? ''
     expect(text).not.toMatch(/cost/i)
     expect(text).not.toMatch(/margin/i)
@@ -191,7 +211,7 @@ describe('the product grid', () => {
 describe('the cart', () => {
   it('merges a repeat tap into one line', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     addProduct('Cola 1.5L')
     addProduct('Cola 1.5L')
@@ -204,7 +224,7 @@ describe('the cart', () => {
 
   it('will not add more than the branch holds', () => {
     state.catalogue = [row({ available_quantity: 2 })]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     addProduct('Cola 1.5L')
 
@@ -216,7 +236,7 @@ describe('the cart', () => {
 
   it('removes a line at zero', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.click(screen.getByRole('button', { name: 'One less Cola 1.5L' }))
     expect(screen.getByText(/Tap a product to start a sale/)).toBeTruthy()
@@ -227,7 +247,7 @@ describe('totals', () => {
   it('applies the branch fee and shows the change', () => {
     state.catalogue = [row()]
     state.fees = [{ id: 'f1', name: 'Service Charge', type: 'percent', value: 10, enabled: true }]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '200' } })
 
@@ -237,7 +257,7 @@ describe('totals', () => {
   })
 
   it('says the server confirms the numbers', () => {
-    render(<PosTillPage />)
+    renderTill()
     expect(screen.getByText(/confirmed by the server when you take payment/)).toBeTruthy()
   })
 })
@@ -245,7 +265,7 @@ describe('totals', () => {
 describe('what the till sends', () => {
   it('sends only branch, items, method, key and payment — never a price', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
@@ -266,7 +286,7 @@ describe('what the till sends', () => {
 
   it('refuses to send an underpaid cash sale', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '50' } })
 
@@ -280,7 +300,7 @@ describe('what the till sends', () => {
     // Reported from the till: an <input type="number"> accepted a symbol. The
     // field is now sanitised, so the characters never land in the value.
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
 
     const cash = screen.getByLabelText('Cash received') as HTMLInputElement
@@ -302,7 +322,7 @@ describe('what the till sends', () => {
     // This is what makes a double-tap safe: the server returns the sale it
     // already made rather than charging twice.
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
 
@@ -317,7 +337,7 @@ describe('what the till sends', () => {
 
   it('mints a new key when the cart changes', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
     fireEvent.click(screen.getByRole('button', { name: /Take payment/ }))
@@ -334,7 +354,7 @@ describe('what the till sends', () => {
 describe('branch scoping', () => {
   it('says so when the account is assigned to no branch', () => {
     state.branchIds = []
-    render(<PosTillPage />)
+    renderTill()
     expect(screen.getByText(/not assigned to a branch/)).toBeTruthy()
   })
 
@@ -342,14 +362,14 @@ describe('branch scoping', () => {
     state.role = 'admin'
     state.branchIds = []
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     expect(screen.getByText('Cola 1.5L')).toBeTruthy()
   })
 })
 
 describe('an empty branch', () => {
   it('explains itself rather than showing a blank grid', () => {
-    render(<PosTillPage />)
+    renderTill()
     expect(screen.getByText(/not offering anything yet/)).toBeTruthy()
   })
 })
@@ -359,7 +379,7 @@ export type { Receipt }
 describe('online payments', () => {
   const startOnline = (label = 'Card') => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     selectMethod(label)
   }
@@ -407,7 +427,7 @@ describe('online payments', () => {
     expect(screen.getByText(/only once PayMongo\s+confirms the payment/)).toBeTruthy()
   })
 
-  it('shows an unmissable test-mode banner while a payment is live', () => {
+  it('marks a live payment as test mode', () => {
     state.onlineResult = {
       attemptId: 'a1', checkoutUrl: 'https://checkout.test/abc',
       amountCentavos: 11000, reference: 'JMAC-POS-ABCDEF012345',
@@ -416,8 +436,9 @@ describe('online payments', () => {
     startOnline()
     fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
 
-    expect(screen.getByText('PayMongo Test Mode')).toBeTruthy()
-    expect(screen.getByText('No real money will be charged.')).toBeTruthy()
+    // A mark beside the amount now, rather than a panel above it. The claim
+    // it makes is the same one.
+    expect(screen.getByText('Test')).toBeTruthy()
   })
 
   it('offers no way to mark a payment paid from the till', () => {
@@ -464,7 +485,13 @@ describe('online payments', () => {
     expect(alert.textContent).toMatch(/call a manager/i)
   })
 
-  it('opens the provider page in a new tab without leaking the referrer', () => {
+  it('goes to the provider itself rather than offering a second button', () => {
+    // The cashier already said "take payment". Asking them to press a second
+    // button afterwards is the same decision twice, with a customer waiting
+    // through it -- so the till navigates as soon as the session exists.
+    //
+    // Same tab on purpose: the provider returns to /pos/till with the attempt
+    // key, and a popup would strand that return in a window somebody closed.
     state.onlineResult = {
       attemptId: 'a1', checkoutUrl: 'https://checkout.test/abc',
       amountCentavos: 11000, reference: 'JMAC-POS-ABCDEF012345',
@@ -473,10 +500,13 @@ describe('online payments', () => {
     startOnline()
     fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
 
-    const link = screen.getByRole('link', { name: 'Open payment page' })
-    expect(link.getAttribute('href')).toBe('https://checkout.test/abc')
-    expect(link.getAttribute('rel')).toContain('noopener')
-    expect(link.getAttribute('rel')).toContain('noreferrer')
+    expect(assignSpy).toHaveBeenCalledWith('https://checkout.test/abc')
+    expect(screen.queryByRole('link', { name: 'Open payment page' })).toBeNull()
+
+    // A way back for a customer who closed the page before paying.
+    const reopen = screen.getByRole('link', { name: 'Reopen payment page' })
+    expect(reopen.getAttribute('href')).toBe('https://checkout.test/abc')
+    expect(reopen.getAttribute('rel')).toContain('noopener')
   })
 
   it('shows the amount the provider was told to charge, not a local total', () => {
@@ -539,14 +569,14 @@ describe('which engine each payment method reaches', () => {
       amountCentavos: 11000,
       reference: 'JMAC-POS-ABCDEF012345',
     }
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     selectMethod(label)
   }
 
   it('offers exactly the five methods, and nothing removed', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     fireEvent.click(screen.getByLabelText('Payment method'))
 
     const options = screen.getAllByRole('option').map((o) => (o.textContent ?? '').trim())
@@ -560,7 +590,7 @@ describe('which engine each payment method reaches', () => {
 
   it('keeps cash independent of PayMongo', () => {
     state.catalogue = [row()]
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
     fireEvent.click(screen.getByRole('button', { name: /Take payment/ }))
@@ -591,13 +621,12 @@ describe('which engine each payment method reaches', () => {
       expect(screen.queryByLabelText('Cash received')).toBeNull()
     })
 
-    it(`shows the test-mode banner once ${label} is under way`, () => {
+    it(`marks ${label} as test mode once it is under way`, () => {
       state.attempt = { id: 'a1', status: 'pending', sale_id: null }
       start(label)
       fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
 
-      expect(screen.getByText('PayMongo Test Mode')).toBeTruthy()
-      expect(screen.getByText('No real money will be charged.')).toBeTruthy()
+      expect(screen.getByText('Test')).toBeTruthy()
     })
   }
 })
@@ -607,7 +636,7 @@ describe('a receipt for a method the till no longer offers', () => {
     // A sale taken before the menu changed. Its receipt must keep working.
     state.catalogue = [row()]
     state.onlineResult = null
-    render(<PosTillPage />)
+    renderTill()
     addProduct('Cola 1.5L')
     fireEvent.change(screen.getByLabelText('Cash received'), { target: { value: '500' } })
     fireEvent.click(screen.getByRole('button', { name: /Take payment/ }))

@@ -237,8 +237,8 @@ Deno.serve(async (req: Request) => {
             payment_method_types: [method],
             reference_number: reference,
             description: `JMAC POS ${reference}`,
-            success_url: `${APP_ORIGIN}/pos/checkout/payment-return?ref=${encodeURIComponent(reference)}`,
-            cancel_url: `${APP_ORIGIN}/pos/checkout/payment-cancelled?ref=${encodeURIComponent(reference)}`,
+            success_url: `${APP_ORIGIN}/pos/till?attempt=${encodeURIComponent(checkoutKey)}`,
+            cancel_url: `${APP_ORIGIN}/pos/till?attempt=${encodeURIComponent(checkoutKey)}&cancelled=1`,
             // Metadata is echoed back on the webhook, so the attempt can be
             // found without trusting anything the browser carries.
             metadata: { jmac_attempt_id: attempt.id, jmac_reference: reference },

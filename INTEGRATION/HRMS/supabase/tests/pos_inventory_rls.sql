@@ -204,14 +204,23 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
     raise notice 'PASS  2b a cashier cannot receive stock';
   end;
 
+  -- A manager adjusting their OWN branch used to be refused here. That is
+  -- reversed: the person holding the boxes is the one who can see that five
+  -- were damaged, and routing it through an Administrator only delayed the
+  -- ledger catching up with the shelf.
+  --
+  -- The manager's authority, and where it stops, is covered end to end in
+  -- pos_manager_inventory_rls. It is asserted there rather than here because
+  -- the movements it writes would change the balances and ledger counts this
+  -- suite goes on to measure.
   perform set_config('request.jwt.claims', json_build_object('sub', manager_id, 'role', 'authenticated')::text, true);
   set local role authenticated;
   begin
-    perform public.adjust_pos_stock(branch_a, cola_id, 5, 'found', null);
-    raise exception 'FAIL  2c a POS manager adjusted stock';
+    perform public.adjust_pos_stock(branch_b, cola_id, 5, 'found', null);
+    raise exception 'FAIL  2c a POS manager adjusted a branch they do not manage';
   exception when raise_exception then
     if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'PASS  2c a POS manager cannot adjust stock';
+    raise notice 'PASS  2c a POS manager cannot adjust a branch they do not manage';
   end;
   reset role;
 

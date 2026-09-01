@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Image as ImageIcon, Minus, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -222,6 +223,26 @@ export default function PosTillPage() {
     method === 'cash' && tendered.trim() !== '' ? changeDue(totals.total, Number(tendered)) : null
 
   // The key survives while the sale is unchanged, so a double-tap is one sale.
+  // Coming back from the payment page.
+  //
+  // The key in the URL says WHICH attempt to look at and nothing more. Its
+  // status is read from the database, which only the signed webhook writes, so
+  // typing this URL by hand produces exactly what an unpaid attempt looks like.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const returnedAttempt = searchParams.get('attempt')
+
+  React.useEffect(() => {
+    if (!returnedAttempt) return
+    setOnlinePayment((current) =>
+      current?.checkoutKey === returnedAttempt
+        ? current
+        : { checkoutKey: returnedAttempt, checkoutUrl: null, amountCentavos: 0, reference: null }
+    )
+    // Cleared so a refresh, or the next sale, does not reopen a finished
+    // payment -- the panel itself is now driven by the attempt's real status.
+    setSearchParams({}, { replace: true })
+  }, [returnedAttempt, setSearchParams])
+
   const attemptRef = React.useRef<CheckoutAttempt | null>(null)
   const fingerprint = attemptFingerprint({
     branchId: branchId || null,
@@ -271,6 +292,16 @@ export default function PosTillPage() {
               amountCentavos: result.amountCentavos,
               reference: result.reference ?? null,
             })
+            // Straight to the payment page. The cashier has already said "take
+            // payment"; making them press a second button afterwards is the
+            // same decision asked twice, with a customer waiting through it.
+            //
+            // Same tab on purpose: the provider returns to /pos/till with the
+            // attempt key, and a popup would strand that return in a window the
+            // cashier may have dismissed.
+            if (result.checkoutUrl) {
+              window.location.assign(result.checkoutUrl)
+            }
           },
         }
       )
