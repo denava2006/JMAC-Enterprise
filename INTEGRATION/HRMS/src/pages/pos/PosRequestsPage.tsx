@@ -121,7 +121,7 @@ function NewRequestDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New request</DialogTitle>
+          <DialogTitle>New stock request</DialogTitle>
           <DialogDescription>
             Tell the business what this branch needs. Submitting a request does not order or
             receive anything.
@@ -219,8 +219,8 @@ export default function PosRequestsPage() {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          Requests are for the branch you manage. What your branch sells is shown on the POS
-          screen.
+          Stock requests are for the branch you manage. What your branch sells is set in
+          Products.
         </CardContent>
       </Card>
     )
@@ -229,7 +229,7 @@ export default function PosRequestsPage() {
   return (
     <div className="flex flex-col gap-5">
       <PosInventoryHeader
-        description="Manage branch stock and inventory requests."
+        description="Ask for more units of what this branch already sells."
         branchId={branchId}
         onNewRequest={() => setComposing(true)}
         newRequestDisabled={!branchId}

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
  * One header for the whole Inventory surface.
  *
  * Stock and Requests used to build their own, and each showed only its own
- * action -- History on Stock, New request on Requests -- so both the tab strip
+ * action -- History on Stock, New stock request on Stock Requests -- so both the tab strip
  * and the buttons moved when you switched tabs. On Stock the tab strip was also
  * nested inside the same justify-between row as the buttons, so it slid
  * sideways as the button label changed length.
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 
 const TABS = [
   { to: '/pos/stock', label: 'Stock' },
-  { to: '/pos/requests', label: 'Requests' },
+  { to: '/pos/requests', label: 'Stock Requests' },
 ] as const
 
 interface Props {
@@ -107,13 +107,13 @@ export function PosInventoryHeader({
           {onNewRequest ? (
             <Button size="sm" onClick={onNewRequest} disabled={newRequestDisabled}>
               <Plus className="h-4 w-4" />
-              New request
+              New stock request
             </Button>
           ) : (
             <Button asChild size="sm">
               <Link to={`/pos/requests${query}${query ? '&' : '?'}new=1`}>
                 <Plus className="h-4 w-4" />
-                New request
+                New stock request
               </Link>
             </Button>
           )}

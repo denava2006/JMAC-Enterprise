@@ -208,6 +208,6 @@ describe('someone who manages nothing', () => {
   it('is told so instead of shown an empty queue', () => {
     state.assignments = [{ branchId: CAVITE, role: 'cashier' }]
     show()
-    expect(screen.getByText(/Requests are for the branch you manage/)).toBeTruthy()
+    expect(screen.getByText(/Stock requests are for the branch you manage/)).toBeTruthy()
   })
 })

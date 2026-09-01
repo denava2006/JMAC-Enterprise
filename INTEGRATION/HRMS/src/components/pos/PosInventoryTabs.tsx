@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
  */
 const TABS = [
   { to: '/pos/stock', label: 'Stock' },
-  { to: '/pos/requests', label: 'Requests' },
+  { to: '/pos/requests', label: 'Stock Requests' },
 ] as const
 
 export function PosInventoryTabs() {

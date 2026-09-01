@@ -601,3 +601,83 @@ export function useCreatePosCategory() {
     onError: (error: Error) => toast.error(error.message),
   })
 }
+
+/**
+ * Renaming or recategorising a product.
+ *
+ * GLOBAL. The catalogue is company-wide, so this changes the product for every
+ * branch carrying it -- the screen says so before the manager confirms. The
+ * function behind it can write a name and a category and nothing else, so no
+ * amount of payload shaping reaches cost.
+ */
+export function useUpdateProductDetails() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      productId,
+      name,
+      categoryId,
+    }: {
+      productId: string
+      name: string
+      categoryId: string
+    }) => {
+      const { error } = await supabase.rpc('update_pos_product_details', {
+        _product_id: productId,
+        _name: name,
+        _category_id: categoryId,
+      })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Product updated for every branch that carries it.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+/**
+ * Putting a picture on a product.
+ *
+ * Reuses the bucket, the generated path and the validation that already
+ * existed; only the row update goes through an RPC, so a manager writing an
+ * image path cannot also write a cost.
+ */
+export function useSetProductImage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ productId, file }: { productId: string; file: File }) => {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        throw new Error('Upload a PNG, JPG or WebP image.')
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        throw new Error(`The image must be under ${MAX_IMAGE_BYTES / (1024 * 1024)}MB.`)
+      }
+
+      // Generated end to end: nothing the manager typed reaches the object name.
+      const extension = file.type.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
+      const path = `${productId}/${crypto.randomUUID()}.${extension}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('pos-product-images')
+        .upload(path, file, { contentType: file.type, upsert: false })
+      if (uploadError) throw new Error('We could not upload that image. Please try again.')
+
+      const { error } = await supabase.rpc('set_pos_product_image', {
+        _product_id: productId,
+        _image_path: path,
+      })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+      return path
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Product image updated.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024

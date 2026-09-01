@@ -19,6 +19,7 @@ import {
   useAddProductToBranch,
   useCreateBranchProduct,
   useCreatePosCategory,
+  useProductImageUrls,
   usePosCategories,
 } from '@/hooks/usePosCatalogue'
 import { Label } from '@/components/ui/label'
@@ -299,6 +300,16 @@ export default function PosProductsPage() {
     return map
   }, [priced])
 
+  // Same source as the price: the catalogue knows what a product looks like,
+  // the inventory RPC knows how many there are. Neither owns the other's data.
+  const imageByProduct = React.useMemo(() => {
+    const map = new Map<string, string | null>()
+    for (const row of priced ?? []) map.set(row.product_id, row.image_path)
+    return map
+  }, [priced])
+
+  const { data: imageUrls } = useProductImageUrls((priced ?? []).map((r) => r.image_path))
+
   const [search, setSearch] = React.useState('')
   const [filter, setFilter] = React.useState(ALL)
 
@@ -438,9 +449,28 @@ export default function PosProductsPage() {
                   return (
                     <TableRow key={row.product_id}>
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{row.product_name}</span>
-                          <span className="text-xs text-muted-foreground">{row.category_name}</span>
+                        <div className="flex items-center gap-3">
+                          {/* A product without a picture is still a product --
+                              the placeholder keeps the row aligned rather than
+                              implying something is wrong. */}
+                          {imageUrls?.[imageByProduct.get(row.product_id) ?? ''] ? (
+                            <img
+                              src={imageUrls[imageByProduct.get(row.product_id) ?? '']}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded object-cover"
+                            />
+                          ) : (
+                            <span
+                              aria-hidden="true"
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground"
+                            >
+                              <Package className="h-4 w-4" />
+                            </span>
+                          )}
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">{row.product_name}</span>
+                            <span className="text-xs text-muted-foreground">{row.category_name}</span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -448,10 +478,8 @@ export default function PosProductsPage() {
                           <span className="tabular-nums text-foreground">
                             {price === undefined ? '—' : peso(price)}
                           </span>
-                          {/* Stated once rather than shown as a disabled input
-                              that looks like something is broken. */}
                           <span className="text-[10px] text-muted-foreground">
-                            set by Administrator
+                            {managesThisBranch ? 'this branch' : 'set by Administrator'}
                           </span>
                         </div>
                       </TableCell>

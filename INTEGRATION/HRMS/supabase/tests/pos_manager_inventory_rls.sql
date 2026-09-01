@@ -280,6 +280,75 @@ begin
   end if;
   raise notice 'PASS  7a approving a request approves a purchase -- it moves no stock';
 
+  -- ======================================================================
+  -- 8. Stock does not enter at a cost nobody established
+  -- ======================================================================
+  --
+  -- A manager may receive without naming a cost, because the invoice is not in
+  -- their hands. The fallback used to be the branch average -- which for a
+  -- product nobody had ever bought is 0, so ten real units entered valued at
+  -- nothing. Stock at zero cost reports as free inventory with infinite margin,
+  -- and every figure downstream inherits it.
+  perform pg_temp.acts_as(mgr_uid);
+  set local role authenticated;
+  declare
+    _fresh uuid;
+    _before int;
+  begin
+    _fresh := public.create_pos_product_for_branch(branch_a, 'ZZ Unvalued ' || tag, general, 40);
+
+    select quantity_on_hand into _before from public.pos_branch_inventory
+     where branch_id = branch_a and product_id = _fresh;
+
+    begin
+      perform public.receive_pos_stock(branch_a, _fresh, 10, null, 'first delivery');
+      reset role;
+      raise exception 'FAIL  8a stock was received with no cost basis';
+    exception when others then
+      if sqlerrm like 'FAIL%' then raise; end if;
+      if sqlerrm not like '%Purchase cost has not been established%' then
+        raise exception 'FAIL  8a refused with the wrong reason: %', sqlerrm;
+      end if;
+    end;
+
+    -- Refused means refused: nothing moved, and no ledger entry claims it did.
+    select quantity_on_hand into n from public.pos_branch_inventory
+     where branch_id = branch_a and product_id = _fresh;
+    if n <> _before then
+      raise exception 'FAIL  8b a refused receipt still moved stock from % to %', _before, n;
+    end if;
+    select count(*) into n from public.pos_inventory_movements
+     where branch_id = branch_a and product_id = _fresh;
+    if n <> 0 then
+      raise exception 'FAIL  8c a refused receipt wrote % movement rows', n;
+    end if;
+    reset role;
+    raise notice 'PASS  8a-c receiving is refused with no cost basis, and nothing moves';
+
+    -- Once somebody with the authority establishes it, the manager may receive.
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', admin_id, 'role','authenticated')::text, true);
+    perform public.receive_pos_stock(branch_a, _fresh, 4, 25, 'opening, priced by finance');
+
+    perform pg_temp.acts_as(mgr_uid);
+    set local role authenticated;
+    perform public.receive_pos_stock(branch_a, _fresh, 6, null, 'second delivery');
+    reset role;
+
+    select quantity_on_hand into n from public.pos_branch_inventory
+     where branch_id = branch_a and product_id = _fresh;
+    if n <> 10 then
+      raise exception 'FAIL  8d stock is % after 4 + 6, expected 10', n;
+    end if;
+
+    select average_unit_cost into txt from public.pos_branch_inventory
+     where branch_id = branch_a and product_id = _fresh;
+    if txt::numeric <> 25 then
+      raise exception 'FAIL  8e the established valuation drifted to %', txt;
+    end if;
+    raise notice 'PASS  8d-e once a cost is established, the manager receives against it';
+  end;
+
   raise notice '--- all manager inventory checks passed ---';
 end $$;
 

@@ -3637,7 +3637,7 @@ export type Database = {
           _notes?: string
           _product_id: string
           _quantity: number
-          _unit_cost: number
+          _unit_cost?: number
         }
         Returns: {
           average_unit_cost: number
@@ -3715,6 +3715,10 @@ export type Database = {
         Args: { _branch_id: string; _price: number; _product_id: string }
         Returns: undefined
       }
+      set_pos_product_image: {
+        Args: { _image_path: string; _product_id: string }
+        Returns: undefined
+      }
       set_position_entitlement: {
         Args: {
           _granted: boolean
@@ -3750,6 +3754,10 @@ export type Database = {
         }[]
       }
       sync_employment_statuses: { Args: never; Returns: undefined }
+      update_pos_product_details: {
+        Args: { _category_id: string; _name: string; _product_id: string }
+        Returns: undefined
+      }
       validate_pos_payment_reference: {
         Args: { _payment_method: string; _payment_reference: string }
         Returns: string

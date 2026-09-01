@@ -64,6 +64,16 @@ vi.mock('@/hooks/usePosInventory', () => ({
 vi.mock('@/hooks/usePosCatalogue', () => ({
   useBranchCatalogueManagement: () => ({ data: state.priced, isLoading: false }),
   useSetBranchAvailability: () => ({ mutate: setAvailability, isPending: false }),
+  // The Add Product dialog and the row thumbnails. Empty by default: a product
+  // without a picture is still a product, and the page must render either way.
+  useCarryableCatalogue: () => ({ data: [], isLoading: false }),
+  useAddProductToBranch: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateBranchProduct: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePosCategory: () => ({ mutate: vi.fn(), isPending: false }),
+  usePosCategories: () => ({ data: [] }),
+  // Empty on purpose: a product without a picture is still a product, and
+  // the row must render either way.
+  useProductImageUrls: () => ({ data: {} }),
 }))
 
 const { default: PosProductsPage } = await import('@/pages/pos/PosProductsPage')
@@ -105,16 +115,16 @@ describe('what a POS manager can do here', () => {
     expect(screen.getByText('Not active enterprise-wide')).toBeTruthy()
   })
 
-  it('shows the price as read-only, and says who sets it', () => {
-    // enforce_branch_product_boundaries refuses a manager's selling price, so
-    // an editable field here would be a box that always errors.
+  it("says the price shown is this branch's", () => {
+    // The caption used to read "set by Administrator", which stopped being true
+    // when the branch price became the manager's. A label that misstates who
+    // owns a number is worse than no label.
     state.rows = [row()]
     state.priced = [{ product_id: 'p1', selling_price: 65 }]
     renderPage()
 
-    expect(screen.getByText('set by Administrator')).toBeTruthy()
-    expect(screen.queryByRole('textbox', { name: /price/i })).toBeNull()
-    expect(screen.queryByRole('spinbutton')).toBeNull()
+    expect(screen.getByText('this branch')).toBeTruthy()
+    expect(screen.queryByText('set by Administrator')).toBeNull()
   })
 
   it('never shows cost, COGS, margin or profit', () => {
