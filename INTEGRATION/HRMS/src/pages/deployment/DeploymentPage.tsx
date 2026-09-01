@@ -1,10 +1,8 @@
 import * as React from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { motion } from 'framer-motion'
 import { FileText, Hourglass, FileCheck2, PenLine, PackageCheck, Rocket, Eye } from 'lucide-react'
+import { StatCard } from '@/components/stat-card'
 import { DataTable } from '@/components/data-table'
-import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
@@ -35,44 +33,6 @@ import {
 } from '@/lib/deploymentLabels'
 
 const ALL = 'all'
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  isLoading,
-  index,
-}: {
-  label: string
-  value: number
-  icon: React.ComponentType<{ className?: string }>
-  isLoading: boolean
-  index: number
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-    >
-      <Card>
-        <CardContent className="flex items-center gap-4 p-5">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            {isLoading ? (
-              <Skeleton className="mt-1 h-7 w-12" />
-            ) : (
-              <p className="font-display text-2xl font-bold text-foreground">{value}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  )
-}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -257,12 +217,12 @@ export default function DeploymentPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Pending Job Offers" value={stats.pendingOffersCount} icon={FileText} isLoading={isLoading} index={0} />
-        <StatCard label="Awaiting Offer Response" value={stats.awaitingOfferResponseCount} icon={Hourglass} isLoading={isLoading} index={1} />
-        <StatCard label="Contracts Ready" value={stats.contractsReadyCount} icon={FileCheck2} isLoading={isLoading} index={2} />
-        <StatCard label="Waiting for Signature" value={stats.waitingForSignatureCount} icon={PenLine} isLoading={isLoading} index={3} />
-        <StatCard label="Ready for Deployment" value={stats.readyForDeploymentCount} icon={PackageCheck} isLoading={isLoading} index={4} />
-        <StatCard label="Deployed Today" value={stats.deployedTodayCount} icon={Rocket} isLoading={isLoading} index={5} />
+        <StatCard label="Pending Job Offers" value={stats.pendingOffersCount} icon={FileText} isLoading={isLoading} index={0} size="default" />
+        <StatCard label="Awaiting Offer Response" value={stats.awaitingOfferResponseCount} icon={Hourglass} isLoading={isLoading} index={1} size="default" />
+        <StatCard label="Contracts Ready" value={stats.contractsReadyCount} icon={FileCheck2} isLoading={isLoading} index={2} size="default" />
+        <StatCard label="Waiting for Signature" value={stats.waitingForSignatureCount} icon={PenLine} isLoading={isLoading} index={3} size="default" />
+        <StatCard label="Ready for Deployment" value={stats.readyForDeploymentCount} icon={PackageCheck} isLoading={isLoading} index={4} size="default" />
+        <StatCard label="Deployed Today" value={stats.deployedTodayCount} icon={Rocket} isLoading={isLoading} index={5} size="default" />
       </div>
 
       {isError ? (

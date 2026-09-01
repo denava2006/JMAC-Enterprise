@@ -24,6 +24,8 @@ import {
   Boxes,
   ShoppingCart,
   Receipt as ReceiptIcon,
+  PiggyBank,
+  Landmark,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
@@ -71,6 +73,17 @@ const referenceNav: NavItem[] = [
   { label: 'Positions', to: '/dashboard/admin/positions', icon: Layers },
   { label: 'Salary Grades', to: '/dashboard/admin/salary-grades', icon: DollarSign },
   { label: 'Work Schedules', to: '/dashboard/admin/work-schedules', icon: CalendarClock },
+]
+
+// Finance. Its own array rather than a filter over mainNav: a Finance Manager
+// standing in /fms wants budgets and vendors, not the HR modules they have no
+// access to. The same reasoning as employeeNav above.
+const financeNav: NavItem[] = [
+  { label: 'Overview', to: '/fms', icon: LayoutDashboard },
+  { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
+  { label: 'Vendors', to: '/fms/vendors', icon: Store },
+  { label: 'Categories', to: '/fms/categories', icon: Tags },
+  { label: 'Chart of Accounts', to: '/fms/accounts', icon: Landmark },
 ]
 
 // Genuinely Administrator-only.
@@ -145,17 +158,21 @@ export function Sidebar() {
   // role. An HR Manager is an employee too: on their own attendance page they
   // need self-service navigation, and on the organization's they need HR's.
   // Reading this from the role is what made those two mutually exclusive.
-  const inSelfService = portalForPath(pathname) === 'employee'
+  const portal = portalForPath(pathname)
+  const inSelfService = portal === 'employee'
+  const inFinance = portal === 'finance'
   const visibleMainNav = inSelfService
     ? employeeNav
-    : mainNav.filter((item) => canAccessModule(profile?.role, item.to))
+    : inFinance
+      ? financeNav
+      : mainNav.filter((item) => canAccessModule(profile?.role, item.to))
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex print:hidden">
       <div className="flex h-16 flex-col justify-center border-b border-border px-5">
         <JmacWordmark className="text-[15px] text-foreground" />
         <span className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {inSelfService ? 'My Workspace' : 'Human Resources'}
+          {inSelfService ? 'My Workspace' : inFinance ? 'Finance' : 'Human Resources'}
         </span>
       </div>
 
@@ -164,7 +181,7 @@ export function Sidebar() {
           <NavRow key={item.to} item={item} />
         ))}
 
-        {!inSelfService && (
+        {!inSelfService && !inFinance && (
           <>
             <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Reference Data
@@ -177,7 +194,7 @@ export function Sidebar() {
           </>
         )}
 
-        {profile?.role === 'admin' && (
+        {profile?.role === 'admin' && !inFinance && (
           <>
             <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Administration

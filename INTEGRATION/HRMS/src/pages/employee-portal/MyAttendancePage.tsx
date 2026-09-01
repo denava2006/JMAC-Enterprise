@@ -1,9 +1,8 @@
 import * as React from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { CalendarClock, Clock, AlarmClock, TrendingUp, CalendarCheck } from 'lucide-react'
+import { StatCard } from '@/components/stat-card'
 import { DataTable } from '@/components/data-table'
-import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -43,32 +42,6 @@ function rangeForQuickFilter(range: QuickRange): { from: string; to: string } {
   if (range === 'this_week') return { from: startOfWeekISODate(), to: today }
   if (range === 'this_month') return { from: startOfMonthISODate(), to: today }
   return { from: today, to: today }
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  isLoading,
-}: {
-  label: string
-  value: string | number
-  icon: React.ComponentType<{ className?: string }>
-  isLoading?: boolean
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          {isLoading ? <Skeleton className="mt-1 h-6 w-12" /> : <p className="font-display text-xl font-bold text-foreground">{value}</p>}
-        </div>
-      </CardContent>
-    </Card>
-  )
 }
 
 export default function MyAttendancePage() {
