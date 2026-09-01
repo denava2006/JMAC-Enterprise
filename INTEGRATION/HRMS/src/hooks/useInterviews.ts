@@ -46,18 +46,57 @@ const STATS_KEY = ['interview-stats']
 /** HR Managers available to take a final interview. HR Staff picks one of these
  * when passing an applicant out of the initial round — the final interview is
  * theirs to run, so there is nobody else to assign it to. */
+export interface FinalInterviewerOption {
+  id: string
+  full_name: string
+  email: string
+  /** True for an Administrator standing in because no HR Manager exists. */
+  isFallback: boolean
+}
+
+/**
+ * Who may run the final interview.
+ *
+ * An HR Manager normally, and an Administrator as a fallback. This asked only
+ * for hr_manager, which produced a production dead end: with no HR Manager on
+ * the system an initial interview could not be passed at all, so recruitment
+ * stopped at the first candidate.
+ *
+ * The database has always allowed both -- protect_final_interviewer_assignment
+ * accepts `role in ('hr_manager','admin') and status = 'active'` -- so this is
+ * the screen catching up with the rule, not the rule being widened. HR Staff
+ * remain excluded on both sides.
+ *
+ * Administrators are listed last and marked, so a real HR Manager is the
+ * obvious choice whenever one exists.
+ */
 export function useAvailableFinalInterviewers() {
   return useQuery({
     queryKey: ['available-final-interviewers'],
-    queryFn: async () => {
+    queryFn: async (): Promise<FinalInterviewerOption[]> => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
-        .eq('role', 'hr_manager')
+        .select('id, full_name, email, role')
+        .in('role', ['hr_manager', 'admin'])
         .eq('status', 'active')
         .order('full_name')
       if (error) throw error
-      return data
+
+      const rows = (data ?? []) as { id: string; full_name: string; email: string; role: string }[]
+      return rows
+        .map((r) => ({
+          id: r.id,
+          full_name: r.full_name,
+          email: r.email,
+          isFallback: r.role === 'admin',
+        }))
+        .sort((a, b) =>
+          a.isFallback === b.isFallback
+            ? a.full_name.localeCompare(b.full_name)
+            : a.isFallback
+              ? 1
+              : -1
+        )
     },
   })
 }

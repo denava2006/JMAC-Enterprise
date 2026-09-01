@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { useSubmitInitialEvaluation, useSubmitFinalEvaluation, useAvailableFinalInterviewers } from '@/hooks/useInterviews'
+import { useAuth } from '@/contexts/AuthContext'
 import type { InterviewType } from '@/lib/enums'
 import { RATING_OPTIONS } from '@/lib/interviewLabels'
 
@@ -66,7 +67,13 @@ export function EvaluateInterviewDialog({
   const submitInitial = useSubmitInitialEvaluation()
   const submitFinal = useSubmitFinalEvaluation()
   const isPending = submitInitial.isPending || submitFinal.isPending
+  const { profile } = useAuth()
   const { data: finalInterviewers } = useAvailableFinalInterviewers()
+  // Whether a real HR Manager exists, and whether this actor may stand in for
+  // one. An Administrator seeing an empty list is a workable situation; HR
+  // Staff seeing one is genuinely blocked and should be told so.
+  const hasManager = (finalInterviewers ?? []).some((m) => !m.isFallback)
+  const canFallBack = profile?.role === 'admin'
   const [finalInterviewerId, setFinalInterviewerId] = React.useState('')
 
   // Initial-stage fields
@@ -250,18 +257,38 @@ export function EvaluateInterviewDialog({
                   }}
                 >
                   <SelectTrigger id="final_interviewer" invalid={!!fieldErrors.finalInterviewerId}>
-                    <SelectValue placeholder={finalInterviewers?.length ? 'Select an HR Manager' : 'No HR Manager available'} />
+                    <SelectValue
+                      placeholder={
+                        hasManager
+                          ? 'Select an HR Manager'
+                          : canFallBack
+                            ? 'No HR Manager — select Administrator'
+                            : 'No HR Manager available'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {finalInterviewers?.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.full_name}
+                        {m.isFallback ? ' — fallback' : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {fieldErrors.finalInterviewerId ? (
                   <p className="text-xs text-destructive">{fieldErrors.finalInterviewerId}</p>
+                ) : !hasManager && canFallBack ? (
+                  /* Not an error state. An Administrator can run this, so
+                     saying so is more use than a red box they cannot clear. */
+                  <p className="text-xs text-muted-foreground">
+                    No HR Manager available. An Administrator can conduct the final interview.
+                  </p>
+                ) : !hasManager ? (
+                  <p className="text-xs text-destructive">
+                    No HR Manager is available. An Administrator must assign or conduct the final
+                    interview.
+                  </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Only required when passing — the final interview is run by an HR Manager, not HR Staff.
