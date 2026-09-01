@@ -1,0 +1,17 @@
+-- may_cancel_pos_payment is gone, and the reason is worth recording.
+--
+-- It was written as a SECURITY DEFINER helper that the cancel endpoint would
+-- call AS THE CALLER, so that has_pos_role() inside it saw the real cashier.
+-- But it was granted to service_role only, so the call failed with "permission
+-- denied" the first time a cashier pressed Cancel against production.
+--
+-- The fix was not to widen the grant. Granting it to authenticated would have
+-- put another SECURITY DEFINER function on the API surface for no gain, when
+-- has_pos_role -- already callable, already the rule every other POS surface
+-- uses -- answers exactly the same question. The endpoint now reads the attempt
+-- with the service role and authorises with has_pos_role as the caller.
+--
+-- Worth noting what did NOT go wrong: the failure left the PayMongo session
+-- alive and the attempt pending, because cancellation records nothing until the
+-- provider confirms the session is dead. The fail-safe ordering held.
+drop function if exists public.may_cancel_pos_payment(uuid);

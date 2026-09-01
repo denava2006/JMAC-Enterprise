@@ -78,6 +78,7 @@ declare
   key2         uuid := gen_random_uuid();
   key3         uuid := gen_random_uuid();
   key4         uuid := gen_random_uuid();
+  key5         uuid := gen_random_uuid();
   cart         jsonb;
   pricing      jsonb;
   result       jsonb;
@@ -86,6 +87,8 @@ declare
   qty          integer;
   before_qty   integer;
   txt          text;
+  ts           timestamptz;
+  flag         boolean;
   tag          text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
   ------------------------------------------------------------------ fixtures
@@ -391,12 +394,18 @@ begin
   -- ======================================================================
   perform set_config('request.jwt.claims', json_build_object('sub', other_user, 'role', 'authenticated')::text, true);
   set local role authenticated;
+  -- Cancelling is no longer reachable from a session at all: the grant was
+  -- revoked when cancellation moved server-side, so that it can expire the
+  -- provider session before recording anything. Branch authority is still
+  -- enforced, now by may_cancel_pos_payment on the caller's behalf (11c).
   begin
     perform public.cancel_pos_payment_attempt(key3);
     raise exception 'FAIL  7a someone with no POS access cancelled a payment';
-  exception when raise_exception then
+  exception when insufficient_privilege then
+    raise notice 'PASS  7a cancelling is not reachable from a browser session';
+  when raise_exception then
     if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'PASS  7a cancelling requires POS access at that branch';
+    raise notice 'PASS  7a cancelling is not reachable from a browser session';
   end;
   reset role;
 
@@ -437,6 +446,158 @@ begin
     raise exception 'FAIL  8b cash classification is wrong';
   end if;
   raise notice 'PASS  8b only cash counts as cash for the drawer';
+
+
+  -- ======================================================================
+  -- 9. Abandonment: a session that is never paid must stop being payable
+  -- ======================================================================
+  --
+  -- PayMongo checkout sessions never expire on their own and this account has
+  -- no checkout_session.expired event, so JMAC owns the deadline. These checks
+  -- cover the database half; the provider half is covered by the sweep's own
+  -- tests, which assert it kills the session BEFORE recording anything.
+
+  insert into public.pos_payment_attempts
+    (branch_id, cashier_profile_id, checkout_key, method, amount_centavos, items, reference_number)
+  values (branch_a, till_user, key5, 'gcash', 11000, cart, 'JMAC-POS-FFFFFF06')
+  returning id into attempt_id;
+
+  select expires_at into ts from public.pos_payment_attempts where id = attempt_id;
+  if ts is null then
+    raise exception 'FAIL  9a a new attempt has no deadline';
+  end if;
+  raise notice 'PASS  9a every attempt gets a deadline at insert';
+
+  -- Before the deadline the sweep must not touch it.
+  select count(*) into n from public.get_expirable_pos_payments(50) e where e.id = attempt_id;
+  if n <> 0 then
+    raise exception 'FAIL  9b a payment inside its window was offered for expiry';
+  end if;
+  raise notice 'PASS  9b a pending payment before its TTL is left alone';
+
+  -- Past the deadline it must be offered.
+  update public.pos_payment_attempts set expires_at = now() - interval '1 minute'
+   where id = attempt_id;
+  select count(*) into n from public.get_expirable_pos_payments(50) e where e.id = attempt_id;
+  if n <> 1 then
+    raise exception 'FAIL  9c an overdue payment was not offered for expiry';
+  end if;
+  raise notice 'PASS  9c a pending payment past its TTL is offered for expiry';
+
+  -- The compare-and-set: the winner is told it won.
+  select public.mark_pos_payment_state(attempt_id, 'expired', 'swept') into flag;
+  if flag is not true then
+    raise exception 'FAIL  9d the first writer was not told it won';
+  end if;
+  select status::text into txt from public.pos_payment_attempts where id = attempt_id;
+  if txt <> 'expired' then
+    raise exception 'FAIL  9d1 status is % after expiry', txt;
+  end if;
+
+  -- A second writer racing the first changes nothing and is told so. This is
+  -- what keeps an expiry sweep and a payment webhook from both "succeeding".
+  select public.mark_pos_payment_state(attempt_id, 'cancelled', 'racing') into flag;
+  if flag is not false then
+    raise exception 'FAIL  9e the losing writer was told it won';
+  end if;
+  select status::text into txt from public.pos_payment_attempts where id = attempt_id;
+  if txt <> 'expired' then
+    raise exception 'FAIL  9e1 a losing writer changed the status to %', txt;
+  end if;
+  raise notice 'PASS  9d-e exactly one writer records a terminal outcome';
+
+  -- An expired attempt must never become a sale.
+  select count(*) into n from public.pos_sales where checkout_key = key5;
+  if n <> 0 then
+    raise exception 'FAIL  9f an expired payment produced a sale';
+  end if;
+  raise notice 'PASS  9f an expired payment creates no sale and no movement';
+
+  -- ======================================================================
+  -- 10. Paid is a one-way door
+  -- ======================================================================
+  --
+  -- The CAS already refuses to touch anything that is not pending. The trigger
+  -- is the second lock on the same door: no path, present or future, may
+  -- rewrite the record of money that actually moved.
+  select id into attempt_id from public.pos_payment_attempts where checkout_key = key2;
+
+  begin
+    update public.pos_payment_attempts set status = 'expired' where id = attempt_id;
+    raise exception 'FAIL 10a a paid payment was expired';
+  exception when check_violation then
+    raise notice 'PASS 10a a paid payment cannot be expired';
+  end;
+
+  begin
+    update public.pos_payment_attempts set status = 'cancelled' where id = attempt_id;
+    raise exception 'FAIL 10b a paid payment was cancelled';
+  exception when check_violation then
+    raise notice 'PASS 10b a paid payment cannot be cancelled';
+  end;
+
+  -- A paid attempt is never offered to the sweep in the first place.
+  update public.pos_payment_attempts set expires_at = now() - interval '1 day'
+   where id = attempt_id;
+  select count(*) into n from public.get_expirable_pos_payments(50) e where e.id = attempt_id;
+  if n <> 0 then
+    raise exception 'FAIL 10c a paid payment was offered for expiry';
+  end if;
+  raise notice 'PASS 10c the sweep never offers a paid payment';
+
+  -- paid_unfulfilled means somebody's money moved but no sale exists. That
+  -- needs a refund decision, not a tidy-up.
+  select id into attempt2_id from public.pos_payment_attempts where checkout_key = key3;
+  begin
+    update public.pos_payment_attempts set status = 'cancelled' where id = attempt2_id;
+    raise exception 'FAIL 10d a paid-but-unfulfilled payment was cancelled away';
+  exception when check_violation then
+    raise notice 'PASS 10d a paid-but-unfulfilled payment cannot be tidied away';
+  end;
+
+  -- ======================================================================
+  -- 11. The browser has no direct route to any of it
+  -- ======================================================================
+  set local role authenticated;
+  begin
+    perform public.get_expirable_pos_payments(10);
+    raise exception 'FAIL 11a an authenticated caller listed expirable payments';
+  exception when insufficient_privilege then
+    raise notice 'PASS 11a get_expirable_pos_payments is denied to authenticated';
+  when raise_exception then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'PASS 11a get_expirable_pos_payments is denied to authenticated';
+  end;
+  reset role;
+
+  -- Cancelling used to be a plain RPC the till called, which marked the attempt
+  -- cancelled while the provider session stayed live and payable. That route is
+  -- now closed; cancellation goes through the Edge Function, which expires the
+  -- session first.
+  set local role authenticated;
+  begin
+    perform public.cancel_pos_payment_attempt(key5);
+    raise exception 'FAIL 11b the till could still cancel a payment directly';
+  exception when insufficient_privilege then
+    raise notice 'PASS 11b the till cannot cancel without going through the server';
+  when raise_exception then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'PASS 11b the till cannot cancel without going through the server';
+  end;
+  reset role;
+
+  -- The TTL is configurable, but bounded so a bad value cannot expire payments
+  -- the instant they are created.
+  update public.system_settings set value = '0'::jsonb where key = 'pos_payment_ttl_minutes';
+  if public.pos_payment_ttl_minutes() < 1 then
+    raise exception 'FAIL 11d a TTL of zero was accepted';
+  end if;
+  update public.system_settings set value = '99999'::jsonb where key = 'pos_payment_ttl_minutes';
+  if public.pos_payment_ttl_minutes() > 1440 then
+    raise exception 'FAIL 11e an unbounded TTL was accepted';
+  end if;
+  update public.system_settings set value = '30'::jsonb where key = 'pos_payment_ttl_minutes';
+  raise notice 'PASS 11d-e the TTL is configurable but bounded';
 
   raise notice '--- all POS payment contract checks passed ---';
 end $$;

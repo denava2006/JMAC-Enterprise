@@ -448,3 +448,10 @@ enabled = true
 # forgets the flag cannot silently start rejecting every real payment.
 [functions.paymongo-webhook]
 verify_jwt = false
+
+# The expiry sweep is called by pg_cron, which cannot present a Supabase JWT
+# either. It authenticates with its own POS_EXPIRY_TOKEN, checked in constant
+# time inside the function. A dedicated token rather than the service-role key:
+# if it leaked, all it can do is expire already-overdue checkout sessions.
+[functions.expire-pos-payments]
+verify_jwt = false

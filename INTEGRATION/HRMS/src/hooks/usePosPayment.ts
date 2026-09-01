@@ -100,16 +100,32 @@ export function usePaymentAttempt(checkoutKey: string | null, enabled: boolean) 
   })
 }
 
+/**
+ * Cancel an online payment.
+ *
+ * Goes through a trusted server endpoint rather than an RPC, because
+ * cancelling has to kill the session at PayMongo BEFORE it is recorded
+ * locally. The old RPC marked the attempt cancelled while the provider's URL
+ * stayed live and payable -- a customer could then pay a basket the till had
+ * already written off.
+ *
+ * The endpoint refuses when the provider says the payment already succeeded,
+ * and finalizes it into a sale instead.
+ */
 export function useCancelPaymentAttempt() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (checkoutKey: string) => {
-      const { error } = await supabase.rpc('cancel_pos_payment_attempt', {
-        _checkout_key: checkoutKey,
+      const { data, error } = await supabase.functions.invoke('cancel-pos-payment', {
+        body: { checkoutKey },
       })
-      if (error) throw new Error(error.message)
+      if (error) throw new Error(await describeFunctionError(error, 'the payment service'))
+      if (data?.error) throw new Error(data.error)
+      return data as { ok?: boolean; status?: string }
     },
-    onSuccess: (_data, checkoutKey) => {
+    onSettled: (_data, _error, checkoutKey) => {
+      // Settled, not success: a refused cancellation means the payment was in
+      // fact paid, and the panel must re-read the row to find that out.
       queryClient.invalidateQueries({ queryKey: ['pos-payment-attempt', checkoutKey] })
     },
   })
