@@ -186,6 +186,10 @@ function NotificationDelivery({ items }: { items: ApplicantNotification[] | unde
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Applicant notifications
       </p>
+      <p className="text-xs text-muted-foreground">
+        &ldquo;Sent to provider&rdquo; means the email was handed to the mail service and accepted.
+        It is not confirmation that it reached the applicant&apos;s inbox.
+      </p>
       <div className="flex flex-col gap-1.5">
         {items.map((n) => (
           <div
@@ -196,7 +200,11 @@ function NotificationDelivery({ items }: { items: ApplicantNotification[] | unde
             <span className="flex items-center gap-2 text-xs">
               {n.status === 'sent' ? (
                 <>
-                  <Badge variant="success">Sent</Badge>
+                  {/* Not "Sent", and deliberately not a success badge. All this
+                      records is that Brevo accepted the API call. Seven of these
+                      read green while Brevo was rejecting every one of them for
+                      an invalid sender, and HR had no way to see it. */}
+                  <Badge variant="muted">Sent to provider</Badge>
                   <span className="text-muted-foreground">
                     {n.sent_at ? new Date(n.sent_at).toLocaleString(undefined,
                       { dateStyle: 'medium', timeStyle: 'short' }) : ''}

@@ -31,7 +31,22 @@ function json(body: unknown, status = 200) {
 }
 
 const TRACK_URL = 'https://jmac-enterprise.vercel.app/track'
-const SENDER = { name: 'JMAC Enterprise', email: 'no-reply@jmac-enterprise.com' }
+/** Who applicant mail comes from.
+ *
+ *  This was hardcoded to no-reply@jmac-enterprise.com -- an address on a domain
+ *  JMAC does not own and has never authenticated with Brevo. Brevo accepted
+ *  every API call and then rejected the message: "Sending has been rejected
+ *  because the sender no-reply@jmac-enterprise.com is not valid". Seven
+ *  applicant notifications were recorded as sent and none could ever arrive.
+ *
+ *  So there is no default any more. An unset sender stops the run instead of
+ *  quietly substituting an address that cannot deliver -- a wrong sender is
+ *  indistinguishable from success until someone reads the provider's log.
+ *
+ *  The display name stays applicant-facing; the address must be one Brevo has
+ *  verified for this account.
+ */
+const SENDER_NAME = Deno.env.get('BREVO_SENDER_NAME') ?? 'JMAC Enterprise'
 
 /** How many attempts before a row is left alone for a person to look at.
  *  Bounded on purpose: an address that will never accept mail must not be
@@ -284,6 +299,15 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'BREVO_API_KEY is not configured for this project.' }, 503)
     }
 
+    const senderEmail = Deno.env.get('BREVO_SENDER_EMAIL')?.trim()
+    if (!senderEmail) {
+      // Same reasoning as the key: refuse rather than send from something that
+      // will be rejected downstream and recorded here as a success.
+      console.error('BREVO_SENDER_EMAIL is not configured; refusing to send.')
+      return json({ error: 'BREVO_SENDER_EMAIL is not configured for this project.' }, 503)
+    }
+    const SENDER = { name: SENDER_NAME, email: senderEmail }
+
 
     // Claim a batch. `processing` is set first so two concurrent runs cannot
     // send the same row twice -- the outbox is at-least-once, and the unique
@@ -418,6 +442,54 @@ Deno.serve(async (req: Request) => {
         }
       } catch {
         quota = { error: 'provider unreachable' }
+      }
+
+      const messageId = new URL(req.url).searchParams.get('messageId')
+      if (messageId) {
+        try {
+          const res = await fetch(
+            `https://api.brevo.com/v3/smtp/statistics/events?messageId=${encodeURIComponent(messageId)}&limit=50`,
+            { headers: { 'api-key': brevoKey, accept: 'application/json' } }
+          )
+          if (res.ok) {
+            const found = await res.json()
+            const events = Array.isArray(found?.events) ? found.events : []
+            quota = {
+              ...(quota ?? {}),
+              // Event names and times only -- no recipient, no subject, no body.
+              message_events: events.map((ev: Record<string, unknown>) => ({
+                event: ev?.event ?? null,
+                date: ev?.date ?? null,
+                reason: ev?.reason ?? null,
+              })),
+            }
+          } else {
+            quota = { ...(quota ?? {}), message_events: { error: `HTTP ${res.status}` } }
+          }
+        } catch {
+          quota = { ...(quota ?? {}), message_events: { error: 'provider unreachable' } }
+        }
+      }
+
+      try {
+        const res = await fetch('https://api.brevo.com/v3/senders', {
+          headers: { 'api-key': brevoKey, accept: 'application/json' },
+        })
+        if (res.ok) {
+          const list = await res.json()
+          const senders = Array.isArray(list?.senders) ? list.senders : []
+          quota = {
+            ...(quota ?? {}),
+            // Addresses only, plus whether the provider considers each usable.
+            verified_senders: senders.map((sn: Record<string, unknown>) => ({
+              name: sn?.name ?? null,
+              email: sn?.email ?? null,
+              active: sn?.active ?? null,
+            })),
+          }
+        }
+      } catch {
+        // Diagnostics must never fail the run.
       }
     }
 
