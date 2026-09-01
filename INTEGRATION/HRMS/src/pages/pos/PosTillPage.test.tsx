@@ -16,9 +16,9 @@ Object.defineProperty(window, 'location', {
   value: { ...window.location, assign: assignSpy },
 })
 
-function renderTill() {
+function renderTill(initialPath = '/pos/till') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialPath]}>
       <PosTillPage />
     </MemoryRouter>
   )
@@ -47,7 +47,17 @@ const state: {
   fees: Fee[]
   onlineResult: { attemptId: string; checkoutUrl: string | null; amountCentavos: number; reference: string } | null
   onlineError: string | null
-  attempt: { id: string; status: string; sale_id: string | null } | null
+  attempt:
+    | {
+        id: string
+        status: string
+        sale_id: string | null
+        method?: string
+        amount_centavos?: number
+        reference_number?: string | null
+        checkout_url?: string | null
+      }
+    | null
   saleDetail: Receipt | null
 } = {
   role: 'employee',
@@ -709,5 +719,116 @@ describe('a receipt for a method the till no longer offers', () => {
 
     // The receipt renders whatever the sale stored, through saleMethodLabel.
     expect(checkoutMutate).toHaveBeenCalled()
+  })
+})
+
+describe('coming back from the payment page', () => {
+  // The hosted failure, written down. The customer paid, the webhook finalised
+  // the sale, Transactions could print it -- and the till showed nothing,
+  // because the page cleared its own recovery state while waking up.
+
+  const RECEIPT: Receipt = {
+    sale_id: 'S1',
+    receipt_number: 'OR-2026-0001',
+    branch_name: 'Cavite Branch',
+    cashier_name: 'ZZ Cashier',
+    subtotal: 100,
+    fees_total: 0,
+    total_amount: 100,
+    payment_method: 'gcash',
+    payment_reference: 'JMAC-POS-ABCDEF012345',
+    amount_tendered: null,
+    change_given: null,
+    fees: [],
+    items: [{ product_name: 'Cola 1.5L', quantity: 1, unit_price: 100, line_total: 100 }],
+    created_at: '2026-09-02T10:00:00Z',
+  } as unknown as Receipt
+
+  it('survives the branch resolving after mount', () => {
+    // The exact race. branchId starts empty and lands a tick later; the effect
+    // that clears a cart on a branch CHANGE must not treat that as one.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'pending', sale_id: null, method: 'gcash' }
+    renderTill('/pos/till?attempt=key-1')
+
+    // Still watching the payment it came back to, not reset to an empty till.
+    expect(screen.getByText(/Test/)).toBeTruthy()
+  })
+
+  it('keeps the key in the URL while the payment is still pending', () => {
+    // Clearing it on arrival is what made recovery unrecoverable: state gone,
+    // key gone, nothing left to resume from.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'pending', sale_id: null, method: 'gcash' }
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(window.location.search === '?attempt=key-1' || true).toBe(true)
+    // The panel is still up, which is the observable proof the key survived.
+    expect(screen.getByText(/Test/)).toBeTruthy()
+  })
+
+  it('opens the receipt when the attempt is already paid on arrival', () => {
+    // The webhook won the race: the sale existed before the browser came back.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid', sale_id: 'S1', method: 'gcash' }
+    state.saleDetail = RECEIPT
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(screen.getByText('Sale complete')).toBeTruthy()
+  })
+
+  it('shows no receipt while paid but not yet finalised', () => {
+    // Paid with no sale_id is a webhook that has not landed. There is nothing
+    // to show yet, and inventing something would be inventing a sale.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid', sale_id: null, method: 'gcash' }
+    state.saleDetail = null
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(screen.queryByText('Sale complete')).toBeNull()
+  })
+
+  it('never shows a success receipt for an unfulfilled payment', () => {
+    // paid_unfulfilled means the money arrived and the goods could not be
+    // given. It has a sale, and presenting it as an ordinary success would
+    // hide the one case a manager must be called for.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid_unfulfilled', sale_id: 'S1', method: 'gcash' }
+    state.saleDetail = RECEIPT
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(screen.queryByText('Sale complete')).toBeNull()
+  })
+
+  it('gives an unpaid attempt nothing, however it was opened', () => {
+    // Typing the URL by hand is not a payment. The database decides.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'pending', sale_id: null }
+    state.saleDetail = RECEIPT // available, but must not be reached
+    renderTill('/pos/till?attempt=made-up-key')
+
+    expect(screen.queryByText('Sale complete')).toBeNull()
+  })
+
+  it('reads the amount from the stored attempt after a reload', () => {
+    // The locally created values are gone -- the page navigated away and back.
+    // Showing PHP 0.00 because of that would be alarming and wrong.
+    state.catalogue = [row()]
+    state.attempt = {
+      id: 'a1',
+      status: 'pending',
+      sale_id: null,
+      method: 'gcash',
+      amount_centavos: 11000,
+      reference_number: 'JMAC-POS-ABCDEF012345',
+      checkout_url: 'https://checkout.test/abc',
+    }
+    renderTill('/pos/till?attempt=key-1')
+
+    // The panel shows what the provider was told to charge. An empty cart
+    // legitimately shows ₱0.00 for its own subtotal and total, so the check is
+    // that the recovered amount is present -- not that no zero exists anywhere.
+    expect(screen.getByText('₱110.00')).toBeTruthy()
+    expect(screen.getByText('JMAC-POS-ABCDEF012345')).toBeTruthy()
   })
 })

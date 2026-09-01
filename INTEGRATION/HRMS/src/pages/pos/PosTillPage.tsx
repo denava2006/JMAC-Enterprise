@@ -276,6 +276,13 @@ export default function PosTillPage() {
     // Paid AND finalised. Either alone proves nothing: a paid attempt whose
     // webhook has not landed yet has no sale to show, and paid_unfulfilled has
     // a sale that must not be presented as an ordinary success.
+    // The page came back with method defaulting to cash, so the payment panel
+    // -- which only renders for an online method -- would not show the payment
+    // the cashier is standing in front of. Restore what they actually chose.
+    if (row.method && isOnlineMethod(row.method as TillMethod)) {
+      setMethod(row.method as TillMethod)
+    }
+
     if (row.status === 'paid' && row.sale_id) {
       setPaidSaleId((current) => current ?? row.sale_id)
     }
@@ -302,8 +309,19 @@ export default function PosTillPage() {
 
   // When an online payment is confirmed, the sale already exists -- the webhook
   // created it. Fetch it and show the same receipt a cash sale shows.
+  // One sale is handled once. Without this the effect feeds itself: clearing
+  // the recovery key changes the callback that clears it, which re-runs the
+  // effect, which clears it again. It also means a reload or a duplicate
+  // webhook cannot open a second receipt for the same sale.
+  const handledSaleRef = React.useRef<string | null>(null)
+
   React.useEffect(() => {
-    if (paidSale.data) {
+    // paidSaleId is checked explicitly rather than trusting the query to
+    // return nothing for a null id. The receipt must open because THIS till
+    // resolved a paid, finalised attempt -- not because a sale happened to be
+    // in the cache.
+    if (paidSaleId && paidSale.data && handledSaleRef.current !== paidSale.data.sale_id) {
+      handledSaleRef.current = paidSale.data.sale_id
       setReceipt(paidSale.data)
       setCart([])
       setTendered('')
@@ -315,7 +333,7 @@ export default function PosTillPage() {
       clearRecovery()
       refreshAfterOnlineSale()
     }
-  }, [paidSale.data, refreshAfterOnlineSale, clearRecovery])
+  }, [paidSaleId, paidSale.data, refreshAfterOnlineSale, clearRecovery])
 
   const pay = () => {
     if (errors.length > 0 || checkout.isPending || createOnline.isPending || !branchId) return
