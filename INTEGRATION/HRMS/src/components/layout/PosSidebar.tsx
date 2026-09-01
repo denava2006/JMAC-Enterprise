@@ -1,4 +1,4 @@
-import { Boxes, FileBarChart, LayoutDashboard, Receipt, ScrollText, ShoppingCart, Tags } from 'lucide-react'
+import { Boxes, FileBarChart, LayoutDashboard, Package, Receipt, ReceiptText, ScrollText, ShoppingCart, Tags } from 'lucide-react'
 import { NavRow, type NavItem } from '@/components/layout/Sidebar'
 import { JmacWordmark } from '@/components/Brand'
 import { useAuth } from '@/contexts/AuthContext'
@@ -31,14 +31,22 @@ const cashierNav: NavItem[] = [
   { label: 'Transactions', to: '/pos/transactions', icon: Receipt },
 ]
 
+// Ordered and named to match the Administrator's POS Management group, so the
+// two read as one system. Same names and icons; NOT the same permissions --
+// each page decides what a manager may do, and the database decides again.
+//
+// POS Requests is reachable from Products and Inventory rather than sitting
+// here: a request is something you raise about a product, not a place you go.
 const managerNav: NavItem[] = [
   { label: 'Dashboard', to: '/pos/dashboard', icon: LayoutDashboard },
   { label: 'POS', to: '/pos/till', icon: ShoppingCart },
-  { label: 'Inventory', to: '/pos/stock', icon: Boxes },
+  { label: 'Products', to: '/pos/products', icon: Package },
   { label: 'Categories', to: '/pos/categories', icon: Tags },
+  { label: 'Inventory', to: '/pos/stock', icon: Boxes },
   { label: 'Transactions', to: '/pos/transactions', icon: Receipt },
-  { label: 'Reports', to: '/pos/reports', icon: FileBarChart },
-  { label: 'Audit Logs', to: '/pos/audit-logs', icon: ScrollText },
+  { label: 'POS Reports', to: '/pos/reports', icon: FileBarChart },
+  { label: 'POS Audit Logs', to: '/pos/audit-logs', icon: ScrollText },
+  { label: 'POS Settings', to: '/pos/settings', icon: ReceiptText },
 ]
 
 export function PosSidebar() {

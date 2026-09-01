@@ -67,6 +67,16 @@ describe('a cashier', () => {
     expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Categories' })).toBeNull()
   })
+
+  it('gains nothing from the manager list growing', () => {
+    // Products and POS Settings are manager modules. A cashier's list stayed
+    // exactly two items when they were added.
+    state.assignments = [{ branchId: 'b1', role: 'cashier' }]
+    show()
+    expect(screen.queryByRole('link', { name: 'Products' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'POS Settings' })).toBeNull()
+    expect(labels()).toHaveLength(2)
+  })
 })
 
 describe('a POS manager', () => {
@@ -74,29 +84,46 @@ describe('a POS manager', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()
     expect(labels()).toEqual(
-      ['Dashboard', 'POS', 'Inventory', 'Categories', 'Transactions', 'Reports', 'Audit Logs']
+      ['Dashboard', 'POS', 'Products', 'Categories', 'Inventory', 'Transactions', 'POS Reports', 'POS Audit Logs', 'POS Settings']
     )
   })
 
   it('gets operational Reports and a POS-scoped Audit Log', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()
-    expect(screen.getByRole('link', { name: 'Reports' }).getAttribute('href')).toBe('/pos/reports')
+    expect(screen.getByRole('link', { name: 'POS Reports' }).getAttribute('href')).toBe(
+      '/pos/reports'
+    )
     // A POS operational audit at /pos/audit-logs -- NOT the enterprise HRMS
     // audit log, which a branch manager has no claim on. The RPC behind it
     // returns branch-operational events only.
-    expect(screen.getByRole('link', { name: 'Audit Logs' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'POS Audit Logs' }).getAttribute('href')).toBe(
       '/pos/audit-logs'
     )
   })
 
-  it('gains no eighth entry for requests -- they are a tab under Inventory', () => {
-    // The manager sidebar was already seven items before Phase 8, and requests
-    // are about stock. /pos/requests is reached from the Inventory tab strip.
+  it('still gives requests no entry of their own -- they are raised about a product', () => {
+    // Unchanged intent, new count. The list grew to nine when Products and POS
+    // Settings arrived, but a request is still something you raise from
+    // Products or the Inventory tab strip, not a place you navigate to.
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()
     expect(screen.queryByRole('link', { name: 'Requests' })).toBeNull()
-    expect(labels()).toHaveLength(7)
+    expect(labels()).toHaveLength(9)
+  })
+
+  it('mirrors the Administrator POS group, so the two read as one system', () => {
+    // Same names, same order, same icons as posAdminNav. Deliberately NOT the
+    // same permissions: each page decides what a manager may do, and the
+    // database decides again.
+    state.assignments = [{ branchId: 'b1', role: 'manager' }]
+    show()
+    expect(screen.getByRole('link', { name: 'Products' }).getAttribute('href')).toBe(
+      '/pos/products'
+    )
+    expect(screen.getByRole('link', { name: 'POS Settings' }).getAttribute('href')).toBe(
+      '/pos/settings'
+    )
   })
 
   it('lands its Dashboard entry on the manager dashboard', () => {
@@ -116,13 +143,13 @@ describe('a POS manager', () => {
     ]
     show()
     expect(labels()).toEqual(
-      ['Dashboard', 'POS', 'Inventory', 'Categories', 'Transactions', 'Reports', 'Audit Logs']
+      ['Dashboard', 'POS', 'Products', 'Categories', 'Inventory', 'Transactions', 'POS Reports', 'POS Audit Logs', 'POS Settings']
     )
   })
 })
 
 describe('the retired screens', () => {
-  it('offers no Catalogue anywhere: pause and resume moved onto Inventory', () => {
+  it('offers no Catalogue anywhere: pause and resume live on Products', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()
     expect(screen.queryByRole('link', { name: 'Catalogue' })).toBeNull()

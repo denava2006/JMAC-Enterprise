@@ -5,13 +5,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { PosInventoryTabs } from '@/components/pos/PosInventoryTabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranches } from '@/hooks/useBranches'
 import { useBranchInventory, useBranchMovements, useSetLowStockThreshold } from '@/hooks/usePosInventory'
-import { useSetBranchAvailability } from '@/hooks/usePosCatalogue'
 import { MOVEMENT_LABEL, inventoryConcernRank, type InventoryRow } from '@/lib/posInventory'
 import { isPosManagerAt } from '@/lib/portals'
 
@@ -26,15 +24,16 @@ import { isPosManagerAt } from '@/lib/portals'
  * an empty set, which is why this page explains itself rather than showing an
  * empty table -- a cashier reads stock on the POS screen instead.
  *
- * A manager may set a low-stock level and stop or resume offering a product at
- * their branch. Nothing else: receiving and adjusting are Administrator-only in
- * this phase, and the product master -- names, prices, cost, categories -- is
- * enterprise administration they have no path to.
+ * A manager may set a low-stock level here. Nothing else: receiving and
+ * adjusting are Administrator-only in this phase, and the product master --
+ * names, prices, cost, categories -- is enterprise administration they have no
+ * path to.
  *
- * The offered switch used to live on a separate Catalogue page. It moved here
- * because this is already the branch's operational product surface, and two
- * screens showing the same products invited the question of which one was
- * authoritative.
+ * Whether a product is offered is shown here but changed on Products. The
+ * switch lived on this page for a while, because a separate Catalogue page had
+ * shown the same products with no clear owner. Products now owns the catalogue
+ * questions and this page owns the quantity ones, which is the split that
+ * actually keeps them apart.
  */
 export default function PosStockPage() {
   const { profile, posAccess } = useAuth()
@@ -55,7 +54,6 @@ export default function PosStockPage() {
   const [showHistory, setShowHistory] = React.useState(false)
   const { data: movements } = useBranchMovements(branchId || undefined, showHistory)
   const setThreshold = useSetLowStockThreshold()
-  const setAvailability = useSetBranchAvailability()
 
   // Per branch, never a global flag: the same person can manage one branch and
   // cash up at another, and the offered switch belongs only to the branch they
@@ -173,6 +171,9 @@ export default function PosStockPage() {
                       step="1"
                       className="h-8 w-20"
                       aria-label={`Low-stock level for ${row.product_name}`}
+                      // set_low_stock_threshold is manager-gated in the
+                      // database; disabling here just says so first.
+                      disabled={!managesThisBranch}
                       defaultValue={row.low_stock_threshold}
                       onBlur={(e) => {
                         const next = Number(e.target.value)
@@ -195,32 +196,14 @@ export default function PosStockPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {managesThisBranch ? (
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={row.is_available}
-                          aria-label={`Offer ${row.product_name} at this branch`}
-                          disabled={row.product_status !== 'active'}
-                          onCheckedChange={(isAvailable) =>
-                            setAvailability.mutate({
-                              branchId,
-                              productId: row.product_id,
-                              isAvailable,
-                            })
-                          }
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {row.is_available ? 'Offered' : 'Stopped'}
-                        </span>
-                        {row.product_status !== 'active' && (
-                          <Badge variant="warning">Not active enterprise-wide</Badge>
-                        )}
-                      </div>
-                    ) : (
-                      <Badge variant={row.is_available ? 'outline' : 'muted'}>
-                        {row.is_available ? 'Offered' : 'Stopped'}
-                      </Badge>
-                    )}
+                    {/* Shown, not switched. The offered toggle moved to
+                        Products when that page was added: this screen answers
+                        "how many", Products answers "what do we sell". Two
+                        screens owning one control is the ambiguity that put
+                        this switch here in the first place. */}
+                    <Badge variant={row.is_available ? 'outline' : 'muted'}>
+                      {row.is_available ? 'Offered' : 'Stopped'}
+                    </Badge>
                   </TableCell>
                 </TableRow>
               ))}

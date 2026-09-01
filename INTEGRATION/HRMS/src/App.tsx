@@ -38,6 +38,8 @@ import PosRequestsPage from '@/pages/pos/PosRequestsPage'
 import PosCategoriesPage from '@/pages/pos/PosCategoriesPage'
 import PosDashboardPage from '@/pages/pos/PosDashboardPage'
 import PosStockPage from '@/pages/pos/PosStockPage'
+import PosBranchProductsPage from '@/pages/pos/PosProductsPage'
+import PosBranchSettingsPage from '@/pages/pos/PosSettingsPage'
 import PosTillPage from '@/pages/pos/PosTillPage'
 import PosTransactionsPage from '@/pages/pos/PosTransactionsPage'
 import AdminPosTransactionsPage from '@/pages/admin/PosTransactionsPage'
@@ -179,6 +181,28 @@ export default function App() {
                   Manager. Receiving and adjusting stay with an Administrator in
                   this phase, so nothing here creates inventory. */}
               <Route path="stock" element={<PosStockPage />} />
+              {/* The branch's selling catalogue. Manager-gated: the page's data
+                  comes from manager-scoped RPCs and the only write it offers is
+                  is_available, which a trigger confines to the manager's own
+                  branch. */}
+              <Route
+                path="products"
+                element={
+                  <PosManagerRoute>
+                    <PosBranchProductsPage />
+                  </PosManagerRoute>
+                }
+              />
+              {/* What the till charges, read-only. Customer pricing stays with
+                  an Administrator, as it does for product prices. */}
+              <Route
+                path="settings"
+                element={
+                  <PosManagerRoute>
+                    <PosBranchSettingsPage />
+                  </PosManagerRoute>
+                }
+              />
               {/* The other half of Inventory: what this branch has asked the
                   business for. A request moves no stock, and neither does
                   approving one -- quantity changes only through receiving. */}

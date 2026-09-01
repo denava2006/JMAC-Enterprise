@@ -161,34 +161,23 @@ describe('what a POS manager sees', () => {
     expect(setThreshold).toHaveBeenCalledWith({ branchId: BRANCH_A, productId: 'p1', threshold: 20 })
   })
 
-  it('lets a manager stop and resume offering a product at their branch', () => {
-    // This moved here from the old Catalogue page: Inventory is already the
-    // branch's operational product surface, so two screens listing the same
-    // products invited the question of which one was authoritative.
+  it('shows whether a product is offered, but does not switch it here', () => {
+    // The switch moved to Products. This screen answers "how many"; Products
+    // answers "what do we sell". Two screens owning one control is the
+    // ambiguity that put the switch on this page in the first place.
     state.rows = [row({ is_available: true })]
     renderPage()
 
-    const toggle = screen.getByRole('switch', { name: 'Offer Cola 1.5L at this branch' })
-    fireEvent.click(toggle)
-    expect(setAvailability).toHaveBeenCalledWith({
-      branchId: BRANCH_A,
-      productId: 'p1',
-      isAvailable: false,
-    })
+    // The column header is also "Offered", so look in the row, not the head.
+    const inRow = screen.getAllByText('Offered').filter((el) => el.closest('td'))
+    expect(inRow).toHaveLength(1)
+    expect(screen.queryByRole('switch', { name: 'Offer Cola 1.5L at this branch' })).toBeNull()
   })
 
   it('marks a stopped product', () => {
     state.rows = [row({ is_available: false })]
     renderPage()
     expect(screen.getByText('Stopped')).toBeTruthy()
-  })
-
-  it('will not offer a product that is not active enterprise-wide', () => {
-    state.rows = [row({ product_status: 'archived' })]
-    renderPage()
-    const toggle = screen.getByRole('switch', { name: 'Offer Cola 1.5L at this branch' })
-    expect((toggle as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('Not active enterprise-wide')).toBeTruthy()
   })
 })
 
