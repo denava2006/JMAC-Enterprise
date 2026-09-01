@@ -82,19 +82,38 @@ begin
   raise notice 'PASS 1b the recipient is derived from the application';
 
   ------------------------------------------------- 2. internal edits are silent
+  --
+  -- Note what is NOT in this list any more. Moving an application into
+  -- under_review used to sit here, on the reading that the status "says only
+  -- that somebody opened it". It is now an applicant email of its own, because
+  -- under_review is an authoritative status Track Application already shows and
+  -- the silence between "received" and "shortlisted" was the real complaint.
+  -- Everything that is genuinely HR's own record still sends nothing.
   update public.applications set notes = 'strong candidate, push to final' where id = app;
   update public.applications set reviewed_by = admin_id, reviewed_at = now() where id = app;
   update public.applications set rejection_reason = 'internal: overqualified' where id = app;
-  update public.applications set status = 'under_review' where id = app;
   if pg_temp.queued(app) <> 1 then
     raise exception 'FAIL 2a HR-internal edits enqueued % notifications', pg_temp.queued(app) - 1; end if;
-  raise notice 'PASS 2a notes, reviewer, rejection_reason and under_review notify nobody';
+  raise notice 'PASS 2a notes, reviewer and rejection_reason notify nobody';
+
+  -- ...and the one status change that IS applicant-facing does email, once.
+  -- This is the line that moved: it used to sit above, inside the silent block.
+  update public.applications set status = 'under_review' where id = app;
+  if pg_temp.queued(app) <> 2 then
+    raise exception 'FAIL 2b moving into review enqueued %, expected exactly one more',
+      pg_temp.queued(app) - 1;
+  end if;
+  update public.applications set status = 'under_review' where id = app;
+  if pg_temp.queued(app) <> 2 then
+    raise exception 'FAIL 2c re-saving under_review enqueued another';
+  end if;
+  raise notice 'PASS 2b-c moving into review enqueues the screening email, exactly once';
 
   ------------------------------------------------------ 3. meaningful changes
   update public.applications set status = 'qualified' where id = app;
-  if pg_temp.queued(app) <> 2 then raise exception 'FAIL 3a shortlisting did not enqueue'; end if;
+  if pg_temp.queued(app) <> 3 then raise exception 'FAIL 3a shortlisting did not enqueue'; end if;
   update public.applications set status = 'qualified' where id = app;
-  if pg_temp.queued(app) <> 2 then
+  if pg_temp.queued(app) <> 3 then
     raise exception 'FAIL 3b re-saving the same status enqueued another'; end if;
   raise notice 'PASS 3a a status change enqueues one; saving the same status again enqueues none';
 
@@ -102,34 +121,34 @@ begin
   insert into public.interviews (application_id, interview_type, scheduled_at, status, mode, location)
   values (app, 'initial', now() + interval '3 days', 'scheduled', 'face_to_face', 'JMAC Head Office')
   returning id into iv;
-  if pg_temp.queued(app) <> 3 then raise exception 'FAIL 4a scheduling did not enqueue'; end if;
+  if pg_temp.queued(app) <> 4 then raise exception 'FAIL 4a scheduling did not enqueue'; end if;
 
   -- An HR-only edit on the interview row: ratings and notes, no reschedule.
   update public.interviews
      set rating_communication = 5, interview_notes = 'internal only', remarks = 'strong'
    where id = iv;
-  if pg_temp.queued(app) <> 3 then
+  if pg_temp.queued(app) <> 4 then
     raise exception 'FAIL 4b rating/notes on an interview enqueued a notification'; end if;
   raise notice 'PASS 4a scheduling enqueues one; ratings and notes on it enqueue none';
 
   -- A genuine move.
   update public.interviews set scheduled_at = now() + interval '5 days' where id = iv;
-  if pg_temp.queued(app) <> 4 then raise exception 'FAIL 4c rescheduling did not enqueue'; end if;
+  if pg_temp.queued(app) <> 5 then raise exception 'FAIL 4c rescheduling did not enqueue'; end if;
   -- Saving the same new time again is not a second reschedule.
   update public.interviews set scheduled_at = (select scheduled_at from public.interviews where id = iv)
    where id = iv;
-  if pg_temp.queued(app) <> 4 then
+  if pg_temp.queued(app) <> 5 then
     raise exception 'FAIL 4d re-saving the same time enqueued a duplicate'; end if;
   -- Moving it a second time is.
   update public.interviews set scheduled_at = now() + interval '9 days' where id = iv;
-  if pg_temp.queued(app) <> 5 then
+  if pg_temp.queued(app) <> 6 then
     raise exception 'FAIL 4e a second genuine move did not enqueue'; end if;
   raise notice 'PASS 4b a real reschedule enqueues one each time; re-saving the same time does not';
 
   update public.interviews set status = 'cancelled' where id = iv;
-  if pg_temp.queued(app) <> 6 then raise exception 'FAIL 4f cancelling did not enqueue'; end if;
+  if pg_temp.queued(app) <> 7 then raise exception 'FAIL 4f cancelling did not enqueue'; end if;
   update public.interviews set status = 'cancelled' where id = iv;
-  if pg_temp.queued(app) <> 6 then raise exception 'FAIL 4g cancelling twice enqueued twice'; end if;
+  if pg_temp.queued(app) <> 7 then raise exception 'FAIL 4g cancelling twice enqueued twice'; end if;
   raise notice 'PASS 4c cancelling enqueues exactly one';
 
   ------------------------------------------------- 5. rejection says nothing

@@ -81,6 +81,16 @@ function compose(row: OutboxRow): { subject: string; heading: string; lines: str
         ],
         action: 'Track your application',
       }
+    case 'application_under_review':
+      return {
+        subject: 'Your JMAC Enterprise application is under review',
+        heading: 'Your application is under review',
+        lines: [
+          `We have started reviewing your application for ${position}.`,
+          'Keep the reference code below — you can check your application at any time.',
+        ],
+        action: 'Track your application',
+      }
     case 'application_shortlisted':
       return {
         subject: 'JMAC Application Update — Shortlisted',
