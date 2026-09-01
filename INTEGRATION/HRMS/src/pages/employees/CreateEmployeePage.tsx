@@ -248,6 +248,9 @@ export default function CreateEmployeePage() {
       province: applicant.province,
       city: applicant.city,
       barangay: applicant.barangay,
+      // Collected on the application, so HR is not asked to retype a date the
+      // applicant already gave -- and one the system already checked.
+      ...(applicant.birth_date ? { birthDate: applicant.birth_date } : {}),
       ...(jobPosting?.department_id ? { departmentId: jobPosting.department_id } : {}),
       ...(jobPosting?.position_id ? { positionId: jobPosting.position_id } : {}),
       ...(offer

@@ -142,6 +142,22 @@ function compose(row: OutboxRow): { subject: string; heading: string; lines: str
         ],
         action: 'Track your application',
       }
+    case 'initial_interview_passed':
+      // The one milestone no other event reports. Passing the initial interview
+      // changes no application status, so without this the applicant hears
+      // nothing between attending and being invited to the final round.
+      //
+      // Carries no rating, score, note or impression -- the evaluation that
+      // produced this is HR's record. It says only that they are through.
+      return {
+        subject: 'JMAC Enterprise — You Passed Your Initial Interview',
+        heading: 'You passed your initial interview',
+        lines: [
+          `Congratulations. You have successfully completed the Initial Interview for the ${position} position and will proceed to the next stage of the recruitment process.`,
+          'We will notify you when your Final Interview is scheduled.',
+        ],
+        action: 'Track your application',
+      }
     case 'interview_scheduled':
       return {
         subject: `JMAC Application Update — ${stage} Scheduled`,

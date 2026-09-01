@@ -276,6 +276,12 @@ otp_expiry = 3600
 subject = "Welcome to JMAC Enterprise — Set Up Your Employee Account"
 content_path = "./supabase/templates/invite.html"
 
+# Same shell as the invitation and the applicant notifications. Production uses
+# the dashboard copy of both; this wires them for local development.
+[auth.email.template.recovery]
+subject = "JMAC Enterprise — Reset Your Password"
+content_path = "./supabase/templates/reset-password.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

@@ -27,7 +27,6 @@ import CreateEmployeePage from '@/pages/employees/CreateEmployeePage'
 import EmployeeDetailsPage from '@/pages/employees/EmployeeDetailsPage'
 import AttendancePage from '@/pages/attendance/AttendancePage'
 import WorkSchedulesPage from '@/pages/admin/WorkSchedulesPage'
-import ApprovalsPage from '@/pages/admin/ApprovalsPage'
 import BranchesPage from '@/pages/admin/BranchesPage'
 import PosAccessPage from '@/pages/admin/PosAccessPage'
 import PosSettingsPage from '@/pages/admin/PosSettingsPage'
@@ -446,14 +445,11 @@ export default function App() {
                 }
               />
 
-              <Route
-                path="admin/approvals"
-                element={
-                  <ProtectedRoute allowedRoles={['admin', 'hr_manager', 'hr_staff']}>
-                    <ApprovalsPage />
-                  </ProtectedRoute>
-                }
-              />
+              {/* The general Approvals screen is gone from navigation. It
+                  existed for HR Staff to propose reference-data changes for an
+                  HR Manager to approve, and HR Staff no longer edits reference
+                  data at all -- the queue has no producer. change_requests, its
+                  RLS and every historical row are deliberately left in place. */}
               <Route
                 path="admin/branches"
                 element={

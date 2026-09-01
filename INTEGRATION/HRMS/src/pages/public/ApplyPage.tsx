@@ -21,6 +21,7 @@ import {
   useSubmitApplication,
   isAcceptingApplications,
   validateResumeFile,
+  validateGovernmentIdFile,
 } from '@/hooks/usePublicCareers'
 
 // Letters with single spaces, hyphens, or apostrophes between them — no digits,
@@ -54,8 +55,31 @@ const applicationSchema = z.object({
   barangay: z.string().trim().min(1, 'Barangay is required'),
   address: z.string().trim().min(1, 'Residential address is required').max(500),
   coverLetter: z.string().max(2000, 'Cover letter cannot exceed 2,000 characters').optional(),
+  // Checked here so the applicant is told before they submit, and again by the
+  // database, which is what actually decides it. Real date arithmetic in both
+  // places: somebody born on 2 September 2008 is 18 on 2 September 2026 and
+  // seventeen the day before, which subtracting years would get wrong.
+  birthDate: z
+    .string()
+    .min(1, 'Date of birth is required')
+    .refine((value) => !Number.isNaN(Date.parse(value)), 'Enter a valid date')
+    .refine((value) => {
+      const dob = new Date(value)
+      const eighteenth = new Date(dob.getFullYear() + 18, dob.getMonth(), dob.getDate())
+      return eighteenth <= new Date()
+    }, 'Applicants must be at least 18 years old.'),
 })
 type ApplicationFormValues = z.infer<typeof applicationSchema>
+
+/** The latest date of birth that is already 18 today, as yyyy-mm-dd for the
+ *  date input's `max`. Computed from the real calendar rather than by
+ *  subtracting 18 from the year. */
+function eighteenYearsAgoISO(): string {
+  const now = new Date()
+  const d = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate())
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const eighteenYearsAgo = eighteenYearsAgoISO()
 
 /** Strips everything but digits and caps the length at 11, as the user types —
  * so letters, +, -, /, *, ., (), and spaces can never even be entered. */
@@ -73,14 +97,30 @@ function formatFileSize(bytes: number) {
   return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function ResumeDropzone({
+/** One dropzone, used for both documents.
+ *
+ *  Parameterised rather than copied, because the two must not drift: an ID and
+ *  a CV accept different types and are stored in different buckets, and the
+ *  quickest way to file a resume as somebody's proof of identity is two
+ *  near-identical components that slowly converge. */
+function FileDropzone({
   file,
   onSelect,
   error,
+  inputId,
+  label,
+  hint,
+  accept,
+  validate,
 }: {
   file: File | null
   onSelect: (file: File | null, error: string | null) => void
   error: string | null
+  inputId: string
+  label: string
+  hint: string
+  accept: string
+  validate: (file: File) => string | null
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = React.useState(false)
@@ -88,14 +128,14 @@ function ResumeDropzone({
   const handleFiles = (files: FileList | null) => {
     const picked = files?.[0]
     if (!picked) return
-    const validationError = validateResumeFile(picked)
+    const validationError = validate(picked)
     onSelect(validationError ? null : picked, validationError)
   }
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor="resume">
-        Resume / CV <span className="text-destructive">*</span>
+      <Label htmlFor={inputId}>
+        {label} <span className="text-destructive">*</span>
       </Label>
       {file ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-input bg-card px-3 py-2.5">
@@ -110,7 +150,7 @@ function ResumeDropzone({
             type="button"
             onClick={() => onSelect(null, null)}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Remove selected resume"
+            aria-label={`Remove selected ${label}`}
           >
             <X className="h-4 w-4" />
           </button>
@@ -141,12 +181,12 @@ function ResumeDropzone({
           <p className="text-sm text-foreground">
             <span className="font-medium text-secondary">Click to upload</span> or drag and drop
           </p>
-          <p className="text-xs text-muted-foreground">PDF, DOC, or DOCX — max 5 MB</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
           <input
             ref={inputRef}
-            id="resume"
+            id={inputId}
             type="file"
-            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept={accept}
             className="sr-only"
             onChange={(e) => handleFiles(e.target.files)}
           />
@@ -174,6 +214,8 @@ export default function ApplyPage() {
   const submitApplication = useSubmitApplication()
 
   const [resumeFile, setResumeFile] = React.useState<File | null>(null)
+  const [governmentIdFile, setGovernmentIdFile] = React.useState<File | null>(null)
+  const [governmentIdError, setGovernmentIdError] = React.useState<string | null>(null)
   const [resumeError, setResumeError] = React.useState<string | null>(null)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
 
@@ -227,6 +269,10 @@ export default function ApplyPage() {
       setResumeError('Please attach your resume to continue.')
       return
     }
+    if (!governmentIdFile) {
+      setGovernmentIdError('Please attach a valid government ID to continue.')
+      return
+    }
 
     try {
       const submitted = await submitApplication.mutateAsync({
@@ -241,7 +287,9 @@ export default function ApplyPage() {
         city: values.city,
         barangay: values.barangay,
         coverLetter: values.coverLetter,
+        birthDate: values.birthDate,
         resumeFile,
+        governmentIdFile,
       })
       navigate('/careers/application-success', {
         replace: true,
@@ -394,6 +442,24 @@ export default function ApplyPage() {
           {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="birthDate">
+            Date of birth <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="birthDate"
+            type="date"
+            invalid={!!errors.birthDate}
+            {...register('birthDate')}
+            // The picker itself stops at somebody's eighteenth birthday, so the
+            // common case never becomes an error message. It is a courtesy, not
+            // the rule: the schema checks it again and the database decides it.
+            max={eighteenYearsAgo}
+          />
+          <p className="text-xs text-muted-foreground">You must be at least 18 years old to apply.</p>
+          {errors.birthDate && <p className="text-xs text-destructive">{errors.birthDate.message}</p>}
+        </div>
+
         <AddressFields
           value={{
             province: watch('province') ?? '',
@@ -415,12 +481,33 @@ export default function ApplyPage() {
           }}
         />
 
-        <ResumeDropzone
+        <FileDropzone
+          inputId="resume"
+          label="Resume / CV"
+          hint="PDF, DOC, or DOCX — max 5 MB"
+          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          validate={validateResumeFile}
           file={resumeFile}
           error={resumeError}
           onSelect={(file, error) => {
             setResumeFile(file)
             setResumeError(error)
+          }}
+        />
+
+        {/* Separate from the CV, and stored separately. A resume is not proof
+            of identity and must never end up filed as one. */}
+        <FileDropzone
+          inputId="governmentId"
+          label="Valid Government ID"
+          hint="PDF, JPG, or PNG — max 5 MB"
+          accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+          validate={(file) => validateGovernmentIdFile(file)}
+          file={governmentIdFile}
+          error={governmentIdError}
+          onSelect={(file, error) => {
+            setGovernmentIdFile(file)
+            setGovernmentIdError(error)
           }}
         />
 

@@ -93,6 +93,64 @@ export function useApplicationTracking(credentials: ApplicantCredentials | null)
   })
 }
 
+/** One step on the applicant's journey. Names and times only -- the RPC behind
+ *  this returns nothing else, and there is nothing else worth showing. */
+export interface ApplicationMilestone {
+  event: string
+  occurred_at: string
+}
+
+/** What each milestone is called on the applicant's screen.
+ *
+ *  An explicit map, not a prettified event name. The stored vocabulary is HR's
+ *  ('reviewed', 'job_offer_prepared'); what the applicant reads should be plain
+ *  and about them. An event with no entry here is not rendered at all, so a
+ *  milestone added later cannot leak internal wording by simply existing. */
+export const MILESTONE_LABEL: Record<string, string> = {
+  submitted: 'Application Submitted',
+  reviewed: 'Under Review',
+  qualified: 'Shortlisted',
+  initial_interview_scheduled: 'Initial Interview Scheduled',
+  initial_interview_rescheduled: 'Initial Interview Rescheduled',
+  initial_interview_passed: 'Initial Interview Passed',
+  initial_interview_cancelled: 'Initial Interview Cancelled',
+  final_interview_scheduled: 'Final Interview Scheduled',
+  final_interview_rescheduled: 'Final Interview Rescheduled',
+  final_interview_cancelled: 'Final Interview Cancelled',
+  job_offer_prepared: 'Offer Sent',
+  offer_accepted: 'Offer Accepted',
+  offer_declined: 'Offer Declined',
+  hired: 'Hired',
+  deployment_completed: 'Deployed',
+  rejected: 'Not Moving Forward',
+  application_closed: 'Application Closed',
+}
+
+/**
+ * The applicant's own timeline.
+ *
+ * A separate call from useApplicationTracking on purpose. That one answers
+ * "where is my application now" and carries offer, contract and employment
+ * detail; this one answers "how did it get here" and carries nothing but event
+ * names and dates. Keeping them apart means the timeline can never inherit the
+ * wider result by accident.
+ */
+export function useApplicationMilestones(credentials: ApplicantCredentials | null) {
+  return useQuery({
+    queryKey: [...TRACKING_KEY, 'milestones', credentials?.referenceCode, credentials?.email],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('lookup_application_milestones', {
+        p_reference_code: credentials!.referenceCode,
+        p_email: credentials!.email,
+      })
+      if (error) throw new Error('We couldn’t load your application history.')
+      return (data as unknown as ApplicationMilestone[] | null) ?? []
+    },
+    enabled: !!credentials,
+    retry: false,
+  })
+}
+
 const FRIENDLY_RESPONSE_ERRORS: Record<string, string> = {
   NOT_FOUND: 'No application matches that reference number and email address.',
   NO_OFFER: 'There’s no job offer on this application yet.',

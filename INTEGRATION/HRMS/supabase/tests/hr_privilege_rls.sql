@@ -129,7 +129,14 @@ begin
   raise notice 'PASS 1b IT Support, Cashier and POS Manager are eligible for no HR role';
 
   ------------------------------------------------- 2. all three are required
-  -- The role alone is not enough: no grant yet.
+  -- The role alone is not enough: no grant.
+  --
+  -- Linking an account to an employee in an HR-entitled position now grants
+  -- automatically (reconcile_hr_privilege), so this clears that first. The
+  -- point of the check is what happens WITHOUT a grant, and that has not
+  -- changed: profiles.role is a name, the grant is the authorization.
+  delete from public.hr_privilege_grants where profile_id in (staff_id, mgr_id);
+
   perform pg_temp.acts_as(staff_id);
   set local role authenticated;
   if public.is_active_staff() then
@@ -199,6 +206,10 @@ begin
     begin
       perform pg_temp.acts_as_nobody();
       _sub := pg_temp.hire('Temp ' || txt, 'Human Resources', 'HR Staff', 'hr_staff');
+      -- Hiring into an HR Staff position grants automatically now. Cleared and
+      -- re-inserted so this loop starts from exactly one known grant, which is
+      -- what it then watches employment status close.
+      delete from public.hr_privilege_grants where profile_id = _sub;
       insert into public.hr_privilege_grants (profile_id, hr_role) values (_sub, 'hr_staff');
       select employee_id into _emp from public.profiles where id = _sub;
 
@@ -248,12 +259,56 @@ begin
   if n <> 1 then raise exception 'FAIL 5c the transfer disturbed the employment record'; end if;
   raise notice 'PASS 5a transferring out closes HR privilege immediately; employment is untouched';
 
-  -- Transferring back does not bring it back.
+  -- Transferring back restores it.
+  --
+  -- This reverses what this check used to assert. The old rule was that a
+  -- transfer back never re-granted, so somebody moved out of HR and back again
+  -- needed an Administrator to re-issue by hand. Access now follows the
+  -- position: the entitlement mapping already says what an HR Staff position
+  -- may reach, and making a person wait on a second manual step to regain what
+  -- their own job description grants is friction, not safety.
+  --
+  -- What is NOT reversed is a human decision -- see 5e.
   perform pg_temp.acts_as_nobody();
   update public.employees set department_id = hr_dept, position_id = hr_staff_pos where id = emp;
   select count(*) into n from public.hr_privilege_grants
    where profile_id = staff_id and status = 'active';
-  if n <> 0 then raise exception 'FAIL 5d moving back silently restored HR privilege'; end if;
+  if n <> 1 then
+    raise exception 'FAIL 5d moving back into an HR position left % active grants, expected 1', n; end if;
+
+  select hr_role into txt from public.hr_privilege_grants
+   where profile_id = staff_id and status = 'active';
+  if txt <> 'hr_staff' then
+    raise exception 'FAIL 5d the restored grant is for %, not the position held', txt; end if;
+  raise notice 'PASS 5d moving back into an HR position restores exactly that position''s privilege';
+
+  ---------------------------------------- 5e. a revoke is not undone by a move
+  --
+  -- The distinction the automatic grant turns on. A grant closed BY THE SYSTEM
+  -- -- employment drift, a position change -- may be re-established when the
+  -- reason goes away. A grant an Administrator closed was somebody deciding
+  -- this account should not have HR access, and no later lifecycle event may
+  -- quietly overrule them.
+  perform pg_temp.acts_as_nobody();
+  update public.hr_privilege_grants
+     set status = 'closed', closed_at = now(), closed_reason = 'revoked by administrator'
+   where profile_id = staff_id and status = 'active';
+  update public.profiles set role = 'employee' where id = staff_id;
+
+  -- A move out and back: exactly the sequence that restores a system closure.
+  update public.employees set department_id = it_dept, position_id = it_pos where id = emp;
+  update public.employees set department_id = hr_dept, position_id = hr_staff_pos where id = emp;
+
+  select count(*) into n from public.hr_privilege_grants
+   where profile_id = staff_id and status = 'active';
+  if n <> 0 then
+    raise exception 'FAIL 5e a transfer undid an Administrator''s revocation'; end if;
+
+  -- And the employment itself is untouched by any of it.
+  select count(*) into n from public.profiles pr join public.employees e on e.id = pr.employee_id
+   where pr.id = staff_id and pr.status = 'active' and e.employment_status = 'active';
+  if n <> 1 then raise exception 'FAIL 5f revoking HR privilege disturbed the employment record'; end if;
+  raise notice 'PASS 5e-f a revoked account stays revoked across transfers, and keeps its employment';
   perform pg_temp.acts_as(staff_id);
   set local role authenticated;
   if public.is_active_staff() then raise exception 'FAIL 5e HR authority returned by itself'; end if;
@@ -341,6 +396,12 @@ begin
   begin
     reset role;
     up_id := pg_temp.hire('Uma Upgrade', 'Human Resources', 'HR Staff', 'employee');
+    -- Hiring into an HR Staff position now grants automatically, and this check
+    -- is about the MANUAL path -- that granting an existing employee HR
+    -- privilege upgrades the account they already have rather than creating a
+    -- second one. Cleared so grant_hr_privilege has something to do.
+    delete from public.hr_privilege_grants where profile_id = up_id;
+    update public.profiles set role = 'employee' where id = up_id;
     select count(*) into before_auth from auth.users;
     perform pg_temp.acts_as(admin_id);
     set local role authenticated;

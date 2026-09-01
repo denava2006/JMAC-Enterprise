@@ -193,10 +193,12 @@ export type Database = {
         Row: {
           applicant_address: string | null
           applicant_barangay: string | null
+          applicant_birth_date: string | null
           applicant_city: string | null
           applicant_cover_letter: string | null
           applicant_email: string | null
           applicant_first_name: string | null
+          applicant_government_id_path: string | null
           applicant_id: string
           applicant_last_name: string | null
           applicant_middle_name: string | null
@@ -218,10 +220,12 @@ export type Database = {
         Insert: {
           applicant_address?: string | null
           applicant_barangay?: string | null
+          applicant_birth_date?: string | null
           applicant_city?: string | null
           applicant_cover_letter?: string | null
           applicant_email?: string | null
           applicant_first_name?: string | null
+          applicant_government_id_path?: string | null
           applicant_id: string
           applicant_last_name?: string | null
           applicant_middle_name?: string | null
@@ -243,10 +247,12 @@ export type Database = {
         Update: {
           applicant_address?: string | null
           applicant_barangay?: string | null
+          applicant_birth_date?: string | null
           applicant_city?: string | null
           applicant_cover_letter?: string | null
           applicant_email?: string | null
           applicant_first_name?: string | null
+          applicant_government_id_path?: string | null
           applicant_id?: string
           applicant_last_name?: string | null
           applicant_middle_name?: string | null
@@ -3516,6 +3522,13 @@ export type Database = {
           submitted_at: string
         }[]
       }
+      lookup_application_milestones: {
+        Args: { p_email: string; p_reference_code: string }
+        Returns: {
+          event: string
+          occurred_at: string
+        }[]
+      }
       mark_pos_payment_state: {
         Args: {
           _attempt_id: string
@@ -3626,6 +3639,10 @@ export type Database = {
         Args: { p_period_id: string }
         Returns: undefined
       }
+      record_application_milestone: {
+        Args: { _application_id: string; _event: string; _occurred_at?: string }
+        Returns: undefined
+      }
       reject_change_request: {
         Args: { p_reason: string; p_request_id: string }
         Returns: undefined
@@ -3692,10 +3709,12 @@ export type Database = {
             Args: {
               p_address: string
               p_barangay?: string
+              p_birth_date?: string
               p_city?: string
               p_cover_letter?: string
               p_email: string
               p_first_name: string
+              p_government_id_path?: string
               p_job_posting_id: string
               p_last_name: string
               p_middle_name?: string

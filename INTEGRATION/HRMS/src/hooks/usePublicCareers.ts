@@ -137,6 +137,59 @@ function describeUploadFailure(message: string): string {
   return 'We could not upload your resume. Please try again.'
 }
 
+/** A government ID is a scan or a photograph. Word documents are deliberately
+ *  not accepted: an ID is not something you author. */
+const ID_EXTENSION_FOR_TYPE: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+}
+
+const MAX_ID_BYTES = 5 * 1024 * 1024
+
+export function validateGovernmentIdFile(file: File | undefined | null): string | null {
+  if (!file) return 'Please attach a valid government ID.'
+  if (!ID_EXTENSION_FOR_TYPE[file.type]) {
+    return 'Unsupported file type. Upload a PDF, JPG or PNG.'
+  }
+  if (file.size > MAX_ID_BYTES) {
+    return `Government ID is too large — the maximum size is ${MAX_ID_BYTES / (1024 * 1024)} MB.`
+  }
+  return null
+}
+
+/**
+ * The ID goes into its own private bucket.
+ *
+ * Kept apart from resumes on purpose. It is sensitive identity information with
+ * a different audience and a different retention question, and mixing the two
+ * is how a CV ends up filed as somebody's proof of identity. The applicant can
+ * write here and nothing else: no listing, no reading back, no replacing.
+ */
+async function uploadGovernmentId(jobPostingId: string, file: File): Promise<string> {
+  const rejection = validateGovernmentIdFile(file)
+  if (rejection) throw new Error(rejection)
+
+  const extension = ID_EXTENSION_FOR_TYPE[file.type]
+  if (!extension) throw new Error('Unsupported file type. Upload a PDF, JPG or PNG.')
+
+  // Generated end to end, like the resume path: nothing the applicant typed
+  // reaches the object name, and upsert:false means a collision is refused
+  // rather than quietly overwriting somebody's ID.
+  const path = `${jobPostingId}/${crypto.randomUUID()}.${extension}`
+
+  const { error } = await supabase.storage.from('government-ids').upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  })
+
+  if (error) {
+    console.error('Government ID upload failed:', error.message)
+    throw new Error('We could not upload your government ID. Please try again.')
+  }
+  return path
+}
+
 async function uploadResume(jobPostingId: string, file: File): Promise<string> {
   // Re-checked here even though the form checks too: this is the last point
   // before the file leaves the browser, and the type decides the stored name.
@@ -177,13 +230,22 @@ export interface SubmitApplicationInput {
   city: string
   barangay: string
   coverLetter?: string
+  birthDate: string
   resumeFile: File
+  governmentIdFile: File
 }
 
 const FRIENDLY_APPLICATION_ERRORS: Record<string, string> = {
   JOB_NOT_FOUND: 'This job posting could not be found.',
   JOB_CLOSED: 'This job posting is no longer accepting applications.',
   DUPLICATE_APPLICATION: 'You’ve already applied to this job with this email address.',
+  // The rule, in the applicant's words. The server decides it -- the form
+  // checks too, but a modified request is refused all the same.
+  UNDERAGE_APPLICANT: 'Applicants must be at least 18 years old.',
+  BIRTH_DATE_REQUIRED: 'Please enter your date of birth.',
+  BIRTH_DATE_INVALID: 'Please check your date of birth.',
+  GOVERNMENT_ID_REQUIRED: 'Please attach a valid government ID.',
+  RESUME_REQUIRED: 'Please attach your resume.',
 }
 
 export function useSubmitApplication() {
@@ -191,6 +253,7 @@ export function useSubmitApplication() {
   return useMutation({
     mutationFn: async (input: SubmitApplicationInput) => {
       const resumePath = await uploadResume(input.jobPostingId, input.resumeFile)
+      const governmentIdPath = await uploadGovernmentId(input.jobPostingId, input.governmentIdFile)
 
       const { data, error } = await supabase.rpc('submit_job_application', {
         p_job_posting_id: input.jobPostingId,
@@ -205,6 +268,8 @@ export function useSubmitApplication() {
         p_barangay: input.barangay,
         p_resume_path: resumePath,
         p_cover_letter: input.coverLetter || undefined,
+        p_birth_date: input.birthDate,
+        p_government_id_path: governmentIdPath,
       })
 
       if (error) {

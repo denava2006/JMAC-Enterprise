@@ -63,6 +63,11 @@ begin
 
     update public.profiles set employee_id = _emp where id = _uid;
 
+    -- An HR-entitled position may already have granted automatically when the
+    -- account was linked. One active grant per account is the rule, so the
+    -- fixture makes sure it is starting from none.
+    delete from public.hr_privilege_grants where profile_id = _uid;
+
     insert into public.hr_privilege_grants (profile_id, hr_role, status)
     values (_uid, _role::text, 'active');
   end if;

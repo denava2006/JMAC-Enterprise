@@ -21,6 +21,8 @@ const application: ApplicationIdentitySnapshot = {
   applicant_address: 'Blk 5 Lot 9, Real Subdivision',
   applicant_resume_url: 'resumes/real-application.pdf',
   applicant_cover_letter: 'Written for the role I applied to.',
+  applicant_birth_date: '1999-04-12',
+  applicant_government_id_path: 'government-ids/real-application.pdf',
 }
 
 // The same person's contact record after a LATER application on the same email
@@ -84,11 +86,14 @@ describe('resolveSubmittedApplicant', () => {
 
   it('never yields undefined for a field the form will bind to', () => {
     const empty = resolveSubmittedApplicant(null, null)
-    const { resume_url, cover_letter, ...text } = empty
+    const { resume_url, cover_letter, birth_date, government_id_path, ...text } = empty
     for (const value of Object.values(text)) expect(value).toBe('')
-    // Documents are genuinely absent rather than blank.
+    // Documents and the date of birth are genuinely absent rather than blank:
+    // an empty string would bind to a date input as a real, wrong value.
     expect(resume_url).toBeNull()
     expect(cover_letter).toBeNull()
+    expect(birth_date).toBeNull()
+    expect(government_id_path).toBeNull()
   })
 })
 
@@ -119,12 +124,17 @@ describe('importedFields', () => {
   })
 
   it('never claims to have imported a field no application collects', () => {
-    // Gender, birth date, civil status and nationality are asked for on the
-    // employee form only. They must stay plainly unfilled.
+    // Gender, civil status and nationality are asked for on the employee form
+    // only. They must stay plainly unfilled.
+    //
+    // Birth date used to be on this list and no longer is: the application
+    // collects it, because an applicant has to be 18 and the date is checked
+    // when they submit.
     const importable: string[] = Object.keys(IMPORTABLE_FIELDS)
-    for (const manual of ['gender', 'birthDate', 'civilStatus', 'nationality']) {
+    for (const manual of ['gender', 'civilStatus', 'nationality']) {
       expect(importable).not.toContain(manual)
     }
+    expect(importable).toContain('birthDate')
   })
 })
 

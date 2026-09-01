@@ -66,7 +66,8 @@ begin
     job_a, 'Clark Kint', 'De Nava', shared, '09171112222',
     'Blk 5 Lot 9, Real Subdivision',
     'resumes/zz-' || tag || '-a.pdf', null,
-    'Ong', 'Cavite', 'Dasmariñas', 'Santa Maria');
+    'Ong', 'Cavite', 'Dasmariñas', 'Santa Maria',
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '-a.pdf');
   reset role;
 
   select applicant_first_name || '|' || coalesce(applicant_middle_name,'') || '|' || applicant_last_name
@@ -94,7 +95,8 @@ begin
     job_b, 'ZZ', 'CronCheck', shared, '09179998888',
     'Blk 1 Lot 2, Test Subdivision',
     'resumes/zz-' || tag || '-b.pdf', null,
-    null, 'Cavite', 'Imus', 'Barangay 1');
+    null, 'Cavite', 'Imus', 'Barangay 1',
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '-b.pdf');
   reset role;
 
   -- The person record is deliberately reused: it is the same human being.

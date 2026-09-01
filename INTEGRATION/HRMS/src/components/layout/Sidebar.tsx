@@ -17,7 +17,6 @@ import {
   Wallet,
   FileBarChart,
   MapPin,
-  ClipboardCheck,
   Store,
   Receipt,
   Package,
@@ -72,7 +71,6 @@ const referenceNav: NavItem[] = [
   { label: 'Positions', to: '/dashboard/admin/positions', icon: Layers },
   { label: 'Salary Grades', to: '/dashboard/admin/salary-grades', icon: DollarSign },
   { label: 'Work Schedules', to: '/dashboard/admin/work-schedules', icon: CalendarClock },
-  { label: 'Approvals', to: '/dashboard/admin/approvals', icon: ClipboardCheck },
 ]
 
 // Genuinely Administrator-only.

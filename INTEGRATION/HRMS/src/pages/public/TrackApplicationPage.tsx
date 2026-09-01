@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarClock,
   CheckCircle2,
+  Check,
   Clock,
   Download,
   ExternalLink,
@@ -23,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   AlertDialog,
@@ -38,6 +39,9 @@ import {
 import { toast } from '@/components/ui/sonner'
 import {
   useApplicationTracking,
+  useApplicationMilestones,
+  MILESTONE_LABEL,
+  type ApplicationMilestone,
   useRespondToOfferAsApplicant,
   useApplicantFileDownload,
   APPLICANT_STATUS_COPY,
@@ -131,6 +135,69 @@ function LookupForm({ onSubmit, isLoading }: { onSubmit: (c: ApplicantCredential
             Track Application
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * The whole journey, not just where it is now.
+ *
+ * Track Application used to show the current interview and nothing else, so
+ * every earlier stage disappeared as the application moved on -- an applicant
+ * who had been shortlisted and interviewed saw only the latest appointment,
+ * with no evidence any of the rest had happened.
+ *
+ * Every row here comes from a recorded timestamp. Nothing is inferred from the
+ * current status, so a stage that genuinely has no record simply is not shown
+ * rather than being drawn as though it had occurred.
+ */
+function JourneyCard({ milestones, isLoading }: { milestones: ApplicationMilestone[]; isLoading: boolean }) {
+  // An unrecognised event is dropped rather than prettified: the stored names
+  // are HR's vocabulary, and guessing a label for one would eventually put
+  // internal wording in front of an applicant.
+  const steps = milestones.filter((m) => MILESTONE_LABEL[m.event])
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <p className="text-sm text-muted-foreground">Loading your application history…</p>
+        </CardContent>
+      </Card>
+    )
+  }
+  if (steps.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Your application journey</CardTitle>
+      </CardHeader>
+      <CardContent className="pb-6">
+        <ol className="flex flex-col">
+          {steps.map((step, index) => {
+            const isLast = index === steps.length - 1
+            return (
+              <li key={`${step.event}-${step.occurred_at}`} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/10 text-success"
+                    aria-hidden="true"
+                  >
+                    <Check className="h-3 w-3" />
+                  </span>
+                  {/* The line joins one step to the next, so the last one has none. */}
+                  {!isLast && <span className="w-px flex-1 bg-border" />}
+                </div>
+                <div className={isLast ? 'pb-0' : 'pb-5'}>
+                  <p className="text-sm font-medium text-foreground">{MILESTONE_LABEL[step.event]}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(step.occurred_at)}</p>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
       </CardContent>
     </Card>
   )
@@ -567,6 +634,7 @@ function StatusResult({
   onSignOut: () => void
 }) {
   const { data: record, isLoading, error } = useApplicationTracking(credentials)
+  const { data: milestones, isLoading: milestonesLoading } = useApplicationMilestones(credentials)
 
   if (isLoading) {
     return (
@@ -644,7 +712,11 @@ function StatusResult({
         </CardContent>
       </Card>
 
+      {/* The current interview keeps its own card -- it is the thing an
+          applicant most often opens this page for. The journey sits alongside
+          it rather than replacing it. */}
       <InterviewCard record={record} />
+      <JourneyCard milestones={milestones ?? []} isLoading={milestonesLoading} />
       <OfferCard record={record} credentials={credentials} />
       <ContractCard record={record} credentials={credentials} />
       <OnboardingCard record={record} />

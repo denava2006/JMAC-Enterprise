@@ -56,7 +56,8 @@ begin
   from public.submit_job_application(
     job_id, 'ZZ', 'Notify', 'zz.notify.' || tag || '@jmac-test.invalid',
     '09171234567', '1 Test St', 'resumes/zz-' || tag || '.pdf', null,
-    null, 'Cavite', 'Imus', 'Barangay 1');
+    null, 'Cavite', 'Imus', 'Barangay 1',
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '.pdf');
   reset role;
 
   select count(*) into n from public.applicant_notification_outbox
@@ -162,8 +163,14 @@ begin
   end if;
   raise notice 'PASS  5c-d moving an interview emails again; editing it does not';
 
-  -- An interview outcome is internal. What the applicant hears follows from the
-  -- APPLICATION's status, which has its own trigger -- so this must be silent.
+  -- An interview outcome is internal, with one deliberate exception: passing
+  -- the INITIAL interview. That milestone changes no application status, so
+  -- without its own email the applicant is left with no word between attending
+  -- the interview and being invited to the next round.
+  --
+  -- What must still be true is that the email carries none of what is being
+  -- recorded here -- the ratings, the impression, the notes, the recommended
+  -- salary and the final remarks are all set below, and none of them travel.
   select count(*) into n from public.applicant_notification_outbox where application_id = app_id;
   update public.interviews
      set status = 'passed',
@@ -175,10 +182,18 @@ begin
          final_remarks = 'strong hire'
    where id = intv_id;
   select count(*) - n into n from public.applicant_notification_outbox where application_id = app_id;
-  if n <> 0 then
-    raise exception 'FAIL  5e recording an interview outcome queued % emails', n;
+  if n <> 1 then
+    raise exception 'FAIL  5e passing the initial interview queued % emails, expected 1', n;
   end if;
-  raise notice 'PASS  5e an interview rating and remarks email nothing';
+  -- The one email is the pass itself. Everything recorded alongside it stays
+  -- where it was recorded.
+  select o.payload::text into txt from public.applicant_notification_outbox o
+   where o.application_id = app_id and o.event_type = 'initial_interview_passed';
+  if txt ilike '%internal only%' or txt ilike '%excellent%'
+     or txt ilike '%strong hire%' or txt ilike '%60000%' then
+    raise exception 'FAIL  5e the pass email carried evaluation detail: %', txt;
+  end if;
+  raise notice 'PASS  5e passing the initial interview emails once, carrying no ratings or remarks';
 
   update public.interviews set status = 'cancelled' where id = intv_id;
   select count(*) into n from public.applicant_notification_outbox
@@ -251,10 +266,10 @@ begin
   -- 8. The full lifecycle, counted
   -- ======================================================================
   select count(*) into n from public.applicant_notification_outbox where application_id = app_id;
-  if n <> 9 then
+  if n <> 10 then
     select string_agg(event_type, ', ' order by created_at) into txt
       from public.applicant_notification_outbox where application_id = app_id;
-    raise exception 'FAIL  8a % emails across the lifecycle, expected 9: %', n, txt;
+    raise exception 'FAIL  8a % emails across the lifecycle, expected 10: %', n, txt;
   end if;
   raise notice 'PASS  8a the whole lifecycle queued exactly 9 applicant emails, one per real event';
 

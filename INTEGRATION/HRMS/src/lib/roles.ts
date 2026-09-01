@@ -57,6 +57,22 @@ export function canAccessModule(role: UserRole | undefined, path: string): boole
   // page with every button replaced by a "view only" badge, which is a module
   // that costs a click and gives nothing back — the figures they actually need
   // show up in the job offer and employee forms that consume them.
-  if (path === '/dashboard/admin/salary-grades') return canApproveWork(role)
+  // Reference data is the shape of the organization -- departments, the
+  // positions inside them, the pay bands attached to those, and the shifts
+  // people are put on. Changing any of it changes what everyone else's records
+  // mean, so it belongs to the roles that own the structure.
+  //
+  // HR Staff still READ all of it: every one of these feeds a dropdown they use
+  // daily -- a job offer needs the salary grade, a deployment needs the
+  // schedule. RLS says the same thing independently (staff_select policies), so
+  // removing the menu is not what stops them editing it.
+  if (
+    path === '/dashboard/admin/departments' ||
+    path === '/dashboard/admin/positions' ||
+    path === '/dashboard/admin/salary-grades' ||
+    path === '/dashboard/admin/work-schedules'
+  ) {
+    return canApproveWork(role)
+  }
   return true
 }

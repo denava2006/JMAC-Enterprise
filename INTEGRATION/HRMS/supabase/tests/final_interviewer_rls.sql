@@ -59,7 +59,8 @@ begin
   select application_id into app_id from public.submit_job_application(
     job_id, 'ZZ', 'Final', 'zz.final.' || tag || '@jmac-test.invalid',
     '09171234567', '1 Test St', 'resumes/zz-' || tag || '.pdf', null,
-    null, 'Cavite', 'Imus', 'Barangay 1');
+    null, 'Cavite', 'Imus', 'Barangay 1',
+    (current_date - interval '18 years')::date, 'government-ids/zz-' || tag || '.pdf');
   reset role;
 
   perform set_config('request.jwt.claims',

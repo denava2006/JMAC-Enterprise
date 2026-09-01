@@ -20,6 +20,29 @@ const ROLE_LABEL: Record<string, string> = {
   hr_staff: 'HR Staff',
 }
 
+/** The short form of a role, for the corner of the header. */
+const ROLE_SHORT: Record<string, string> = {
+  admin: 'Admin',
+  hr_manager: 'HRM',
+  hr_staff: 'HR Staff',
+}
+
+/**
+ * A short identity for the header, and only for the header.
+ *
+ * A full legal name -- four parts, sometimes five -- pushed the header wide and
+ * squeezed everything beside it. This shortens the DISPLAY: "HRM Clark", not a
+ * change to anybody's recorded name. The full name stays on the employee
+ * record, the applicant record, the account menu below this, and every audit
+ * entry, because those are the places it means something.
+ */
+export function compactIdentity(fullName: string | null | undefined, role: string | undefined): string {
+  const first = (fullName ?? '').trim().split(/\s+/)[0] ?? ''
+  const short = role ? ROLE_SHORT[role] : undefined
+  if (!first) return short ?? ''
+  return short ? `${short} ${first}` : first
+}
+
 function initials(name: string) {
   return name
     .split(' ')
@@ -55,7 +78,10 @@ export function Navbar() {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             <div className="hidden text-right leading-tight sm:block">
-              <p className="text-sm font-medium text-foreground">{profile?.full_name}</p>
+              {/* Short here on purpose; the full name is in the menu below. */}
+              <p className="text-sm font-medium text-foreground">
+                {isEmployee ? profile?.full_name : compactIdentity(profile?.full_name, profile?.role)}
+              </p>
               <p className="text-xs text-muted-foreground">
                 {isEmployee && myEmployee
                   ? [myEmployee.positions?.title, myEmployee.departments?.name].filter(Boolean).join(' · ')

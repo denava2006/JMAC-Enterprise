@@ -159,6 +159,7 @@ export function useApplicationForEmployeeCreation(applicationId: string | undefi
           applicant_first_name, applicant_middle_name, applicant_last_name,
           applicant_email, applicant_phone,
           applicant_province, applicant_city, applicant_barangay, applicant_address,
+          applicant_birth_date, applicant_government_id_path,
           applicants (first_name, middle_name, last_name, email, phone, address, province, city, barangay),
           job_postings (department_id, position_id),
           job_offers (employment_type, salary_grade_id, proposed_salary, currency, work_schedule_id, created_at),

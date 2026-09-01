@@ -21,6 +21,10 @@ export interface SubmittedApplicant {
    *  otherwise show the newest CV to whoever is interviewing. */
   resume_url: string | null
   cover_letter: string | null
+  /** Given on the application, so HR never retypes it. */
+  birth_date: string | null
+  /** Object path in the private government-ids bucket -- never a URL. */
+  government_id_path: string | null
 }
 
 /** The application's own immutable snapshot columns. */
@@ -36,6 +40,8 @@ export interface ApplicationIdentitySnapshot {
   applicant_address?: string | null
   applicant_resume_url?: string | null
   applicant_cover_letter?: string | null
+  applicant_birth_date?: string | null
+  applicant_government_id_path?: string | null
 }
 
 /** The applicants row: one per email, rewritten by each new submission. */
@@ -81,14 +87,22 @@ export function resolveSubmittedApplicant(
     address: pick(application?.applicant_address, master?.address),
     resume_url: application?.applicant_resume_url ?? master?.resume_url ?? null,
     cover_letter: application?.applicant_cover_letter ?? master?.cover_letter ?? null,
+    // No fallback to the contact record: neither was ever stored there. An
+    // application submitted before these were collected simply has none.
+    birth_date: application?.applicant_birth_date ?? null,
+    government_id_path: application?.applicant_government_id_path ?? null,
   }
 }
 
 /** Form fields that can be carried over from an application, and the submitted
- *  value behind each. Gender, birth date, civil status and nationality are
- *  deliberately absent: an application never asks for them, so they are HR's to
- *  enter and must never be shown as though the applicant had supplied them. */
+ *  value behind each. Gender, civil status and nationality are deliberately
+ *  absent: an application never asks for them, so they are HR's to enter and
+ *  must never be shown as though the applicant had supplied them.
+ *
+ *  Birth date IS here now -- the application collects it, because an applicant
+ *  must be 18 and the date is checked at submission. */
 export const IMPORTABLE_FIELDS = {
+  birthDate: 'birth_date',
   firstName: 'first_name',
   middleName: 'middle_name',
   lastName: 'last_name',
