@@ -150,3 +150,51 @@ describe('self-service shows one person their own records', () => {
     }
   })
 })
+
+describe('the Finance portal', () => {
+  it('is held by each finance role', () => {
+    for (const role of ['finance_staff', 'finance_manager', 'accountant'] as const) {
+      expect(portalsFor(role, NO_POS_ACCESS, EMPLOYED)).toContain('finance')
+    }
+  })
+
+  it('comes with My Workspace, like every other privilege', () => {
+    // Finance people are employees. Their own attendance, leave and payslips do
+    // not stop existing because they were granted a finance role.
+    const held = portalsFor('finance_manager', NO_POS_ACCESS, EMPLOYED)
+    expect(held).toContain('finance')
+    expect(held).toContain('employee')
+    expect(held).not.toContain('admin')
+  })
+
+  it('is not held by an Administrator', () => {
+    // They grant finance access and read its audit trail. Validating, approving
+    // and paying belong to the three finance roles -- modelling the
+    // Administrator as all of them rebuilds, inside one account, the
+    // combination the one-active-role index forbids for everyone else.
+    expect(portalsFor('admin', NO_POS_ACCESS, NOT_EMPLOYED)).not.toContain('finance')
+    expect(portalsFor('admin', NO_POS_ACCESS, EMPLOYED)).not.toContain('finance')
+  })
+
+  it('is not held by HR or POS staff', () => {
+    expect(portalsFor('hr_manager', NO_POS_ACCESS, EMPLOYED)).not.toContain('finance')
+    expect(portalsFor('employee', posCashier, EMPLOYED)).not.toContain('finance')
+  })
+
+  it('lands a finance employee in Finance, not in their own payslips', () => {
+    expect(defaultPortalPath('finance_staff', NO_POS_ACCESS, EMPLOYED)).toBe('/fms')
+  })
+
+  it('tells a finance page apart from every other portal', () => {
+    expect(portalForPath('/fms')).toBe('finance')
+    expect(portalForPath('/fms/budgets')).toBe('finance')
+    expect(portalForPath('/dashboard/my-attendance')).toBe('employee')
+    expect(portalForPath('/pos/till')).toBe('pos')
+    expect(portalForPath('/dashboard/employees')).toBe('admin')
+  })
+
+  it('offers both names in the switcher', () => {
+    const labels = availablePortals('accountant', NO_POS_ACCESS, EMPLOYED).map((p) => p.label)
+    expect(labels).toEqual(['Finance', 'My Workspace'])
+  })
+})

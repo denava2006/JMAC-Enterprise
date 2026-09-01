@@ -926,6 +926,60 @@ export type Database = {
           },
         ]
       }
+      finance_privilege_grants: {
+        Row: {
+          closed_at: string | null
+          closed_reason: string | null
+          created_at: string
+          finance_role: string
+          granted_at: string
+          granted_by: string | null
+          id: string
+          profile_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          finance_role: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          profile_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          finance_role?: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          profile_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_privilege_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_privilege_grants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generated_reports: {
         Row: {
           created_at: string
@@ -2789,6 +2843,7 @@ export type Database = {
         Args: { _email: string }
         Returns: string
       }
+      can_manage_pos_catalogue: { Args: never; Returns: boolean }
       can_review_pos_request: {
         Args: { _request_type: Database["public"]["Enums"]["pos_request_type"] }
         Returns: boolean
@@ -2808,6 +2863,10 @@ export type Database = {
           _payment_reference?: string
         }
         Returns: Json
+      }
+      close_finance_privilege: {
+        Args: { _profile_id: string; _reason?: string }
+        Returns: undefined
       }
       close_hr_privilege: {
         Args: { _profile_id: string; _reason: string }
@@ -3459,10 +3518,15 @@ export type Database = {
         }[]
       }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
+      grant_finance_privilege: {
+        Args: { _finance_role: string; _profile_id: string }
+        Returns: string
+      }
       grant_hr_privilege: {
         Args: { _hr_role: string; _profile_id: string }
         Returns: string
       }
+      has_finance_privilege: { Args: { _roles: string[] }; Returns: boolean }
       has_hr_privilege: { Args: { _roles: string[] }; Returns: boolean }
       has_pos_access: { Args: never; Returns: boolean }
       has_pos_role: {
@@ -3473,6 +3537,7 @@ export type Database = {
         Returns: boolean
       }
       is_active_employee: { Args: never; Returns: boolean }
+      is_active_finance: { Args: never; Returns: boolean }
       is_active_staff: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_eligible_for_system_role: {
@@ -3657,6 +3722,10 @@ export type Database = {
       }
       recompute_payroll_period_status: {
         Args: { p_period_id: string }
+        Returns: undefined
+      }
+      reconcile_finance_privilege: {
+        Args: { _profile_id: string }
         Returns: undefined
       }
       reconcile_hr_privilege: {
@@ -3865,7 +3934,14 @@ export type Database = {
       pos_role: "manager" | "cashier"
       pos_sale_status: "completed"
       report_format: "pdf" | "docx" | "excel"
-      user_role: "admin" | "hr_staff" | "employee" | "hr_manager"
+      user_role:
+        | "admin"
+        | "hr_staff"
+        | "employee"
+        | "hr_manager"
+        | "finance_staff"
+        | "finance_manager"
+        | "accountant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4106,7 +4182,15 @@ export const Constants = {
       pos_role: ["manager", "cashier"],
       pos_sale_status: ["completed"],
       report_format: ["pdf", "docx", "excel"],
-      user_role: ["admin", "hr_staff", "employee", "hr_manager"],
+      user_role: [
+        "admin",
+        "hr_staff",
+        "employee",
+        "hr_manager",
+        "finance_staff",
+        "finance_manager",
+        "accountant",
+      ],
     },
   },
 } as const

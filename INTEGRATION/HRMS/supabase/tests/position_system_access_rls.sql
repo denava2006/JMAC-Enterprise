@@ -129,7 +129,12 @@ begin
   join public.departments d on d.id = p.department_id
   where (d.name, p.title) not in
     (('Human Resources','HR Staff'), ('Human Resources','HR Manager'),
-     ('Store Operations','Cashier'), ('Store Operations','POS Manager'));
+     ('Store Operations','Cashier'), ('Store Operations','POS Manager'),
+     -- FMS F1. Listed one by one on purpose: this check exists so that a new
+     -- entitlement has to be declared here by somebody, rather than appearing
+     -- in the registry unnoticed.
+     ('Finance','Finance Staff'), ('Finance','Finance Manager'),
+     ('Finance','Accountant'));
   if txt <> '' then raise exception 'FAIL 1c unexpected positions hold entitlements: %', txt; end if;
 
   -- Minted here rather than assumed. This previously read the Sales

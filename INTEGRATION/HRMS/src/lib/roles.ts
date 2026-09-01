@@ -4,6 +4,9 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrator',
   hr_manager: 'HR Manager',
   hr_staff: 'HR Staff',
+  finance_manager: 'Finance Manager',
+  finance_staff: 'Finance Staff',
+  accountant: 'Accountant',
   employee: 'Employee',
 }
 

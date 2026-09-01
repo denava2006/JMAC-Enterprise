@@ -39,6 +39,7 @@ import PosDashboardPage from '@/pages/pos/PosDashboardPage'
 import PosStockPage from '@/pages/pos/PosStockPage'
 import PosBranchProductsPage from '@/pages/pos/PosProductsPage'
 import PosBranchSettingsPage from '@/pages/pos/PosSettingsPage'
+import FinanceHomePage from '@/pages/fms/FinanceHomePage'
 import PosTillPage from '@/pages/pos/PosTillPage'
 import PosTransactionsPage from '@/pages/pos/PosTransactionsPage'
 import AdminPosTransactionsPage from '@/pages/admin/PosTransactionsPage'
@@ -120,6 +121,25 @@ export default function App() {
                 responsible for them. Their POS modules -- including the till
                 itself, the same PosTillPage rendered at
                 /dashboard/admin/pos -- live in the back office instead. */}
+            {/* Finance. The route exists and is guarded; what finance people
+                do is built in the phases after this one.
+
+                requireFinance rather than a role list, so the guard asks the
+                same question the database does -- an active grant, not a role
+                somebody's profile happens to claim. Administrators are blocked
+                deliberately: they grant finance access and read its audit
+                trail, and are not one of the three operational finance roles. */}
+            <Route
+              path="/fms"
+              element={
+                <ProtectedRoute requireFinance blockRoles={['admin']}>
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<FinanceHomePage />} />
+            </Route>
+
             <Route
               path="/pos"
               element={

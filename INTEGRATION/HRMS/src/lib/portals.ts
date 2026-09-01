@@ -3,7 +3,7 @@ import type { PosRole, UserRole } from '@/lib/enums'
 /** The three separate areas of the system. Each has its own layout, its own
  * sidebar, and its own landing route -- a cashier at a till and an HR Manager
  * approving payroll are doing unrelated jobs and should not share a menu. */
-export type PortalKey = 'admin' | 'pos' | 'employee'
+export type PortalKey = 'admin' | 'pos' | 'finance' | 'employee'
 
 export interface Portal {
   key: PortalKey
@@ -29,13 +29,17 @@ export const PORTALS: Record<PortalKey, Portal> = {
   // Its own landing route, not '/dashboard'. An HR Manager holds both this and
   // the back office, and two portals sharing one path cannot be switched
   // between or told apart in the switcher.
+  // Finance is a portal like the others, not a separate application. Same
+  // shell, same sidebar grammar, same switcher -- somebody moving between
+  // Human Resources, the till and Finance stays inside JMAC Enterprise.
+  finance: { key: 'finance', label: 'Finance', path: '/fms' },
   employee: { key: 'employee', label: 'My Workspace', path: '/dashboard/my-dashboard' },
 }
 
 /** The order a landing portal is chosen in when someone holds more than one.
  * POS before employee so a cashier lands at the till rather than on their own
  * payslips. */
-const PORTAL_PRIORITY: PortalKey[] = ['admin', 'pos', 'employee']
+const PORTAL_PRIORITY: PortalKey[] = ['admin', 'pos', 'finance', 'employee']
 
 /** One POS assignment: a role AT a branch. The pair is the unit -- see
  * PosAccess for why it is never flattened. */
@@ -111,6 +115,15 @@ export function hasAnyManagerAssignment(pos: PosAccess): boolean {
  * For everyone else the POS comes from an actual assignment, which is the same
  * rule the database applies.
  */
+/** The finance roles, as they appear on a profile. Access still requires an
+ *  active grant behind the role -- this only decides whether the portal is
+ *  offered at all. */
+const FINANCE_ROLES = ['finance_staff', 'finance_manager', 'accountant']
+
+export function isFinanceRole(role: UserRole | undefined): boolean {
+  return !!role && FINANCE_ROLES.includes(role)
+}
+
 export function portalsFor(
   role: UserRole | undefined,
   pos: PosAccess,
@@ -132,6 +145,10 @@ export function portalsFor(
 
   if (role === 'hr_manager' || role === 'hr_staff') held.push('admin')
   if (pos.assignments.length > 0) held.push('pos')
+  // The role on the profile is only ever written alongside a grant, and the
+  // database refuses to authorize one without the other -- so offering the
+  // portal on the role is offering it to somebody the server will admit.
+  if (isFinanceRole(role)) held.push('finance')
 
   // Additive, deliberately. HR staff and cashiers are employees who also do a
   // privileged job; their own attendance, leave and payslips do not stop
@@ -189,6 +206,7 @@ export function defaultPortalPath(
 /** Which portal a path belongs to, for marking the switcher. */
 export function portalForPath(pathname: string): PortalKey {
   if (pathname === '/pos' || pathname.startsWith('/pos/')) return 'pos'
+  if (pathname === '/fms' || pathname.startsWith('/fms/')) return 'finance'
   // Self-service lives under /dashboard but is a separate context: "My
   // Attendance" is this person's own record, "Attendance" is the organization's.
   // The prefix is what tells the two apart for navigation and the switcher.

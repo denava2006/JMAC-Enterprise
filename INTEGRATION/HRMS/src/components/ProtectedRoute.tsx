@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/lib/enums'
 import { needsPasswordSetup } from '@/lib/passwordSetup'
+import { isFinanceRole } from '@/lib/portals'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -23,6 +24,13 @@ interface ProtectedRouteProps {
    * role is what removed self-service from HR staff, who are employees too, and
    * would have handed it to an Administrator with no employee record to read. */
   requireEmployee?: boolean
+  /** Require an active finance privilege.
+   *
+   * A role list would admit anyone whose profile claims a finance role; the
+   * database refuses to authorize a role without a grant behind it, so the
+   * guard asks the same question rather than a looser one. The server is still
+   * the authority -- this only decides what is worth rendering. */
+  requireFinance?: boolean
 }
 
 export function ProtectedRoute({
@@ -31,6 +39,7 @@ export function ProtectedRoute({
   requirePos,
   blockRoles,
   requireEmployee,
+  requireFinance,
 }: ProtectedRouteProps) {
   const { session, profile, posAccess, initializing } = useAuth()
 
@@ -66,6 +75,10 @@ export function ProtectedRoute({
   // Refusals land on /home rather than /dashboard so the redirect resolves to
   // whichever portal this account actually holds -- sending a cashier who
   // guessed an HR URL to /dashboard would only bounce them again.
+  if (requireFinance && !isFinanceRole(profile.role)) {
+    return <Navigate to="/home" replace />
+  }
+
   if (requireEmployee && !profile.employee_id) {
     // No employment to show. /home resolves to whatever this account does hold,
     // which for an Administrator is the back office.
