@@ -30,7 +30,9 @@ export type StatusFilter = (typeof STATUS_FILTERS)[number]
 export const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
   all: 'All',
   active: 'Active',
-  inactive: 'Inactive',
+  // "Revoked", not "Inactive": the badge on the row already says Revoked, and
+  // two words for one state on the same screen reads as two different things.
+  inactive: 'Revoked',
 }
 
 /** The badge says "Revoked" while the filter says "Inactive": the filter names
@@ -105,6 +107,27 @@ export function filterByStatus<T extends { status: AssignmentStatus }>(
   filter: StatusFilter
 ): T[] {
   return filter === 'all' ? rows : rows.filter((row) => row.status === filter)
+}
+
+/**
+ * Is there already an active assignment for this person at this branch?
+ *
+ * A revoked row keeps offering "Grant again" forever, which reads as though
+ * the person has no access -- even when a newer active row for the same branch
+ * is sitting a few lines above it. The database refuses the duplicate either
+ * way (pos_branch_assignments_active_unique), so this changes no permission;
+ * it stops the screen from inviting an action that cannot succeed and implying
+ * a state that is not true.
+ */
+export function hasActiveAssignmentAt(
+  rows: { profile_id: string; branch_id: string; status: AssignmentStatus }[],
+  profileId: string,
+  branchId: string
+): boolean {
+  return rows.some(
+    (row) =>
+      row.profile_id === profileId && row.branch_id === branchId && row.status === 'active'
+  )
 }
 
 export function countByStatus(rows: { status: AssignmentStatus }[]): Record<StatusFilter, number> {

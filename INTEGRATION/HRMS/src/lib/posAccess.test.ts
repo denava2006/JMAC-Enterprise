@@ -10,6 +10,7 @@ import {
   describeAssignmentError,
   filterByStatus,
   grantableBranches,
+  hasActiveAssignmentAt,
   hasImplicitPosAccess,
   type AssignmentStatus,
   type ProfileOption,
@@ -176,5 +177,42 @@ describe('labels', () => {
   it('calls a revoked assignment revoked', () => {
     expect(ASSIGNMENT_STATUS_LABEL.inactive).toBe('Revoked')
     expect(ASSIGNMENT_STATUS_LABEL.active).toBe('Active')
+  })
+})
+
+describe('hasActiveAssignmentAt', () => {
+  const row = (profile_id: string, branch_id: string, status: 'active' | 'inactive') => ({
+    profile_id,
+    branch_id,
+    status,
+  })
+
+  it('sees an active assignment for the same person and branch', () => {
+    expect(hasActiveAssignmentAt([row('p1', 'b1', 'active')], 'p1', 'b1')).toBe(true)
+  })
+
+  it('is what makes a revoked row stop offering Grant again', () => {
+    // The reported confusion: a revoked row from August sitting under an active
+    // row from September, both for the same branch, with the old one still
+    // inviting a re-grant the database would refuse.
+    const rows = [row('p1', 'b1', 'inactive'), row('p1', 'b1', 'active')]
+    expect(hasActiveAssignmentAt(rows, 'p1', 'b1')).toBe(true)
+  })
+
+  it('allows a re-grant when only revoked history exists', () => {
+    expect(hasActiveAssignmentAt([row('p1', 'b1', 'inactive')], 'p1', 'b1')).toBe(false)
+  })
+
+  it('does not confuse another branch for this one', () => {
+    // Holding a live grant at one branch says nothing about another till.
+    expect(hasActiveAssignmentAt([row('p1', 'b2', 'active')], 'p1', 'b1')).toBe(false)
+  })
+
+  it('does not confuse another person for this one', () => {
+    expect(hasActiveAssignmentAt([row('p2', 'b1', 'active')], 'p1', 'b1')).toBe(false)
+  })
+
+  it('handles an empty list', () => {
+    expect(hasActiveAssignmentAt([], 'p1', 'b1')).toBe(false)
   })
 })

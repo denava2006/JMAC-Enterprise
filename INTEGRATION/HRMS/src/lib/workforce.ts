@@ -117,7 +117,7 @@ export function groupEntitlements(rows: PositionEntitlementRow[]): PositionEntit
 
 /** Role codes are storage, not display. The same map the creation form uses,
  *  so a position reads the same wherever it appears. */
-function roleLabel(code: string): string {
+export function roleLabel(code: string): string {
   for (const group of ELIGIBILITY_SYSTEMS) {
     const hit = group.options.find((o) => o.value === code)
     if (hit) return hit.label

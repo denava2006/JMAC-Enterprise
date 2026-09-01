@@ -46,6 +46,7 @@ import {
   STATUS_FILTER_LABEL,
   countByStatus,
   filterByStatus,
+  hasActiveAssignmentAt,
   type StatusFilter,
 } from '@/lib/posAccess'
 import { ROLE_LABEL } from '@/lib/roles'
@@ -417,6 +418,15 @@ export default function PosAccessPage() {
               <DropdownMenuItem destructive onClick={() => setRevoking(row.original)}>
                 Revoke access
               </DropdownMenuItem>
+            ) : hasActiveAssignmentAt(
+                assignments,
+                row.original.profile_id,
+                row.original.branch_id
+              ) ? (
+              /* A newer active row already covers this person at this branch.
+                 Offering "Grant again" here suggests they have no access, and
+                 the database would refuse the duplicate anyway. */
+              <DropdownMenuItem disabled>Already active</DropdownMenuItem>
             ) : (
               <DropdownMenuItem
                 onClick={() =>

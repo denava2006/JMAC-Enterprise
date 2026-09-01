@@ -11,6 +11,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { EditPersonalInfoDialog } from '@/components/employees/EditPersonalInfoDialog'
 import { EditEmploymentInfoDialog } from '@/components/employees/EditEmploymentInfoDialog'
 import { TransferEmployeeDialog } from '@/components/employees/TransferEmployeeDialog'
+import { EmployeeSystemAccess } from '@/components/employees/EmployeeSystemAccess'
 import { EmployeeDocumentsTab } from '@/components/employees/EmployeeDocumentsTab'
 import { AdjustLeaveBalanceDialog } from '@/components/leave/AdjustLeaveBalanceDialog'
 import {
@@ -332,6 +333,17 @@ export default function EmployeeDetailsPage() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-2 flex flex-col gap-3 border-t border-border pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  System Access
+                </h3>
+                <EmployeeSystemAccess
+                  profileId={account?.id ?? null}
+                  positionId={employee.position_id}
+                  employmentStatus={employee.employment_status}
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

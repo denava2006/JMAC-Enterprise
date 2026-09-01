@@ -114,7 +114,7 @@ describe('revoked history', () => {
     expect(screen.queryByText('Liza Fernandez')).toBeNull()
     // ...but the filter still counts it, which is how the reader knows it is
     // there rather than gone.
-    expect(screen.getByRole('button', { name: 'Inactive (1)' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Revoked (1)' })).toBeTruthy()
   })
 
   it('is reachable, and labels the assignment "Revoked"', () => {
@@ -124,7 +124,7 @@ describe('revoked history', () => {
     expect(screen.getByRole('button', { name: 'All (2)' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Active (1)' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Inactive (1)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoked (1)' }))
 
     expect(screen.getByText('Revoked')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
@@ -217,5 +217,60 @@ describe('Phase 9A eligibility', () => {
     noncompliant = []
     render(<PosAccessPage />)
     expect(screen.queryByText(/no longer authorize/)).toBeNull()
+  })
+})
+
+describe('re-granting a revoked assignment', () => {
+  const openRowMenu = () => {
+    // Radix opens on keydown; a synthetic click alone does not in jsdom.
+    const triggers = screen.getAllByRole('button', { name: 'Assignment actions' })
+    fireEvent.keyDown(triggers[0], { key: 'Enter' })
+  }
+
+  it('offers "Grant again" when only revoked history exists', () => {
+    state.assignments = [
+      assignment({ id: 'a1', status: 'inactive', pos_role: 'manager' }),
+    ]
+    render(<PosAccessPage />)
+    fireEvent.click(screen.getByRole('button', { name: /^All / }))
+    openRowMenu()
+
+    expect(screen.getByText('Grant again')).toBeTruthy()
+    expect(screen.queryByText('Already active')).toBeNull()
+  })
+
+  it('replaces it with "Already active" when a live grant covers the same branch', () => {
+    // The reported confusion: an August revoked row and a September active row
+    // for the same person and branch looked like two accounts, and the old row
+    // still invited a re-grant the database would refuse.
+    state.assignments = [
+      assignment({ id: 'old', status: 'inactive', pos_role: 'manager', created_at: '2026-08-25T00:00:00Z' }),
+      assignment({ id: 'new', status: 'active', pos_role: 'manager', created_at: '2026-09-01T00:00:00Z' }),
+    ]
+    render(<PosAccessPage />)
+    fireEvent.click(screen.getByRole('button', { name: /^Revoked / }))
+    openRowMenu()
+
+    expect(screen.getByText('Already active')).toBeTruthy()
+    expect(screen.queryByText('Grant again')).toBeNull()
+  })
+
+  it('still offers "Grant again" when the live grant is at a different branch', () => {
+    // A grant at one till says nothing about another.
+    state.assignments = [
+      assignment({ id: 'old', branch_id: 'b2', status: 'inactive' }),
+      assignment({ id: 'other', branch_id: 'b9', status: 'active', branch: { id: 'b9', name: 'Other Branch' } }),
+    ]
+    render(<PosAccessPage />)
+    fireEvent.click(screen.getByRole('button', { name: /^Revoked / }))
+    openRowMenu()
+
+    expect(screen.getByText('Grant again')).toBeTruthy()
+  })
+
+  it('labels the revoked filter "Revoked", matching the badge', () => {
+    state.assignments = [assignment({ status: 'inactive' })]
+    render(<PosAccessPage />)
+    expect(screen.getByRole('button', { name: /^Revoked / })).toBeTruthy()
   })
 })

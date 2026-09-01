@@ -15,6 +15,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useDepartments } from '@/hooks/useDepartments'
 import { usePositions } from '@/hooks/usePositions'
 import { useUpdateEmployee, type Employee } from '@/hooks/useEmployees'
+import { usePositionEntitlements } from '@/hooks/useWorkforce'
+import { entitlementChips } from '@/lib/workforce'
+import { toast } from '@/components/ui/sonner'
 
 /**
  * Move an employee to a different job.
@@ -43,6 +46,7 @@ export function TransferEmployeeDialog({
   const { data: departments } = useDepartments()
   const { data: positions } = usePositions()
   const updateEmployee = useUpdateEmployee()
+  const { data: entitlements } = usePositionEntitlements()
 
   const [departmentId, setDepartmentId] = React.useState('')
   const [positionId, setPositionId] = React.useState('')
@@ -90,7 +94,25 @@ export function TransferEmployeeDialog({
         values: { department_id: departmentId, position_id: positionId },
         notes: `${fromDepartment} / ${fromPosition} → ${toDepartment} / ${toPosition}. ${reason.trim()}`,
       },
-      { onSuccess: () => onOpenChange(false) }
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+
+          // A transfer into a privileged position is the moment people expect
+          // access to appear, and it deliberately does not. Saying so here --
+          // once, at the moment of the change -- is the difference between a
+          // security model and an apparent bug.
+          const entry = (entitlements ?? []).find((e) => e.positionId === positionId)
+          const chips = entry ? entitlementChips(entry) : []
+          if (chips.length > 0) {
+            toast.info(
+              `This position is eligible for ${chips.map((c) => c.label).join(' and ')} access. ` +
+                'System access must be granted separately.',
+              { duration: 8000 }
+            )
+          }
+        },
+      }
     )
   }
 
