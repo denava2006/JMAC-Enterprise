@@ -20,10 +20,21 @@ import {
   useCreateBranchProduct,
   useCreatePosCategory,
   useProductImageUrls,
+  useSetProductImage,
+  useImportProductImage,
+  useUpdateProductDetails,
+  useSetBranchSellingPrice,
   usePosCategories,
 } from '@/hooks/usePosCatalogue'
 import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/MoneyInput'
+import {
+  ProductImagePicker,
+  GLOBAL_FIELD_NOTICE,
+  globalNoticeClass,
+  type ImageChoice,
+} from '@/components/pos/ProductImagePicker'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -89,12 +100,15 @@ function AddProductDialog({ branchId, onClose }: { branchId: string; onClose: ()
   const [categoryId, setCategoryId] = React.useState('')
   const [price, setPrice] = React.useState('')
   const [newCategory, setNewCategory] = React.useState('')
+  const [image, setImage] = React.useState<ImageChoice>({ kind: 'none' })
 
   const { data: carryable, isLoading } = useCarryableCatalogue(branchId)
   const { data: categories } = usePosCategories()
   const addToBranch = useAddProductToBranch()
   const createProduct = useCreateBranchProduct()
   const createCategory = useCreatePosCategory()
+  const setProductImage = useSetProductImage()
+  const importImage = useImportProductImage()
 
   const matches = React.useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -238,6 +252,11 @@ function AddProductDialog({ branchId, onClose }: { branchId: string; onClose: ()
               <MoneyInput id="new_product_price" value={price} onValueChange={setPrice} />
             </div>
 
+            {/* No Import button here: an import needs a product id to file the
+                result against, and the product does not exist yet. The link is
+                held and imported the moment it does. */}
+            <ProductImagePicker value={image} onChange={setImage} />
+
             <p className="text-xs text-muted-foreground">
               The product starts with no stock and is not offered until you enable it.
             </p>
@@ -255,13 +274,181 @@ function AddProductDialog({ branchId, onClose }: { branchId: string; onClose: ()
               onClick={() =>
                 createProduct.mutate(
                   { branchId, name: name.trim(), categoryId, sellingPrice: priceValue },
-                  { onSuccess: onClose }
+                  {
+                    onSuccess: async (productId) => {
+                      // The product is created and carried; the image is a
+                      // second step against an id that now exists. If it fails
+                      // the product still stands -- losing a created product
+                      // because its photo would not download is a worse outcome
+                      // than a product with no photo, which Edit can fix.
+                      try {
+                        if (image.kind === 'file') {
+                          await setProductImage.mutateAsync({ productId, file: image.file })
+                        } else if (image.kind === 'url') {
+                          await importImage.mutateAsync({ productId, imageUrl: image.url })
+                        }
+                      } catch {
+                        toast.message('Product created, but the image could not be added.', {
+                          description: 'You can add it from Edit product.',
+                        })
+                      }
+                      onClose()
+                    },
+                  }
                 )
               }
             >
               Create Product
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+
+/**
+ * Editing a product.
+ *
+ * Two kinds of field sit here and they behave differently, so the dialog says
+ * which is which rather than leaving a manager to discover that renaming a
+ * product renamed it for six other branches. Name, category and image are the
+ * company's; the selling price is this branch's.
+ */
+function EditProductDialog({
+  branchId,
+  product,
+  currentImageUrl,
+  onClose,
+}: {
+  branchId: string
+  product: {
+    product_id: string
+    product_name: string
+    category_id: string | null
+    selling_price: number
+  }
+  currentImageUrl: string | null
+  onClose: () => void
+}) {
+  const [name, setName] = React.useState(product.product_name)
+  const [categoryId, setCategoryId] = React.useState(product.category_id ?? '')
+  const [image, setImage] = React.useState<ImageChoice>({ kind: 'none' })
+  const [price, setPrice] = React.useState(String(product.selling_price))
+
+  const { data: categories } = usePosCategories()
+  const updateDetails = useUpdateProductDetails()
+  const setBranchPrice = useSetBranchSellingPrice()
+  const setProductImage = useSetProductImage()
+  const importImage = useImportProductImage()
+
+  const priceValue = Number(price)
+  const priceChanged = Number.isFinite(priceValue) && priceValue !== Number(product.selling_price)
+  const detailsChanged =
+    name.trim() !== product.product_name || categoryId !== (product.category_id ?? '')
+  const canSave =
+    name.trim().length > 0 &&
+    !!categoryId &&
+    priceValue >= 0 &&
+    (detailsChanged || priceChanged || image.kind !== 'none')
+
+  const save = async () => {
+    if (detailsChanged) {
+      await updateDetails.mutateAsync({ productId: product.product_id, name: name.trim(), categoryId })
+    }
+    if (priceChanged) {
+      await setBranchPrice.mutateAsync({
+        branchId,
+        productId: product.product_id,
+        price: priceValue,
+      })
+    }
+    if (image.kind === 'file') {
+      await setProductImage.mutateAsync({ productId: product.product_id, file: image.file })
+    } else if (image.kind === 'url') {
+      await importImage.mutateAsync({ productId: product.product_id, imageUrl: image.url })
+    }
+    onClose()
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit product</DialogTitle>
+          <DialogDescription>{product.product_name}</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3">
+          <p className={globalNoticeClass}>{GLOBAL_FIELD_NOTICE}</p>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit_product_name">Product name</Label>
+            <Input
+              id="edit_product_name"
+              value={name}
+              maxLength={200}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit_product_category">Category</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger id="edit_product_category">
+                <SelectValue placeholder="Choose a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {(categories ?? [])
+                  .filter((c) => c.is_active)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* The one field on this screen that belongs to this branch alone,
+              placed under the shared ones so the difference is visible rather
+              than only stated. */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit_product_price">Selling price at this branch</Label>
+            <MoneyInput id="edit_product_price" value={price} onValueChange={setPrice} />
+            <p className="text-xs text-muted-foreground">
+              Only this branch. Other branches keep their own price.
+            </p>
+          </div>
+
+          {/* The product exists, so a link can be imported and previewed as the
+              stored copy straight away. */}
+          <ProductImagePicker
+            value={image}
+            onChange={setImage}
+            currentImageUrl={currentImageUrl}
+            importing={importImage.isPending}
+            onImportNow={(url) =>
+              importImage.mutate(
+                { productId: product.product_id, imageUrl: url },
+                { onSuccess: () => setImage({ kind: 'none' }) }
+              )
+            }
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSave}
+            loading={updateDetails.isPending || setProductImage.isPending || setBranchPrice.isPending}
+            onClick={save}
+          >
+            Save changes
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -285,6 +472,7 @@ export default function PosProductsPage() {
 
   const { data: rows, isLoading } = useBranchInventory(branchId || undefined)
   const [adding, setAdding] = React.useState(false)
+  const [editing, setEditing] = React.useState<string | null>(null)
   const { data: priced } = useBranchCatalogueManagement(branchId || undefined)
   const setAvailability = useSetBranchAvailability()
 
@@ -378,6 +566,24 @@ export default function PosProductsPage() {
       {adding && branchId && (
         <AddProductDialog branchId={branchId} onClose={() => setAdding(false)} />
       )}
+
+      {editing && branchId && (() => {
+        const row = (priced ?? []).find((r) => r.product_id === editing)
+        if (!row) return null
+        return (
+          <EditProductDialog
+            branchId={branchId}
+            product={{
+              product_id: row.product_id,
+              product_name: row.name,
+              category_id: row.category_id,
+              selling_price: Number(row.selling_price),
+            }}
+            currentImageUrl={imageUrls?.[row.image_path ?? ''] ?? null}
+            onClose={() => setEditing(null)}
+          />
+        )
+      })()}
 
       {outOfStock > 0 && (
         <Card>
@@ -523,9 +729,18 @@ export default function PosProductsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {managesThisBranch && (
-                          <Button asChild size="sm" variant="outline">
-                            <Link to="/pos/requests">Request stock</Link>
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditing(row.product_id)}
+                            >
+                              Edit
+                            </Button>
+                            <Button asChild size="sm" variant="outline">
+                              <Link to="/pos/requests">Request stock</Link>
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

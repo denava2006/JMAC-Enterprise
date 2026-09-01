@@ -681,3 +681,58 @@ export function useSetProductImage() {
 
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+const IMPORT_IMAGE_ERRORS: Record<string, string> = {
+  IMAGE_URL_INVALID: 'That does not look like a valid link.',
+  IMAGE_URL_SCHEME: 'Use a link starting with https://',
+  // Deliberately vague about WHY. Saying "that address is internal" turns the
+  // importer into a probe for what exists inside the network.
+  IMAGE_URL_BLOCKED: 'That link cannot be used. Try the image address from the product page.',
+  IMAGE_URL_UNREACHABLE: 'We could not reach that link. Check it opens in a browser.',
+  IMAGE_URL_REDIRECTS: 'That link redirects too many times.',
+  IMAGE_TYPE_UNSUPPORTED: 'That link is not a JPG, PNG or WebP image.',
+  IMAGE_TOO_LARGE: 'That image is larger than 5MB.',
+  IMAGE_STORE_FAILED: 'We could not save that image. Please try again.',
+}
+
+/**
+ * Bring an image in from a URL.
+ *
+ * The browser cannot do this: a product photo on somebody else's website will
+ * not send CORS headers, so fetch() from the page fails. The server can — and
+ * the copy it stores is what the till renders, so the image keeps working after
+ * the source site changes or disappears.
+ */
+export function useImportProductImage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ productId, imageUrl }: { productId: string; imageUrl: string }) => {
+      const { data, error } = await supabase.functions.invoke('import-pos-product-image', {
+        body: { productId, imageUrl: imageUrl.trim() },
+      })
+
+      // A non-2xx from an Edge Function arrives as an error with the body
+      // attached, so the specific reason has to be dug out of the response
+      // rather than read off error.message.
+      if (error) {
+        let code = ''
+        const ctx = (error as { context?: Response }).context
+        if (ctx && typeof ctx.json === 'function') {
+          code = await ctx.json().then((b: { error?: string }) => b?.error ?? '').catch(() => '')
+        }
+        throw new Error(IMPORT_IMAGE_ERRORS[code] ?? 'We could not import that image.')
+      }
+
+      const payload = data as { error?: string; imagePath?: string } | null
+      if (payload?.error) {
+        throw new Error(IMPORT_IMAGE_ERRORS[payload.error] ?? 'We could not import that image.')
+      }
+      return payload?.imagePath ?? null
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Image imported.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
