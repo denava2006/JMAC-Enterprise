@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/lib/enums'
 import { needsPasswordSetup } from '@/lib/passwordSetup'
-import { isFinanceRole } from '@/lib/portals'
+import { isFinanceRole, portalsFor } from '@/lib/portals'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -31,6 +31,17 @@ interface ProtectedRouteProps {
    * guard asks the same question rather than a looser one. The server is still
    * the authority -- this only decides what is worth rendering. */
   requireFinance?: boolean
+  /** Require the back office itself -- the HR dashboard home and its shell.
+   *
+   * Every HR subpage is already gated, so a Finance Manager who typed
+   * /dashboard/employees was bounced. The HOME route was not: it sat inside a
+   * bare ProtectedRoute, so the shell rendered for anyone signed in, and a
+   * Finance-only account could sit inside the HR back office looking at it.
+   *
+   * Deliberately not a role list. It asks whether this account holds the back
+   * office at all, which is the same question the portal switcher answers, so
+   * the two cannot disagree. */
+  requireBackOffice?: boolean
 }
 
 export function ProtectedRoute({
@@ -40,6 +51,7 @@ export function ProtectedRoute({
   blockRoles,
   requireEmployee,
   requireFinance,
+  requireBackOffice,
 }: ProtectedRouteProps) {
   const { session, profile, posAccess, initializing } = useAuth()
 
@@ -98,6 +110,19 @@ export function ProtectedRoute({
 
   if (requirePos && !posAccess.hasAccess) {
     return <Navigate to="/home" replace />
+  }
+
+  if (requireBackOffice) {
+    const held = portalsFor(profile.role, posAccess, !!profile.employee_id)
+    // An account holding NOTHING is let through on purpose. /home would resolve
+    // it straight back to /dashboard -- defaultPortalPath falls back here when
+    // there is no portal at all -- and refusing it would be a redirect loop of
+    // exactly the kind F1 already paid for once. DashboardHome renders its own
+    // "nothing to show you" state, which is the honest answer for a
+    // half-provisioned account.
+    if (held.length > 0 && !held.includes('admin')) {
+      return <Navigate to="/home" replace />
+    }
   }
 
   return <>{children}</>

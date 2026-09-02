@@ -106,8 +106,16 @@ function renderApp(initialPath: string) {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireBackOffice>
               <p>back office</p>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/fms"
+          element={
+            <ProtectedRoute requireFinance blockRoles={['admin']}>
+              <p>finance portal</p>
             </ProtectedRoute>
           }
         />
@@ -516,5 +524,55 @@ describe('the previous user must not decide the next user’s portal', () => {
     renderApp('/home')
     expect(screen.getByText('back office')).toBeTruthy()
     expect(screen.queryByText('the till')).toBeNull()
+  })
+})
+
+describe('the HR dashboard shell is not a lobby', () => {
+  // Every HR SUBPAGE was already gated, so a Finance Manager typing
+  // /dashboard/employees was bounced. The home route was not: it sat inside a
+  // bare ProtectedRoute, so the shell rendered for anyone signed in and a
+  // Finance-only account could sit inside the back office looking at it.
+  it.each(['finance_staff', 'finance_manager', 'accountant'] as const)(
+    '%s opening /dashboard lands in Finance',
+    (role) => {
+      signIn(role, NO_POS_ACCESS, 'e1')
+      renderApp('/dashboard')
+      expect(screen.getByText('finance portal')).toBeTruthy()
+      expect(screen.queryByText('back office')).toBeNull()
+    }
+  )
+
+  it.each(['admin', 'hr_manager', 'hr_staff'] as const)('%s still opens /dashboard', (role) => {
+    signIn(role, NO_POS_ACCESS, role === 'admin' ? null : 'e1')
+    renderApp('/dashboard')
+    expect(screen.getByText('back office')).toBeTruthy()
+  })
+
+  it('a cashier opening /dashboard lands at the till, not in HR', () => {
+    signIn('employee', pos(['b1']), 'e1')
+    renderApp('/dashboard')
+    expect(screen.queryByText('back office')).toBeNull()
+  })
+
+  it('an employee opening /dashboard lands in their own workspace', () => {
+    signIn('employee', NO_POS_ACCESS, 'e1')
+    renderApp('/dashboard')
+    expect(screen.getByText('my workspace')).toBeTruthy()
+    expect(screen.queryByText('back office')).toBeNull()
+  })
+
+  it('an account holding no portal at all is let through rather than looped', () => {
+    // defaultPortalPath falls back to /dashboard when there is no portal, so
+    // refusing this account would bounce it between /home and /dashboard for
+    // ever. The home page renders its own "nothing to show you" state instead.
+    signIn('employee', NO_POS_ACCESS, null)
+    renderApp('/dashboard')
+    expect(screen.getByText('back office')).toBeTruthy()
+  })
+
+  it('and the HR subpages keep refusing Finance, as they already did', () => {
+    signIn('finance_manager', NO_POS_ACCESS, 'e1')
+    renderApp('/dashboard/employees')
+    expect(screen.queryByText('employees page')).toBeNull()
   })
 })

@@ -255,7 +255,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<DashboardHome />} />
+              <Route
+                index
+                element={
+                  <ProtectedRoute requireBackOffice>
+                    <DashboardHome />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Internal HR back-office — employee-role logins are blocked from
                   all of it and land on DashboardHome's placeholder instead. */}
