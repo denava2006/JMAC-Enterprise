@@ -70,6 +70,7 @@ declare
   alloc_id  uuid;
   other_id  uuid;
   n         integer;
+  txt       text;
   num       numeric;
   tag       text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
@@ -265,44 +266,59 @@ begin
   reset role;
 
   -- ======================================================================
-  -- 5. budgets — the ceiling belongs to the Finance Manager
+  -- 5. budgets -- Staff draft the ceiling, the Manager puts it in force
   -- ======================================================================
-  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform pg_temp.acts_as(staff); set local role authenticated;
   insert into public.budgets (name, finance_category_id, amount, status, fiscal_year)
   values ('ZZ Ops Budget ' || tag, cat_id, 100000, 'active', 2026) returning id into budget_id;
-  raise notice 'PASS  5a the Finance Manager sets a ceiling';
+  -- Note what was asked for and what was recorded: the insert said 'active'
+  -- and the trigger wrote 'draft'. A maker cannot put their own ceiling into
+  -- force by saying so in the INSERT.
+  select status into txt from public.budgets where id = budget_id;
+  if txt <> 'draft' then raise exception 'FAIL 5a a budget inserted itself as %', txt; end if;
+  raise notice 'PASS  5a Finance Staff draft a ceiling, and it starts as a draft';
+
+  begin
+    update public.budgets set status = 'active' where id = budget_id;
+    raise exception 'FAIL 5b Finance Staff activated their own budget';
+  exception when insufficient_privilege then
+    raise notice 'PASS  5b a budget cannot be activated by editing it';
+  end;
   reset role;
 
-  perform pg_temp.acts_as(staff); set local role authenticated;
+  -- The checker was the only one who could create these before F4.2, which
+  -- made the Manager both author and approver of the company's ceilings.
+  perform pg_temp.acts_as(manager); set local role authenticated;
   begin
-    insert into public.budgets (name, amount, status) values ('ZZ Staff Budget ' || tag, 5000, 'active');
-    raise exception 'FAIL 5b Finance Staff set a ceiling';
+    insert into public.budgets (name, amount) values ('ZZ Manager Budget ' || tag, 5000);
+    raise exception 'FAIL 5c the Finance Manager authored a budget';
   exception when insufficient_privilege then
-    raise notice 'PASS  5b Finance Staff cannot perform a Manager-only mutation';
+    raise notice 'PASS  5c the Finance Manager approves ceilings rather than writing them';
   end;
-  begin
-    update public.budgets set amount = 999999 where id = budget_id;
-    get diagnostics n = row_count;
-    if n <> 0 then raise exception 'FAIL 5c Finance Staff raised a ceiling'; end if;
-    raise notice 'PASS  5c Finance Staff cannot raise a ceiling';
-  end;
+
+  perform public.review_budget(budget_id, true, 'agreed for 2026');
+  select status into txt from public.budgets where id = budget_id;
+  if txt <> 'active' then raise exception 'FAIL 5d approval left the budget %', txt; end if;
+  select approved_by into other_id from public.budgets where id = budget_id;
+  if other_id <> manager then raise exception 'FAIL 5d the approver was not stamped'; end if;
+  raise notice 'PASS  5d the Finance Manager puts a drafted ceiling in force';
   reset role;
 
   perform pg_temp.acts_as(acct); set local role authenticated;
   begin
     insert into public.budgets (name, amount, status) values ('ZZ Acct Budget ' || tag, 5000, 'active');
-    raise exception 'FAIL 5d the Accountant set a ceiling';
+    raise exception 'FAIL 5e the Accountant set a ceiling';
   exception when insufficient_privilege then
-    raise notice 'PASS  5d the Accountant cannot gain Manager authority';
+    raise notice 'PASS  5e the Accountant cannot draft or approve a ceiling';
   end;
   reset role;
 
   perform pg_temp.acts_as(admin_id); set local role authenticated;
   begin
     insert into public.budgets (name, amount, status) values ('ZZ Admin Budget ' || tag, 5000, 'active');
-    raise exception 'FAIL 5e the Administrator set a ceiling';
+    raise exception 'FAIL 5f the Administrator set a ceiling';
   exception when insufficient_privilege then
-    raise notice 'PASS  5e no routine amount-setting by the Administrator';
+    raise notice 'PASS  5f no routine amount-setting by the Administrator';
   end;
   reset role;
 
@@ -408,6 +424,140 @@ begin
     raise exception 'FAIL 8a created_by was taken from the payload';
   end if;
   raise notice 'PASS  8a created_by is stamped from the session, not accepted from the caller';
+  reset role;
+
+  -- ======================================================================
+  -- 10. Maker and checker: a proposal is not yet a supplier
+  -- ======================================================================
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  insert into public.vendors (name, contact_person, tin, phone)
+  values ('ZZ Proposed ' || tag, 'Ana Reyes', '222-333-444-55555', '09171234567')
+  returning id into other_id;
+  select approval_status into txt from public.vendors where id = other_id;
+  if txt <> 'pending_approval' then
+    raise exception 'FAIL 10a a newly proposed vendor was already %', txt;
+  end if;
+  raise notice 'PASS  10a a vendor the maker creates starts as a proposal';
+
+  -- The maker cannot wave it through, whatever they write into the row.
+  begin
+    update public.vendors set approval_status = 'approved' where id = other_id;
+    raise exception 'FAIL 10b the maker approved their own vendor';
+  exception when insufficient_privilege then
+    raise notice 'PASS  10b approval is not something a maker can write';
+  end;
+
+  begin
+    perform public.review_vendor(other_id, true, 'me again');
+    raise exception 'FAIL 10c Finance Staff ran a review';
+  exception when insufficient_privilege then
+    raise notice 'PASS  10c only a Finance Manager reviews a vendor';
+  end;
+  reset role;
+
+  -- The checker admits it, and may not edit it on the way past.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  begin
+    update public.vendors set tin = '999-999-999-99999' where id = other_id;
+    raise exception 'FAIL 10d the checker rewrote the vendor they were reviewing';
+  exception when insufficient_privilege then
+    raise notice 'PASS  10d the checker approves a vendor rather than editing it';
+  end;
+
+  perform public.review_vendor(other_id, true, 'checked against DTI registration');
+  select approval_status into txt from public.vendors where id = other_id;
+  if txt <> 'approved' then raise exception 'FAIL 10e review left the vendor %', txt; end if;
+  raise notice 'PASS  10e the Finance Manager admits a vendor to the approved list';
+
+  -- Archiving is still the Manager's, exactly as F2 decided.
+  update public.vendors set is_active = false where id = other_id;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FAIL 10f the Manager lost the ability to retire a vendor'; end if;
+  update public.vendors set is_active = true where id = other_id;
+  raise notice 'PASS  10f retiring a vendor remains the Manager''s';
+  reset role;
+
+  -- A material edit reopens the verdict. Without this the control is
+  -- decorative: get a harmless vendor approved, then change its TIN.
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  update public.vendors set tin = '888-777-666-55555' where id = other_id;
+  select approval_status into txt from public.vendors where id = other_id;
+  if txt <> 'pending_approval' then
+    raise exception 'FAIL 10g a changed TIN kept its old approval (%)', txt;
+  end if;
+  raise notice 'PASS  10g changing what was approved sends it back for approval';
+
+  -- A note is not a material change, so it does not cost a re-approval.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.review_vendor(other_id, true, 're-checked');
+  reset role;
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  update public.vendors set notes = 'delivers Tuesdays' where id = other_id;
+  select approval_status into txt from public.vendors where id = other_id;
+  if txt <> 'approved' then raise exception 'FAIL 10h a note reopened the approval'; end if;
+  raise notice 'PASS  10h a housekeeping edit does not reopen an approval';
+  reset role;
+
+  -- ======================================================================
+  -- 11. Nobody approves their own proposal, whatever role they now hold
+  -- ======================================================================
+  --
+  -- The role matrix nearly guarantees this on its own, since a Manager cannot
+  -- author master data. What it does not cover is promotion: a Staff member
+  -- who proposed a vendor last month and is a Manager today. The proposal is
+  -- re-pointed at the Manager to stand in for that history.
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  insert into public.vendors (name, phone) values ('ZZ Promoted ' || tag, '09181234567')
+  returning id into alloc_id;
+  reset role;
+
+  update public.vendors set proposed_by = manager where id = alloc_id;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  begin
+    perform public.review_vendor(alloc_id, true, 'approving my own');
+    raise exception 'FAIL 11a somebody approved a vendor they had proposed';
+  exception when insufficient_privilege then
+    raise notice 'PASS  11a nobody approves the vendor they proposed themselves';
+  end;
+  reset role;
+
+  -- Same rule on the money. A budget drafted by whoever is now the Manager
+  -- cannot be activated by them.
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  insert into public.budgets (name, amount) values ('ZZ Self Budget ' || tag, 1000)
+  returning id into alloc_id;
+  reset role;
+
+  update public.budgets set created_by = manager where id = alloc_id;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  begin
+    perform public.review_budget(alloc_id, true, 'approving my own');
+    raise exception 'FAIL 11b somebody activated a budget they had drafted';
+  exception when insufficient_privilege then
+    raise notice 'PASS  11b nobody activates the ceiling they drafted themselves';
+  end;
+  reset role;
+
+  -- ======================================================================
+  -- 12. A vendor's phone number is a Philippine mobile number
+  -- ======================================================================
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  begin
+    insert into public.vendors (name, phone) values ('ZZ Landline ' || tag, '0288887777');
+    raise exception 'FAIL 12a a ten-digit landline passed as a mobile number';
+  exception when check_violation then
+    raise notice 'PASS  12a a number that is not 09 + nine digits is refused';
+  end;
+  begin
+    insert into public.vendors (name, phone) values ('ZZ Plus ' || tag, '+639171234567');
+    raise exception 'FAIL 12b a +63 number was accepted';
+  exception when check_violation then
+    raise notice 'PASS  12b the international form is refused rather than rewritten';
+  end;
+  insert into public.vendors (name, phone) values ('ZZ Mobile ' || tag, '09171234568');
+  raise notice 'PASS  12c a genuine 09 mobile number is accepted';
   reset role;
 
   -- ======================================================================

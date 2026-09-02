@@ -60,9 +60,11 @@ function actionsFor(role: string | undefined, status: string | undefined) {
         { to: 'cancelled', label: 'Cancel order', tone: 'destructive' as const },
       ]
     }
-    if (status === 'draft' || status === 'returned') {
-      return [{ to: 'pending_approval', label: 'Submit for approval', tone: 'default' as const }]
-    }
+    // Deliberately nothing for draft/returned. Submitting an order for
+    // approval is the maker's act, and a checker who can submit is a checker
+    // who can approve their own work -- which is the whole control this
+    // separation exists to provide.
+    return []
   }
   return []
 }
@@ -81,7 +83,14 @@ export function PurchaseOrderDetail({
   const transition = useTransitionPurchaseOrder()
 
   const order = orders.find((o) => o.id === orderId)
-  const editable = order?.status === 'draft' || order?.status === 'returned'
+  // Editing an order is the maker's work, so it takes BOTH an editable status
+  // and the maker's role. This used to be status alone, which is how a Finance
+  // Manager reviewing an order still saw the line editor and the delete icons:
+  // the checker was being offered the maker's controls on the document they
+  // were reviewing. The database refuses those writes, but a control that is
+  // visible and then fails is worse than one that was never offered.
+  const isMaker = profile?.role === 'finance_staff'
+  const editable = isMaker && (order?.status === 'draft' || order?.status === 'returned')
   const actions = actionsFor(profile?.role, order?.status ?? undefined)
 
   return (

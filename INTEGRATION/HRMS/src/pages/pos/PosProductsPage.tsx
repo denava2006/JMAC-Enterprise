@@ -591,10 +591,20 @@ export default function PosProductsPage() {
             <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-sm text-foreground">
               {outOfStock} {outOfStock === 1 ? 'product is' : 'products are'} out of stock.{' '}
-              <Link to="/pos/requests" className="font-medium underline">
-                Request stock
-              </Link>{' '}
-              — approving a request does not add stock; receiving does.
+              {/* Asking the business for stock is the branch manager's call, and
+                  /pos/requests is manager-gated. A cashier seeing this link
+                  would be sent to a door that does not open for them, so they
+                  are told who to raise it with instead. */}
+              {managesThisBranch ? (
+                <>
+                  <Link to="/pos/requests" className="font-medium underline">
+                    Request stock
+                  </Link>{' '}
+                  — approving a request does not add stock; receiving does.
+                </>
+              ) : (
+                <>Your branch manager can request more.</>
+              )}
             </p>
           </CardContent>
         </Card>

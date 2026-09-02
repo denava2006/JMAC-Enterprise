@@ -127,6 +127,18 @@ const posAdminNav: NavItem[] = [
   { label: 'POS Settings', to: '/dashboard/admin/pos-settings', icon: Receipt },
 ]
 
+/**
+ * A portal's landing route -- /dashboard, /fms, /pos -- is a prefix of every
+ * page inside that portal, so it has to match exactly or it stays highlighted
+ * everywhere. This used to name /dashboard specifically, which left Finance
+ * with two lit rows on every /fms/* page: Overview and the page you were
+ * actually on. One path segment means a portal root; anything deeper is a page
+ * within one, and new portals get the right behaviour without being listed.
+ */
+export function isPortalRoot(to: string): boolean {
+  return to.split('/').filter(Boolean).length === 1
+}
+
 /** Shared with the POS sidebar so both portals render navigation identically. */
 export function NavRow({ item, end }: { item: NavItem; end?: boolean }) {
   const Icon = item.icon
@@ -142,7 +154,7 @@ export function NavRow({ item, end }: { item: NavItem; end?: boolean }) {
   return (
     <NavLink
       to={item.to}
-      end={end ?? item.to === '/dashboard'}
+      end={end ?? isPortalRoot(item.to)}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',

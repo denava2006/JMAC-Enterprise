@@ -53,7 +53,11 @@ export function NewPurchaseOrderDialog({
     }
   }, [source])
 
-  const activeVendors = vendors.filter((v) => v.is_active)
+  // A proposed vendor is not yet a supplier the company deals with, so it must
+  // not be selectable on an order that commits money. The database refuses the
+  // submission either way; offering the name here would only mean drafting an
+  // order that cannot go anywhere.
+  const selectableVendors = vendors.filter((v) => v.is_active && v.approval_status === 'approved')
 
   return (
     <Dialog open={!!source} onOpenChange={onOpenChange}>
@@ -77,16 +81,16 @@ export function NewPurchaseOrderDialog({
                 <SelectValue placeholder="Select a supplier" />
               </SelectTrigger>
               <SelectContent>
-                {activeVendors.map((v) => (
+                {selectableVendors.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
                     {v.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {activeVendors.length === 0 && (
+            {selectableVendors.length === 0 && (
               <p className="text-xs text-warning">
-                No active vendors yet. Add one under Vendors before raising an order.
+                No approved vendors yet. A vendor has to be added under Vendors and approved by a Finance Manager before an order can be raised against it.
               </p>
             )}
           </div>

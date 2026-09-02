@@ -61,20 +61,61 @@ describe('the Administrator sets no amounts', () => {
   })
 })
 
-describe('budget authority belongs to the Finance Manager', () => {
-  it('only the Manager sets a ceiling', () => {
-    expect(financeCan('finance_manager', 'budgets', 'create')).toBe(true)
-    expect(financeCan('finance_staff', 'budgets', 'create')).toBe(false)
+describe('a ceiling is drafted by one person and put in force by another', () => {
+  // F2 gave budgets to the Finance Manager alone, which made one person both
+  // the author and the approver of what the company may spend. F4.2 splits it.
+  it('Staff draft the ceiling', () => {
+    expect(financeCan('finance_staff', 'budgets', 'create')).toBe(true)
+    expect(financeCan('finance_manager', 'budgets', 'create')).toBe(false)
     expect(financeCan('accountant', 'budgets', 'create')).toBe(false)
     expect(financeCan('admin', 'budgets', 'create')).toBe(false)
   })
 
-  it('only the Manager edits or closes one', () => {
-    for (const action of ['edit', 'archive'] as FinanceAction[]) {
-      expect(financeCan('finance_manager', 'budgets', action)).toBe(true)
-      expect(financeCan('finance_staff', 'budgets', action)).toBe(false)
-      expect(financeCan('accountant', 'budgets', action)).toBe(false)
+  it('the Manager approves it, and nobody else can', () => {
+    expect(financeCan('finance_manager', 'budgets', 'approve')).toBe(true)
+    expect(financeCan('finance_staff', 'budgets', 'approve')).toBe(false)
+    expect(financeCan('accountant', 'budgets', 'approve')).toBe(false)
+    expect(financeCan('admin', 'budgets', 'approve')).toBe(false)
+  })
+
+  it('closing a ceiling stays the Manager’s', () => {
+    expect(financeCan('finance_manager', 'budgets', 'archive')).toBe(true)
+    expect(financeCan('finance_staff', 'budgets', 'archive')).toBe(false)
+    expect(financeCan('accountant', 'budgets', 'archive')).toBe(false)
+  })
+})
+
+describe('the checker does not author master data', () => {
+  // The hosted screenshot that started F4.2: a Finance Manager looking at a
+  // purchase order with the line editor still on it. The same principle
+  // applies to the vendor and category lists behind it.
+  it.each(['vendors', 'categories'] as const)('gives %s authorship to Staff alone', (module) => {
+    for (const action of ['create', 'edit'] as FinanceAction[]) {
+      expect(financeCan('finance_staff', module, action)).toBe(true)
+      expect(financeCan('finance_manager', module, action)).toBe(false)
+      expect(financeCan('accountant', module, action)).toBe(false)
+      expect(financeCan('admin', module, action)).toBe(false)
     }
+  })
+
+  it.each(['vendors', 'categories'] as const)('keeps %s approval with the Manager', (module) => {
+    expect(financeCan('finance_manager', module, 'approve')).toBe(true)
+    expect(financeCan('finance_staff', module, 'approve')).toBe(false)
+  })
+
+  it.each(['vendors', 'categories'] as const)(
+    'leaves archiving %s with the Manager, as F2 decided',
+    (module) => {
+      // Withdrawing a record changes how every past use of it reads, which is
+      // governance rather than authorship.
+      expect(financeCan('finance_manager', module, 'archive')).toBe(true)
+      expect(financeCan('finance_staff', module, 'archive')).toBe(false)
+    },
+  )
+
+  it('does not let the checker link what a vendor supplies', () => {
+    expect(financeCan('finance_staff', 'vendorCategories', 'create')).toBe(true)
+    expect(financeCan('finance_manager', 'vendorCategories', 'create')).toBe(false)
   })
 })
 

@@ -48,6 +48,7 @@ import {
   useSaveAllocation,
   useSaveBudget,
   useSetBudgetStatus,
+  useReviewBudget,
 } from '@/hooks/useFinanceMasterData'
 
 const NONE = '__none__'
@@ -230,7 +231,10 @@ function BudgetDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Draft — nothing can be drawn yet</SelectItem>
-                  <SelectItem value="active">Active — open for allocation</SelectItem>
+                  {/* Active is deliberately absent. A ceiling comes into force
+                      when a Finance Manager approves it, not when the person
+                      who drafted it selects "Active" -- which is the whole
+                      point of drafting it separately. */}
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
@@ -489,6 +493,7 @@ export default function BudgetsPage() {
   const { profile } = useAuth()
   const { data: budgets = [], isLoading } = useBudgets()
   const setStatus = useSetBudgetStatus()
+  const review = useReviewBudget()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<BudgetStatus | null>(null)
   const [viewing, setViewing] = React.useState<BudgetStatus | null>(null)
@@ -496,6 +501,7 @@ export default function BudgetsPage() {
   const canCreate = financeCan(profile?.role, 'budgets', 'create')
   const canEdit = financeCan(profile?.role, 'budgets', 'edit')
   const canClose = financeCan(profile?.role, 'budgets', 'archive')
+  const canApprove = financeCan(profile?.role, 'budgets', 'approve')
 
   const active = budgets.filter((b) => b.status === 'active')
   const ceiling = active.reduce((sum, b) => sum + Number(b.amount), 0)
@@ -561,7 +567,7 @@ export default function BudgetsPage() {
           )
         },
       },
-      ...(canEdit || canClose
+      ...(canEdit || canClose || canApprove
         ? [
             {
               id: 'actions',
@@ -584,6 +590,21 @@ export default function BudgetsPage() {
                           Edit
                         </DropdownMenuItem>
                       )}
+                      {canApprove && row.original.status === 'draft' && row.original.id && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => review.mutate({ id: row.original.id!, approve: true })}
+                          >
+                            Approve ceiling
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            destructive
+                            onClick={() => review.mutate({ id: row.original.id!, approve: false })}
+                          >
+                            Return for revision
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       {canClose && row.original.status !== 'closed' && row.original.id && (
                         <DropdownMenuItem
                           onClick={() => setStatus.mutate({ id: row.original.id!, status: 'closed' })}
@@ -599,7 +620,7 @@ export default function BudgetsPage() {
           ]
         : []),
     ],
-    [canEdit, canClose, setStatus],
+    [canEdit, canClose, canApprove, setStatus, review],
   )
 
   return (

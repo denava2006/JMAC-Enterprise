@@ -36,11 +36,13 @@ import {
 import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { financeCan } from '@/lib/financeAuthority'
+import { ApprovalBadge } from '@/components/fms/ApprovalCell'
 import {
   type FinanceCategory,
   useFinanceCategories,
   useSaveFinanceCategory,
   useSetFinanceCategoryActive,
+  useReviewFinanceCategory,
 } from '@/hooks/useFinanceMasterData'
 
 const schema = z.object({
@@ -146,12 +148,14 @@ export default function FinanceCategoriesPage() {
   const { profile } = useAuth()
   const { data: categories = [], isLoading } = useFinanceCategories()
   const setActive = useSetFinanceCategoryActive()
+  const review = useReviewFinanceCategory()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<FinanceCategory | null>(null)
 
   const canCreate = financeCan(profile?.role, 'categories', 'create')
   const canEdit = financeCan(profile?.role, 'categories', 'edit')
   const canArchive = financeCan(profile?.role, 'categories', 'archive')
+  const canApprove = financeCan(profile?.role, 'categories', 'approve')
 
   const expenseCount = categories.filter((c) => c.kind === 'expense' && c.is_active).length
   const incomeCount = categories.filter((c) => c.kind === 'income' && c.is_active).length
@@ -189,7 +193,12 @@ export default function FinanceCategoriesPage() {
             <Badge variant="secondary">Archived</Badge>
           ),
       },
-      ...(canEdit || canArchive
+      {
+        accessorKey: 'approval_status',
+        header: 'Approval',
+        cell: ({ row }) => <ApprovalBadge status={row.original.approval_status} />,
+      },
+      ...(canEdit || canArchive || canApprove
         ? [
             {
               id: 'actions',
@@ -212,6 +221,21 @@ export default function FinanceCategoriesPage() {
                           Edit
                         </DropdownMenuItem>
                       )}
+                      {canApprove && row.original.approval_status === 'pending_approval' && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => review.mutate({ id: row.original.id, approve: true })}
+                          >
+                            Approve category
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            destructive
+                            onClick={() => review.mutate({ id: row.original.id, approve: false })}
+                          >
+                            Reject category
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       {canArchive && (
                         <DropdownMenuItem
                           onClick={() =>
@@ -229,7 +253,7 @@ export default function FinanceCategoriesPage() {
           ]
         : []),
     ],
-    [canEdit, canArchive, setActive],
+    [canEdit, canArchive, canApprove, setActive, review],
   )
 
   return (

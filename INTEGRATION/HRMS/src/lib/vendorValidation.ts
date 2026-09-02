@@ -45,9 +45,17 @@ export function isValidTin(value: string): boolean {
  */
 export const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/
 
-/** Digits only. A leading + is refused rather than stripped: quietly changing
- *  what somebody typed is how a wrong number gets stored confidently. */
-export const PHONE_PATTERN = /^\d{7,15}$/
+/**
+ * A Philippine mobile number: 09 followed by nine digits, and nothing else.
+ *
+ * Mirrors vendors_phone_format exactly. F4.1 accepted any 7-15 digits, which
+ * let landlines and +63-style numbers through; the business only ever uses the
+ * one form. A leading + or a dash is refused rather than stripped, because
+ * quietly changing what somebody typed is how a wrong number gets stored
+ * confidently -- and the leading 0 is part of the number, which is why this is
+ * a text field with a pattern and never a number input.
+ */
+export const PHONE_PATTERN = /^09\d{9}$/
 
 /** Letters and spaces, Unicode-aware so accented and non-Latin names pass. */
 export const PERSON_NAME_PATTERN = /^\p{L}+(?: \p{L}+)*$/u
@@ -82,7 +90,7 @@ export const vendorSchema = z.object({
     .string()
     .transform((v) => v.trim())
     .refine((v) => v === '' || PHONE_PATTERN.test(v), {
-      message: 'Phone number must be digits only, 7 to 15 of them.',
+      message: 'Enter a mobile number as 11 digits starting 09, like 09171234567.',
     })
     .optional(),
 

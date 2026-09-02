@@ -12,9 +12,16 @@ export type FinanceModule =
   | 'budgets'
   | 'allocations'
 
-/** archive covers "archive", "retire", "close" and "release" — the reversible
- *  end of a record's life. Nothing in Finance master data is deleted. */
-export type FinanceAction = 'read' | 'create' | 'edit' | 'archive'
+/**
+ * archive covers "archive", "retire", "close" and "release" — the reversible
+ * end of a record's life. Nothing in Finance master data is deleted.
+ *
+ * approve is the checker's half of maker/checker: admitting a proposed vendor
+ * or category, or putting a drafted budget in force. It is deliberately not
+ * the same cell as edit, because the whole point is that one person cannot
+ * hold both on the same record.
+ */
+export type FinanceAction = 'read' | 'create' | 'edit' | 'archive' | 'approve'
 
 /**
  * The role matrix from docs/fms-authorization.md, in one place.
@@ -30,24 +37,31 @@ export type FinanceAction = 'read' | 'create' | 'edit' | 'archive'
 const MATRIX: Record<FinanceModule, Record<FinanceAction, readonly UserRole[]>> = {
   categories: {
     read: ['finance_staff', 'finance_manager', 'accountant', 'admin'],
-    create: ['finance_staff', 'finance_manager'],
-    edit: ['finance_staff', 'finance_manager'],
-    // Archiving changes how past classifications read.
+    // F4.2: authorship is the maker's alone. A checker who can also write the
+    // record is approving their own work under another name.
+    create: ['finance_staff'],
+    edit: ['finance_staff'],
+    // Archiving changes how past classifications read, so it stays governance
+    // rather than authorship — the checker's, as F2 decided.
     archive: ['finance_manager'],
+    approve: ['finance_manager'],
   },
   vendors: {
     read: ['finance_staff', 'finance_manager', 'accountant', 'admin'],
-    create: ['finance_staff', 'finance_manager'],
-    edit: ['finance_staff', 'finance_manager'],
+    create: ['finance_staff'],
+    edit: ['finance_staff'],
     // Retiring a supplier the company has transacted with.
     archive: ['finance_manager'],
+    approve: ['finance_manager'],
   },
   vendorCategories: {
     read: ['finance_staff', 'finance_manager', 'accountant', 'admin'],
-    create: ['finance_staff', 'finance_manager'],
+    // What a vendor supplies is part of describing the vendor.
+    create: ['finance_staff'],
     // A link row has nothing to edit: it exists or it does not.
     edit: [],
-    archive: ['finance_staff', 'finance_manager'],
+    archive: ['finance_staff'],
+    approve: [],
   },
   accounts: {
     read: ['finance_staff', 'finance_manager', 'accountant', 'admin'],
@@ -55,13 +69,19 @@ const MATRIX: Record<FinanceModule, Record<FinanceAction, readonly UserRole[]>> 
     create: ['accountant'],
     edit: ['accountant'],
     archive: ['accountant'],
+    // No maker/checker here yet: the chart is the Accountant's, and F4.2 does
+    // not open accounting.
+    approve: [],
   },
   budgets: {
     read: ['finance_staff', 'finance_manager', 'accountant', 'admin'],
-    // Budget authority, and nobody else's. Not the Administrator's.
-    create: ['finance_manager'],
-    edit: ['finance_manager'],
+    // F4.2: Staff draft the ceiling, the Manager puts it in force. This was
+    // Manager-only, which made one person both author and approver of what the
+    // company is allowed to spend.
+    create: ['finance_staff'],
+    edit: ['finance_staff', 'finance_manager'],
     archive: ['finance_manager'],
+    approve: ['finance_manager'],
   },
   allocations: {
     read: ['finance_staff', 'finance_manager', 'accountant', 'admin'],
@@ -70,6 +90,7 @@ const MATRIX: Record<FinanceModule, Record<FinanceAction, readonly UserRole[]>> 
     edit: ['finance_staff', 'finance_manager'],
     // Releasing returns money to the ceiling.
     archive: ['finance_manager'],
+    approve: [],
   },
 }
 
@@ -103,6 +124,8 @@ export function canEditAllocation(
 export function canWriteAnyFinanceModule(role: UserRole | null | undefined): boolean {
   if (!role) return false
   return (Object.keys(MATRIX) as FinanceModule[]).some((m) =>
-    (['create', 'edit', 'archive'] as FinanceAction[]).some((a) => financeCan(role, m, a)),
+    (['create', 'edit', 'archive', 'approve'] as FinanceAction[]).some((a) =>
+      financeCan(role, m, a),
+    ),
   )
 }

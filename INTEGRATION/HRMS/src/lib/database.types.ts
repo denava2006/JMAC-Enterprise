@@ -556,6 +556,7 @@ export type Database = {
           id: string
           name: string
           period: string
+          review_note: string | null
           start_date: string | null
           status: string
           updated_at: string
@@ -574,6 +575,7 @@ export type Database = {
           id?: string
           name: string
           period?: string
+          review_note?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string
@@ -592,6 +594,7 @@ export type Database = {
           id?: string
           name?: string
           period?: string
+          review_note?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string
@@ -1144,6 +1147,7 @@ export type Database = {
       }
       finance_categories: {
         Row: {
+          approval_status: string
           created_at: string
           created_by: string | null
           description: string | null
@@ -1151,9 +1155,14 @@ export type Database = {
           is_active: boolean
           kind: string
           name: string
+          proposed_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           updated_at: string
         }
         Insert: {
+          approval_status?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1161,9 +1170,14 @@ export type Database = {
           is_active?: boolean
           kind: string
           name: string
+          proposed_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           updated_at?: string
         }
         Update: {
+          approval_status?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1171,12 +1185,30 @@ export type Database = {
           is_active?: boolean
           kind?: string
           name?: string
+          proposed_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "finance_categories_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_categories_proposed_by_fkey"
+            columns: ["proposed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_categories_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -3489,6 +3521,7 @@ export type Database = {
       vendors: {
         Row: {
           address: string | null
+          approval_status: string
           contact_person: string | null
           created_at: string
           created_by: string | null
@@ -3498,11 +3531,16 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          proposed_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           tin: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          approval_status?: string
           contact_person?: string | null
           created_at?: string
           created_by?: string | null
@@ -3512,11 +3550,16 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          proposed_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           tin?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          approval_status?: string
           contact_person?: string | null
           created_at?: string
           created_by?: string | null
@@ -3526,6 +3569,10 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          proposed_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           tin?: string | null
           updated_at?: string
         }
@@ -3533,6 +3580,20 @@ export type Database = {
           {
             foreignKeyName: "vendors_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendors_proposed_by_fkey"
+            columns: ["proposed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendors_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -3801,6 +3862,10 @@ export type Database = {
           _system: Database["public"]["Enums"]["entitlement_system"]
         }
         Returns: undefined
+      }
+      assert_may_review_finance_master: {
+        Args: { _proposed_by: string; _what: string }
+        Returns: string
       }
       bootstrap_first_administrator: {
         Args: { _email: string }
@@ -4783,6 +4848,18 @@ export type Database = {
           p_reference_code: string
         }
         Returns: string
+      }
+      review_budget: {
+        Args: { _approve: boolean; _budget_id: string; _note?: string }
+        Returns: undefined
+      }
+      review_finance_category: {
+        Args: { _approve: boolean; _category_id: string; _note?: string }
+        Returns: undefined
+      }
+      review_vendor: {
+        Args: { _approve: boolean; _note?: string; _vendor_id: string }
+        Returns: undefined
       }
       set_low_stock_threshold: {
         Args: { _branch_id: string; _product_id: string; _threshold: number }

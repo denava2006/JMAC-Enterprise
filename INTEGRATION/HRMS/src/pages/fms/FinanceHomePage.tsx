@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
 import { StatCard } from '@/components/stat-card'
+import { WaitingOnYou } from '@/components/fms/WaitingOnYou'
 import { useAuth } from '@/contexts/AuthContext'
 import { ROLE_LABEL } from '@/lib/roles'
 import { firstName } from '@/lib/displayName'
@@ -68,6 +69,8 @@ export default function FinanceHomePage() {
         description={`Welcome, ${firstName(profile?.full_name)}. Master data for JMAC Enterprise.`}
         action={profile?.role ? <Badge variant="secondary">{ROLE_LABEL[profile.role]}</Badge> : undefined}
       />
+
+      <WaitingOnYou />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

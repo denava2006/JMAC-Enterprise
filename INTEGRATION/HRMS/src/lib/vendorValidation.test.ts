@@ -82,19 +82,29 @@ describe('email', () => {
 })
 
 describe('phone', () => {
-  it.each(['09171234567', '639171234567'])('accepts %s', (value) => {
+  it.each(['09171234567', '09991234567'])('accepts %s', (value) => {
     expect(check('phone', value).ok).toBe(true)
   })
 
-  it.each(['+639171234567', '0917-123-4567', '0917 123 4567', 'abc0917', '(0917)1234567', '0917'])(
-    'refuses %s',
-    (value) => {
-      expect(check('phone', value).ok).toBe(false)
-    },
-  )
+  // 639..., 02..., and a twelve-digit number were all accepted under F4.1's
+  // "7 to 15 digits". A mobile number here is 09 and nine more, so they are
+  // not, and the client says so before the database has to.
+  it.each([
+    '+639171234567',
+    '639171234567',
+    '0288887777',
+    '091712345678',
+    '0917-123-4567',
+    '0917 123 4567',
+    'abc0917',
+    '(0917)1234567',
+    '0917',
+  ])('refuses %s', (value) => {
+    expect(check('phone', value).ok).toBe(false)
+  })
 
   it('explains the rule instead of naming a pattern', () => {
-    expect(check('phone', '+639171234567').message).toMatch(/digits only/)
+    expect(check('phone', '+639171234567').message).toMatch(/starting 09/)
   })
 
   it('is optional', () => {

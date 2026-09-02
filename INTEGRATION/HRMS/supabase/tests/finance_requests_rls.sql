@@ -86,11 +86,18 @@ begin
   worker  := pg_temp.hire('Requester',   'Cashier');
   hr      := pg_temp.hire('HR Person',   'HR Staff');
 
-  -- Master data, created by the roles that own it.
-  perform pg_temp.acts_as(manager); set local role authenticated;
+  -- Master data, created by the roles that own it. Since F4.2 that is two
+  -- roles for a budget: Staff draft the ceiling, the Manager puts it in force.
+  -- The request tests below all reserve against it, so it has to be genuinely
+  -- active by the time they run.
+  perform pg_temp.acts_as(staff); set local role authenticated;
   select id into cat_id from public.finance_categories where kind='expense' and is_active limit 1;
-  insert into public.budgets (name, finance_category_id, amount, status, fiscal_year)
-  values ('ZZ Request Budget ' || tag, cat_id, 100000, 'active', 2026) returning id into budget_id_v;
+  insert into public.budgets (name, finance_category_id, amount, fiscal_year)
+  values ('ZZ Request Budget ' || tag, cat_id, 100000, 2026) returning id into budget_id_v;
+  reset role;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.review_budget(budget_id_v, true, 'fixture');
   reset role;
 
   perform pg_temp.acts_as(acct); set local role authenticated;

@@ -9,7 +9,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: state.role } }),
 }))
 
-const { Sidebar } = await import('@/components/layout/Sidebar')
+const { Sidebar, isPortalRoot } = await import('@/components/layout/Sidebar')
 
 function show(at = '/dashboard') {
   return render(
@@ -69,5 +69,59 @@ describe('the Finance menu follows the portal, not the role', () => {
     show('/fms')
     expect(screen.queryByRole('link', { name: 'POS Reports' })).toBeNull()
     expect(screen.queryByText('Administration')).toBeNull()
+  })
+})
+
+/**
+ * The active row is how somebody knows where they are. Two lit rows is not a
+ * cosmetic problem: Overview stayed highlighted on every /fms/* page, so the
+ * menu said "Overview" while the screen said "Vendors".
+ */
+describe('exactly one navigation row is ever active', () => {
+  function activeLinkNames() {
+    return screen
+      .getAllByRole('link')
+      .filter((el) => el.getAttribute('aria-current') === 'page')
+      .map((el) => el.textContent?.trim())
+  }
+
+  it.each([
+    ['/fms', 'Overview'],
+    ['/fms/requests', 'Requests'],
+    ['/fms/procurement', 'Procurement'],
+    ['/fms/budgets', 'Budgets'],
+    ['/fms/vendors', 'Vendors'],
+    ['/fms/categories', 'Categories'],
+    ['/fms/accounts', 'Chart of Accounts'],
+  ])('marks only %s active, as %s', (path, expected) => {
+    state.role = 'finance_staff'
+    show(path)
+    expect(activeLinkNames()).toEqual([expected])
+  })
+
+  it('does not leave Finance Overview lit on a child route', () => {
+    // The regression itself, named: /fms is a prefix of /fms/vendors, so
+    // without exact matching both rows light up.
+    state.role = 'finance_manager'
+    show('/fms/vendors')
+    const overview = screen.getByRole('link', { name: 'Overview' })
+    expect(overview.getAttribute('aria-current')).toBeNull()
+  })
+
+  it.each([
+    ['/dashboard', 'Dashboard'],
+    ['/dashboard/employees', 'Employees'],
+  ])('applies the same rule in the back office: %s', (path, expected) => {
+    state.role = 'admin'
+    show(path)
+    expect(activeLinkNames()).toEqual([expected])
+  })
+
+  it('treats a portal root as exact and a page within one as a prefix', () => {
+    expect(isPortalRoot('/fms')).toBe(true)
+    expect(isPortalRoot('/dashboard')).toBe(true)
+    expect(isPortalRoot('/pos')).toBe(true)
+    expect(isPortalRoot('/fms/vendors')).toBe(false)
+    expect(isPortalRoot('/dashboard/admin/work-schedules')).toBe(false)
   })
 })

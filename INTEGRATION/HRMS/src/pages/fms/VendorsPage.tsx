@@ -29,12 +29,14 @@ import {
 import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { financeCan } from '@/lib/financeAuthority'
+import { ApprovalBadge } from '@/components/fms/ApprovalCell'
 import { formatTin, vendorSchema } from '@/lib/vendorValidation'
 import {
   type Vendor,
   useFinanceCategories,
   useSaveVendor,
   useSetVendorActive,
+  useReviewVendor,
   useVendorCategories,
   useVendors,
 } from '@/hooks/useFinanceMasterData'
@@ -150,7 +152,18 @@ function VendorDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendor-phone">Phone</Label>
-              <Input id="vendor-phone" {...form.register('phone')} placeholder="09171234567" />
+              {/* Deliberately type="text": a number input would drop the
+                  leading 0, and 09 is where the number starts. inputMode gets
+                  the numeric keypad on a phone without that cost. */}
+              <Input
+                id="vendor-phone"
+                {...form.register('phone')}
+                type="text"
+                inputMode="numeric"
+                maxLength={11}
+                autoComplete="tel-national"
+                placeholder="09171234567"
+              />
               {form.formState.errors.phone && (
                 <p className="text-xs text-destructive">{form.formState.errors.phone.message}</p>
               )}
@@ -218,12 +231,14 @@ export default function VendorsPage() {
   const { data: links } = useVendorCategories()
   const { data: categories = [] } = useFinanceCategories()
   const setActive = useSetVendorActive()
+  const review = useReviewVendor()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Vendor | null>(null)
 
   const canCreate = financeCan(profile?.role, 'vendors', 'create')
   const canEdit = financeCan(profile?.role, 'vendors', 'edit')
   const canArchive = financeCan(profile?.role, 'vendors', 'archive')
+  const canApprove = financeCan(profile?.role, 'vendors', 'approve')
 
   const categoryName = React.useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
@@ -284,7 +299,19 @@ export default function VendorsPage() {
             <Badge variant="secondary">Retired</Badge>
           ),
       },
-      ...(canEdit || canArchive
+      {
+        accessorKey: 'approval_status',
+        header: 'Approval',
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            <ApprovalBadge status={row.original.approval_status} />
+            {row.original.approval_status === 'rejected' && row.original.review_note && (
+              <span className="text-xs text-muted-foreground">{row.original.review_note}</span>
+            )}
+          </div>
+        ),
+      },
+      ...(canEdit || canArchive || canApprove
         ? [
             {
               id: 'actions',
@@ -307,6 +334,21 @@ export default function VendorsPage() {
                           Edit
                         </DropdownMenuItem>
                       )}
+                      {canApprove && row.original.approval_status === 'pending_approval' && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => review.mutate({ id: row.original.id, approve: true })}
+                          >
+                            Approve vendor
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            destructive
+                            onClick={() => review.mutate({ id: row.original.id, approve: false })}
+                          >
+                            Reject vendor
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       {canArchive && (
                         <DropdownMenuItem
                           onClick={() =>
@@ -324,7 +366,7 @@ export default function VendorsPage() {
           ]
         : []),
     ],
-    [canEdit, canArchive, links, categoryName, setActive],
+    [canEdit, canArchive, canApprove, links, categoryName, setActive],
   )
 
   return (

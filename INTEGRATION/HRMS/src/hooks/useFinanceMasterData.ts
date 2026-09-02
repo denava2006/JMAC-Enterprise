@@ -266,6 +266,58 @@ export function useSetBudgetStatus() {
   )
 }
 
+/* -------------------------------------------------------- maker / checker */
+
+/**
+ * The checker's half of finance master data.
+ *
+ * Each of these calls a SECURITY DEFINER function rather than updating the row,
+ * because approval is not something a maker may write and the database is where
+ * that is decided. The self-approval refusal comes back from the server as an
+ * insufficient_privilege error and is surfaced as-is by describeFinanceError.
+ */
+export function useReviewVendor() {
+  return useFinanceMutation<{ id: string; approve: boolean; note?: string }>(
+    async ({ id, approve, note }) => {
+      const { error } = await supabase.rpc('review_vendor', {
+        _vendor_id: id,
+        _approve: approve,
+        _note: note ?? undefined,
+      })
+      if (error) throw error
+    },
+    { invalidate: [FINANCE_KEYS.vendors], success: 'Vendor reviewed.' },
+  )
+}
+
+export function useReviewFinanceCategory() {
+  return useFinanceMutation<{ id: string; approve: boolean; note?: string }>(
+    async ({ id, approve, note }) => {
+      const { error } = await supabase.rpc('review_finance_category', {
+        _category_id: id,
+        _approve: approve,
+        _note: note ?? undefined,
+      })
+      if (error) throw error
+    },
+    { invalidate: [FINANCE_KEYS.categories], success: 'Category reviewed.' },
+  )
+}
+
+export function useReviewBudget() {
+  return useFinanceMutation<{ id: string; approve: boolean; note?: string }>(
+    async ({ id, approve, note }) => {
+      const { error } = await supabase.rpc('review_budget', {
+        _budget_id: id,
+        _approve: approve,
+        _note: note ?? undefined,
+      })
+      if (error) throw error
+    },
+    { invalidate: [FINANCE_KEYS.budgets], success: 'Budget reviewed.' },
+  )
+}
+
 /* ------------------------------------------------------------ allocations */
 
 export function useBudgetAllocations(budgetId: string | undefined) {

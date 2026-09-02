@@ -66,6 +66,7 @@ declare
   mgr_a uuid; mgr_b uuid; cashier uuid;
   branch_a uuid; branch_b uuid; general_id uuid; product uuid; vendor uuid;
   po uuid; line_a uuid; line_b uuid; receipt uuid; key1 uuid := gen_random_uuid();
+  po2 uuid; po3 uuid; line_c uuid; vendor_b uuid;
   n integer; qty integer; num numeric; txt text;
   tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
@@ -98,6 +99,23 @@ begin
 
   perform pg_temp.acts_as(staff); set local role authenticated;
   insert into public.vendors (name) values ('ZZ Supplier ' || tag) returning id into vendor;
+  reset role;
+
+  -- A second order, left in draft, for the sections that test who may write to
+  -- one. The first order goes through the whole receiving story and cannot
+  -- also be the one nobody is allowed to touch.
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  insert into public.purchase_orders (vendor_id) values (vendor) returning id into po2;
+  insert into public.purchase_order_items
+    (purchase_order_id, description, quantity_ordered, unit_cost)
+  values (po2, 'ZZ Draft line', 2, 25.00) returning id into line_c;
+  reset role;
+
+  -- Since F4.2 a proposed vendor is not yet a supplier the company deals with,
+  -- and an order cannot be put forward against one. Everything below is about
+  -- receiving rather than vendor approval, so the vendor is admitted here.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.review_vendor(vendor, true, 'fixture');
   reset role;
 
   -- ======================================================================
@@ -455,6 +473,178 @@ begin
   end;
 
   -- ======================================================================
+  -- 11. The checker cannot write the document they approve
+  -- ======================================================================
+  --
+  -- A hosted screenshot showed a Finance Manager looking at an order with the
+  -- line editor still on screen. Hiding the buttons was not the fix; these are.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  begin
+    insert into public.purchase_orders (vendor_id) values (vendor);
+    raise exception 'FAIL 11a the Finance Manager raised a purchase order';
+  exception when insufficient_privilege then
+    raise notice 'PASS  11a the Finance Manager does not raise purchase orders';
+  end;
+
+  begin
+    insert into public.purchase_order_items
+      (purchase_order_id, description, quantity_ordered, unit_cost)
+    values (po2, 'ZZ Manager line', 1, 10.00);
+    raise exception 'FAIL 11b the Finance Manager added a line to an order';
+  exception when insufficient_privilege then
+    raise notice 'PASS  11b the Finance Manager does not add lines';
+  end;
+
+  delete from public.purchase_order_items where id = line_c;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FAIL 11c the Finance Manager deleted a line'; end if;
+  raise notice 'PASS  11c the Finance Manager does not delete lines';
+
+  update public.purchase_order_items set quantity_ordered = 99 where id = line_c;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FAIL 11d the Finance Manager edited a line'; end if;
+  raise notice 'PASS  11d the Finance Manager does not edit lines';
+
+  begin
+    perform public.transition_purchase_order(po2, 'pending_approval');
+    raise exception 'FAIL 11e the Finance Manager submitted an order for their own approval';
+  exception when insufficient_privilege then
+    raise notice 'PASS  11e submitting is the maker''s act, so the checker cannot do it';
+  end;
+  reset role;
+
+  -- ======================================================================
+  -- 12. Nobody approves the order they raised
+  -- ======================================================================
+  --
+  -- Section 11 means a Manager cannot normally be an order's author at all.
+  -- What that does not cover is promotion: the Staff member who raised this
+  -- order last month and is the Manager today. Re-pointing created_by stands
+  -- in for that history.
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  perform public.transition_purchase_order(po2, 'pending_approval');
+  reset role;
+
+  update public.purchase_orders set created_by = manager where id = po2;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  begin
+    perform public.transition_purchase_order(po2, 'approved');
+    raise exception 'FAIL 12a somebody approved a purchase order they had raised';
+  exception when insufficient_privilege then
+    raise notice 'PASS  12a nobody approves the purchase order they raised';
+  end;
+  reset role;
+
+  update public.purchase_orders set created_by = staff where id = po2;
+
+  -- ======================================================================
+  -- 13. An order cannot be placed with a vendor nobody approved
+  -- ======================================================================
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  insert into public.vendors (name) values ('ZZ Unvetted ' || tag) returning id into vendor_b;
+  insert into public.purchase_orders (vendor_id) values (vendor_b) returning id into po3;
+  insert into public.purchase_order_items
+    (purchase_order_id, description, quantity_ordered, unit_cost,
+     pos_product_id, destination_branch_id)
+  values (po3, 'ZZ Something', 5, 10.00, product, branch_b);
+
+  begin
+    perform public.transition_purchase_order(po3, 'pending_approval');
+    raise exception 'FAIL 13a an order went forward against an unapproved vendor';
+  exception when check_violation then
+    raise notice 'PASS  13a a proposed vendor is not yet a supplier an order may be placed with';
+  end;
+  reset role;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.review_vendor(vendor_b, true, 'checked');
+  reset role;
+
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  perform public.transition_purchase_order(po3, 'pending_approval');
+  raise notice 'PASS  13b once approved, the same vendor carries the same order forward';
+
+  -- A material edit reopens the vendor, and the order must not carry the old
+  -- verdict past the approval step on the strength of it.
+  update public.vendors set tin = '777-666-555-44444' where id = vendor_b;
+  reset role;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  begin
+    perform public.transition_purchase_order(po3, 'approved');
+    raise exception 'FAIL 13c an order was approved against a reopened vendor';
+  exception when check_violation then
+    raise notice 'PASS  13c a vendor sent back for re-approval stops the order too';
+  end;
+  reset role;
+
+  -- ======================================================================
+  -- 14. Closing an order means everything ordered arrived
+  -- ======================================================================
+  --
+  -- po is complete: line_a ordered 10 and sections 4 and 6 received 6 then 4.
+  -- A finished order closes with nothing further required.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.transition_purchase_order(po, 'closed');
+  select status into txt from public.purchase_orders where id = po;
+  if txt <> 'closed' then raise exception 'FAIL 14a a completed order would not close'; end if;
+  -- The audit trail is the Administrator's to read, so the assertion drops
+  -- back to the suite owner rather than asking Finance to see it.
+  reset role;
+  select count(*) into n from public.audit_logs
+   where record_id = po and action = 'Purchase Order Closed';
+  if n <> 1 then raise exception 'FAIL 14a a completed close was not audited as one'; end if;
+  raise notice 'PASS  14a an order whose stock all arrived closes, and is audited as closed';
+
+  -- po3 is the opposite case: approved, nothing delivered against it.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.review_vendor(vendor_b, true, 're-checked after the TIN change');
+  perform public.transition_purchase_order(po3, 'approved');
+
+  begin
+    perform public.transition_purchase_order(po3, 'closed');
+    raise exception 'FAIL 14b an order closed with stock still undelivered';
+  exception when check_violation then
+    raise notice 'PASS  14b an order with something still outstanding does not simply close';
+  end;
+
+  -- Short-closing is allowed, but it costs a reason and it is audited under
+  -- its own name, so a closed-short order is never mistaken for a complete one.
+  perform public.transition_purchase_order(po3, 'closed', 'supplier discontinued the line');
+  reset role;
+  select count(*) into n from public.audit_logs
+   where record_id = po3 and action = 'Purchase Order Closed Short';
+  if n <> 1 then raise exception 'FAIL 14c a short close was audited as an ordinary close'; end if;
+  raise notice 'PASS  14c closing short takes a reason, and says so in the audit trail';
+
+  -- And what was already received stays received. Closing the paperwork does
+  -- not reach back into stock that physically arrived.
+  select quantity_on_hand into qty from public.pos_branch_inventory
+   where branch_id = branch_a and product_id = product;
+  if qty is null or qty < 10 then
+    raise exception 'FAIL 14d closing the order disturbed received stock (on hand %)', qty;
+  end if;
+  raise notice 'PASS  14d closing an order leaves stock that already arrived alone';
+
+  -- An order with nothing receivable on it -- services, rent, a licence -- has
+  -- no delivery to wait for, so "everything arrived" is vacuously true and it
+  -- closes without a reason. po2's only line names no POS product, which is
+  -- also why it can never move stock: there is nowhere for it to move to.
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.transition_purchase_order(po2, 'approved');
+  perform public.transition_purchase_order(po2, 'closed');
+  select status into txt from public.purchase_orders where id = po2;
+  if txt <> 'closed' then raise exception 'FAIL 14e a services order would not close'; end if;
+  reset role;
+  select count(*) into n from public.pos_inventory_movements m
+   where m.source_id in (
+     select i.id from public.purchase_order_items i where i.purchase_order_id = po2
+   );
+  if n <> 0 then raise exception 'FAIL 14e a non-stock order moved inventory'; end if;
+  raise notice 'PASS  14e an order with no stock lines closes freely and moves nothing';
+
+  -- ======================================================================
   -- 10. A vendor's details are checked by the database, not just the form
   -- ======================================================================
   perform pg_temp.acts_as(staff); set local role authenticated;
@@ -510,17 +700,22 @@ begin
   end loop;
   raise notice 'PASS  10d an email must be an address, and is stored lowercased and trimmed';
 
-  -- Phone: digits only, refused rather than silently stripped.
+  -- Phone: a Philippine mobile number, exactly. 09 and nine more digits.
+  -- F4.1 accepted any 7-15 digits, which let a landline and a 63-prefixed
+  -- number through; F4.2 narrows it to the one form the business actually
+  -- uses. Nothing is stripped or rewritten -- a wrong number is refused and
+  -- said so, rather than quietly reshaped into a plausible one.
   insert into public.vendors (name, phone) values ('ZZ Phone A ' || tag, '09171234567');
-  insert into public.vendors (name, phone) values ('ZZ Phone B ' || tag, '639171234567');
 
-  foreach txt in array array['+639171234567', '0917-123-4567', '0917 123 4567', 'abc0917', '0917'] loop
+  foreach txt in array array['+639171234567', '639171234567', '0917-123-4567',
+                             '0917 123 4567', 'abc0917', '0917',
+                             '0288887777', '091712345678'] loop
     begin
       insert into public.vendors (name, phone) values ('ZZ Phone Bad ' || tag || txt, txt);
       raise exception 'FAIL 10e "%" was accepted as a phone number', txt;
     exception when check_violation then null; end;
   end loop;
-  raise notice 'PASS  10e a phone number is digits only -- a + or a dash is refused, not stripped';
+  raise notice 'PASS  10e a phone number is 09 followed by nine digits, and nothing else';
 
   -- Contact person: letters and spaces.
   insert into public.vendors (name, contact_person)
