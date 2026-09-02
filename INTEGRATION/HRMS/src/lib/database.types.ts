@@ -3050,6 +3050,64 @@ export type Database = {
           },
         ]
       }
+      procurement_receipts: {
+        Row: {
+          created_at: string
+          delivery_reference: string | null
+          id: string
+          idempotency_key: string
+          inventory_movement_id: string | null
+          purchase_order_item_id: string
+          quantity_received: number
+          received_at: string
+          received_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          delivery_reference?: string | null
+          id?: string
+          idempotency_key: string
+          inventory_movement_id?: string | null
+          purchase_order_item_id: string
+          quantity_received: number
+          received_at?: string
+          received_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          delivery_reference?: string | null
+          id?: string
+          idempotency_key?: string
+          inventory_movement_id?: string | null
+          purchase_order_item_id?: string
+          quantity_received?: number
+          received_at?: string
+          received_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_receipts_inventory_movement_id_fkey"
+            columns: ["inventory_movement_id"]
+            isOneToOne: false
+            referencedRelation: "pos_inventory_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_receipts_purchase_order_item_id_fkey"
+            columns: ["purchase_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_receipts_received_by_fkey"
+            columns: ["received_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           activated_at: string | null
@@ -3109,6 +3167,219 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_order_items: {
+        Row: {
+          created_at: string
+          description: string
+          destination_branch_id: string | null
+          id: string
+          line_total: number | null
+          pos_product_id: string | null
+          purchase_order_id: string
+          quantity_ordered: number
+          unit_cost: number
+          unit_of_measure: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          destination_branch_id?: string | null
+          id?: string
+          line_total?: number | null
+          pos_product_id?: string | null
+          purchase_order_id: string
+          quantity_ordered: number
+          unit_cost: number
+          unit_of_measure?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          destination_branch_id?: string | null
+          id?: string
+          line_total?: number | null
+          pos_product_id?: string | null
+          purchase_order_id?: string
+          quantity_ordered?: number
+          unit_cost?: number
+          unit_of_measure?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_destination_branch_id_fkey"
+            columns: ["destination_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_pos_product_id_fkey"
+            columns: ["pos_product_id"]
+            isOneToOne: false
+            referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_order_sources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          finance_request_id: string | null
+          id: string
+          pos_inventory_request_id: string | null
+          purchase_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          finance_request_id?: string | null
+          id?: string
+          pos_inventory_request_id?: string | null
+          purchase_order_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          finance_request_id?: string | null
+          id?: string
+          pos_inventory_request_id?: string | null
+          purchase_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_sources_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_sources_finance_request_id_fkey"
+            columns: ["finance_request_id"]
+            isOneToOne: false
+            referencedRelation: "finance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_sources_pos_inventory_request_id_fkey"
+            columns: ["pos_inventory_request_id"]
+            isOneToOne: false
+            referencedRelation: "pos_inventory_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_sources_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_sources_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          closed_at: string | null
+          closed_reason: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          expected_delivery_date: string | null
+          id: string
+          notes: string | null
+          order_date: string | null
+          po_number: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string | null
+          po_number?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string | null
+          po_number?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -3405,6 +3676,52 @@ export type Database = {
           },
         ]
       }
+      purchase_order_status: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          created_by: string | null
+          expected_delivery_date: string | null
+          id: string | null
+          line_count: number | null
+          notes: string | null
+          order_date: string | null
+          po_number: string | null
+          quantity_ordered: number | null
+          quantity_outstanding: number | null
+          quantity_received: number | null
+          status: string | null
+          submitted_at: string | null
+          subtotal: number | null
+          updated_at: string | null
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       add_pos_product_to_branch: {
@@ -3453,6 +3770,18 @@ export type Database = {
           p_reference_code: string
         }
         Returns: boolean
+      }
+      apply_pos_receipt: {
+        Args: {
+          _branch_id: string
+          _notes: string
+          _product_id: string
+          _quantity: number
+          _source_id: string
+          _source_type: string
+          _unit_cost: number
+        }
+        Returns: Record<string, unknown>
       }
       apply_position_system_access: {
         Args: { _access: Json; _position_id: string }
@@ -3754,6 +4083,19 @@ export type Database = {
           out_of_stock_count: number
           product_count: number
           sort_order: number
+        }[]
+      }
+      get_branch_deliveries: {
+        Args: { _branch_id: string }
+        Returns: {
+          expected_delivery_date: string
+          po_number: string
+          product_id: string
+          product_name: string
+          purchase_order_item_id: string
+          quantity_ordered: number
+          quantity_outstanding: number
+          quantity_received: number
         }[]
       }
       get_branch_inventory: {
@@ -4370,6 +4712,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      receive_procurement_stock: {
+        Args: {
+          _delivery_reference?: string
+          _idempotency_key?: string
+          _purchase_order_item_id: string
+          _quantity: number
+        }
+        Returns: string
+      }
       recompute_payroll_period_status: {
         Args: { p_period_id: string }
         Returns: undefined
@@ -4479,6 +4830,14 @@ export type Database = {
           _payment_reference?: string
           _remarks?: string
           _request_id: string
+          _to_status: string
+        }
+        Returns: undefined
+      }
+      transition_purchase_order: {
+        Args: {
+          _purchase_order_id: string
+          _remarks?: string
           _to_status: string
         }
         Returns: undefined

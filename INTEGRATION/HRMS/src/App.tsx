@@ -42,6 +42,8 @@ import PosBranchSettingsPage from '@/pages/pos/PosSettingsPage'
 import FinanceHomePage from '@/pages/fms/FinanceHomePage'
 import BudgetsPage from '@/pages/fms/BudgetsPage'
 import FinanceRequestsPage from '@/pages/fms/FinanceRequestsPage'
+import ProcurementPage from '@/pages/fms/ProcurementPage'
+import PosDeliveriesPage from '@/pages/pos/PosDeliveriesPage'
 import MyRequestsPage from '@/pages/employee-portal/MyRequestsPage'
 import VendorsPage from '@/pages/fms/VendorsPage'
 import FinanceCategoriesPage from '@/pages/fms/FinanceCategoriesPage'
@@ -145,6 +147,7 @@ export default function App() {
             >
               <Route index element={<FinanceHomePage />} />
               <Route path="requests" element={<FinanceRequestsPage />} />
+              <Route path="procurement" element={<ProcurementPage />} />
               <Route path="budgets" element={<BudgetsPage />} />
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />
@@ -212,6 +215,17 @@ export default function App() {
                   Manager. Receiving and adjusting stay with an Administrator in
                   this phase, so nothing here creates inventory. */}
               <Route path="stock" element={<PosStockPage />} />
+              {/* Deliveries against approved purchase orders. Manager-gated:
+                  confirming one is what moves stock, and the server refuses
+                  anybody who is not the destination branch's manager. */}
+              <Route
+                path="deliveries"
+                element={
+                  <PosManagerRoute>
+                    <PosDeliveriesPage />
+                  </PosManagerRoute>
+                }
+              />
               {/* The branch's selling catalogue. Manager-gated: the page's data
                   comes from manager-scoped RPCs and the only write it offers is
                   is_available, which a trigger confines to the manager's own

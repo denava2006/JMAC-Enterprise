@@ -1,4 +1,4 @@
-import { Boxes, FileBarChart, LayoutDashboard, Package, Receipt, ReceiptText, ScrollText, ShoppingCart, Tags } from 'lucide-react'
+import { Boxes, FileBarChart, LayoutDashboard, Package, Receipt, ReceiptText, ScrollText, ShoppingCart, Tags, Truck } from 'lucide-react'
 import { NavRow, type NavItem } from '@/components/layout/Sidebar'
 import { JmacWordmark } from '@/components/Brand'
 import { useAuth } from '@/contexts/AuthContext'
@@ -44,6 +44,9 @@ const managerNav: NavItem[] = [
   { label: 'Products', to: '/pos/products', icon: Package },
   { label: 'Categories', to: '/pos/categories', icon: Tags },
   { label: 'Inventory', to: '/pos/stock', icon: Boxes },
+  // Branch-scoped, and the manager's alone: confirming a delivery is what
+  // updates stock, and it belongs to the person who is physically there.
+  { label: 'Deliveries', to: '/pos/deliveries', icon: Truck },
   { label: 'Transactions', to: '/pos/transactions', icon: Receipt },
   { label: 'POS Reports', to: '/pos/reports', icon: FileBarChart },
   { label: 'POS Audit Logs', to: '/pos/audit-logs', icon: ScrollText },

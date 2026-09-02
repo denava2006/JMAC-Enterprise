@@ -27,6 +27,7 @@ import {
   PiggyBank,
   Landmark,
   ReceiptText,
+  PackageCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
@@ -84,6 +85,7 @@ const referenceNav: NavItem[] = [
 const financeNav: NavItem[] = [
   { label: 'Overview', to: '/fms', icon: LayoutDashboard },
   { label: 'Requests', to: '/fms/requests', icon: ReceiptText },
+  { label: 'Procurement', to: '/fms/procurement', icon: PackageCheck },
   { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
   { label: 'Vendors', to: '/fms/vendors', icon: Store },
   { label: 'Categories', to: '/fms/categories', icon: Tags },

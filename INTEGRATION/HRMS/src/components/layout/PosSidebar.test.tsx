@@ -84,7 +84,8 @@ describe('a POS manager', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()
     expect(labels()).toEqual(
-      ['Dashboard', 'POS', 'Products', 'Categories', 'Inventory', 'Transactions', 'POS Reports', 'POS Audit Logs', 'POS Settings']
+      ['Dashboard', 'POS', 'Products', 'Categories', 'Inventory',
+    'Deliveries', 'Transactions', 'POS Reports', 'POS Audit Logs', 'POS Settings']
     )
   })
 
@@ -109,7 +110,7 @@ describe('a POS manager', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()
     expect(screen.queryByRole('link', { name: 'Requests' })).toBeNull()
-    expect(labels()).toHaveLength(9)
+    expect(labels()).toHaveLength(10)
   })
 
   it('mirrors the Administrator POS group, so the two read as one system', () => {
@@ -143,7 +144,8 @@ describe('a POS manager', () => {
     ]
     show()
     expect(labels()).toEqual(
-      ['Dashboard', 'POS', 'Products', 'Categories', 'Inventory', 'Transactions', 'POS Reports', 'POS Audit Logs', 'POS Settings']
+      ['Dashboard', 'POS', 'Products', 'Categories', 'Inventory',
+    'Deliveries', 'Transactions', 'POS Reports', 'POS Audit Logs', 'POS Settings']
     )
   })
 })
