@@ -15,11 +15,12 @@ import {
   type RequestType,
 } from '@/lib/financeRequests'
 import { RequestDetail, StatusBadge } from '@/components/fms/RequestDetail'
-import { useFinanceRequests, type FinanceRequestRow } from '@/hooks/useFinanceRequests'
+import { useFinanceRequests, useRequestParticipants, type FinanceRequestRow } from '@/hooks/useFinanceRequests'
 
 export default function FinanceRequestsPage() {
   const { profile } = useAuth()
   const { data: requests = [], isLoading } = useFinanceRequests()
+  const { data: names } = useRequestParticipants()
   const [openId, setOpenId] = React.useState<string | null>(null)
 
   // The status this role is responsible for clearing. Everything else is
@@ -34,8 +35,11 @@ export default function FinanceRequestsPage() {
   const open = React.useMemo(() => requests.filter((r) => isOpen(r.status as RequestStatus)), [requests])
 
   const shown = scope === 'inbox' ? inbox : scope === 'open' ? open : requests
-  const committed = requests
-    .filter((r) => r.status === 'pending_payment')
+  // F3.1 removed pending_payment: approval reserves, it does not pay. Calling
+  // this "not yet paid" described a settlement step that does not exist, and
+  // read 0.00 for a purchase request that had genuinely reserved its budget.
+  const reserved = requests
+    .filter((r) => r.status === 'approved')
     .reduce((sum, r) => sum + Number(r.amount), 0)
 
   const columns = React.useMemo<ColumnDef<FinanceRequestRow>[]>(
@@ -56,7 +60,7 @@ export default function FinanceRequestsPage() {
         cell: ({ row }) => (
           <div className="min-w-0">
             <p className="truncate text-sm text-foreground">
-              {row.original.profiles?.full_name ?? '—'}
+              {names?.get(row.original.requester_id) ?? '…'}
             </p>
             <p className="text-xs text-muted-foreground">
               {REQUEST_TYPE_LABEL[row.original.type as RequestType]}
@@ -79,10 +83,15 @@ export default function FinanceRequestsPage() {
       {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => <StatusBadge status={row.original.status as RequestStatus} />,
+        cell: ({ row }) => (
+          <StatusBadge
+            status={row.original.status as RequestStatus}
+            type={row.original.type as RequestType}
+          />
+        ),
       },
     ],
-    [],
+    [names],
   )
 
   return (
@@ -101,8 +110,8 @@ export default function FinanceRequestsPage() {
         />
         <StatCard label="Open in total" value={open.length} icon={ListChecks} isLoading={isLoading} />
         <StatCard
-          label="Approved, not yet paid"
-          value={formatMoney(committed)}
+          label="Approved / Reserved"
+          value={formatMoney(reserved)}
           icon={ListChecks}
           isLoading={isLoading}
         />

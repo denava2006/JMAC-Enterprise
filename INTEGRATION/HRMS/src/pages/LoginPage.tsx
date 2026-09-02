@@ -21,7 +21,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
-  const { session, profile, signIn } = useAuth()
+  const { session, profile, signIn, sessionExpired } = useAuth()
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
@@ -92,6 +92,19 @@ export default function LoginPage() {
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{formError}</span>
+                </div>
+              )}
+
+              {/* A session that turned out to be stale was cleared during
+                  start-up. Saying so is the difference between "why am I here
+                  again" and knowing to just sign in. */}
+              {!formError && sessionExpired && (
+                <div
+                  role="status"
+                  className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Your previous session expired. Please sign in again.</span>
                 </div>
               )}
 

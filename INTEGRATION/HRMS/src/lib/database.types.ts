@@ -3595,6 +3595,17 @@ export type Database = {
         }
         Returns: Json
       }
+      finance_request_participants: {
+        Args: never
+        Returns: {
+          display_name: string
+          profile_id: string
+        }[]
+      }
+      finance_request_was_submitted: {
+        Args: { _request_id: string }
+        Returns: boolean
+      }
       generate_application_reference: { Args: never; Returns: string }
       generate_employee_number: { Args: never; Returns: string }
       generate_payslip_number: { Args: never; Returns: string }

@@ -458,6 +458,87 @@ begin
   if num <> 71000 then raise exception 'FAIL 11d reserved reads % after approving a classified request', num; end if;
   raise notice 'PASS  11d a request classified at validation reserves against that budget on approval';
   reset role;
+
+  -- ======================================================================
+  -- 12. Nothing reaches Finance until it is submitted
+  -- ======================================================================
+  -- The New Request dialog says exactly that. It was not true: the read policy
+  -- showed Finance every request including drafts nobody had sent.
+  declare draft_req uuid;
+  begin
+    draft_req := pg_temp.raise_request(worker, 777, null);
+
+    perform pg_temp.acts_as(worker); set local role authenticated;
+    select count(*) into n from public.finance_requests where id = draft_req;
+    if n <> 1 then raise exception 'FAIL 12a a requester cannot see their own draft'; end if;
+    update public.finance_requests set title = 'ZZ still mine' where id = draft_req;
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'FAIL 12a a requester cannot edit their own draft'; end if;
+    raise notice 'PASS  12a a requester reads and edits their own draft';
+    reset role;
+
+    foreach txt in array array['finance_staff', 'finance_manager', 'accountant'] loop
+      perform pg_temp.acts_as(
+        case txt when 'finance_staff' then staff
+                 when 'finance_manager' then manager
+                 else acct end);
+      set local role authenticated;
+      select count(*) into n from public.finance_requests where id = draft_req;
+      if n <> 0 then raise exception 'FAIL 12b % read another employee''s unsubmitted draft', txt; end if;
+      select count(*) into n from public.finance_request_approvals where request_id = draft_req;
+      if n <> 0 then raise exception 'FAIL 12b % read the trail of an unsubmitted draft', txt; end if;
+      reset role;
+    end loop;
+    raise notice 'PASS  12b no finance role can read another employee''s unsubmitted draft';
+
+    -- Submitting hands it over, and it stays handed over for good.
+    perform pg_temp.acts_as(worker); set local role authenticated;
+    perform public.transition_finance_request(draft_req, 'pending_validation');
+    reset role;
+
+    perform pg_temp.acts_as(staff); set local role authenticated;
+    select count(*) into n from public.finance_requests where id = draft_req;
+    if n <> 1 then raise exception 'FAIL 12c Finance cannot see a submitted request'; end if;
+    perform public.transition_finance_request(draft_req, 'returned', 'Needs a quote');
+    select count(*) into n from public.finance_requests where id = draft_req;
+    if n <> 1 then raise exception 'FAIL 12d a returned request vanished from Finance'; end if;
+    raise notice 'PASS  12c-d submitting hands a request to Finance, and returning it does not take it back';
+    reset role;
+
+    -- ====================================================================
+    -- 13. A name, without opening the staff directory
+    -- ====================================================================
+    -- profiles is readable by yourself, by HR and by an Administrator. A
+    -- finance role is none of those, which is why the screen said "Unknown"
+    -- about people it knew. The fix answers one narrow question instead.
+    perform pg_temp.acts_as(staff); set local role authenticated;
+
+    select count(*) into n from public.profiles;
+    if n <> 1 then
+      raise exception 'FAIL 13a Finance can read % profiles directly -- access widened', n;
+    end if;
+    raise notice 'PASS  13a Finance still reads only its own profile row directly';
+
+    select count(*) into n from public.finance_request_participants() where profile_id = worker;
+    if n <> 1 then raise exception 'FAIL 13b the requester''s name is not resolvable'; end if;
+
+    select display_name into txt from public.finance_request_participants() where profile_id = worker;
+    if txt is null or txt = '' then raise exception 'FAIL 13b the requester resolved to an empty name'; end if;
+    raise notice 'PASS  13b Finance can resolve the name of a request participant';
+
+    -- Somebody who appears on no request the caller may read stays invisible.
+    select count(*) into n from public.finance_request_participants() where profile_id = hr;
+    if n <> 0 then raise exception 'FAIL 13c an unrelated person was exposed through participants'; end if;
+    raise notice 'PASS  13c it exposes participants only, not the staff directory';
+    reset role;
+
+    -- And the caller cannot use it to see participants of requests they cannot read.
+    perform pg_temp.acts_as(hr); set local role authenticated;
+    select count(*) into n from public.finance_request_participants();
+    if n <> 0 then raise exception 'FAIL 13d HR resolved % finance participants', n; end if;
+    raise notice 'PASS  13d somebody with no finance access resolves nobody';
+    reset role;
+  end;
 end $$;
 
 rollback;

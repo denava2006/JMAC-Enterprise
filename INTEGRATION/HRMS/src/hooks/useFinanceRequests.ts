@@ -16,15 +16,19 @@ export const REQUEST_KEYS = {
   trail: (id: string) => ['finance', 'requests', id, 'trail'] as const,
 }
 
+// No profiles embed. profiles is selectable by yourself, by HR and by an
+// Administrator -- a finance role is none of those, so the embed came back null
+// and every screen said "Unknown requester" about somebody it knew. Names are
+// resolved through finance_request_participants instead, which answers only
+// "what are these people called" for requests the caller may already read.
 const SELECT =
-  '*, vendors(name), finance_categories(name), budgets(name), finance_accounts(name), profiles!finance_requests_requester_id_fkey(full_name)'
+  '*, vendors(name), finance_categories(name), budgets(name), finance_accounts(name)'
 
 export interface FinanceRequestRow extends FinanceRequest {
   vendors: { name: string } | null
   finance_categories: { name: string } | null
   budgets: { name: string } | null
   finance_accounts: { name: string } | null
-  profiles: { full_name: string | null } | null
 }
 
 /** Everything the signed-in person is allowed to see. RLS decides whether that
@@ -67,11 +71,34 @@ export function useRequestTrail(id: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('finance_request_approvals')
-        .select('*, profiles(full_name)')
+        .select('*')
         .eq('request_id', id!)
         .order('created_at')
       if (error) throw error
-      return data as unknown as (RequestApproval & { profiles: { full_name: string | null } | null })[]
+      return data as RequestApproval[]
+    },
+  })
+}
+
+/**
+ * Names for the people on the requests this account can see.
+ *
+ * A narrow RPC rather than a profiles read: it returns profile_id and
+ * display_name and nothing else, for participants of requests the caller is
+ * already allowed to read. Finance gets a name to show without being handed the
+ * staff directory.
+ */
+export function useRequestParticipants() {
+  return useQuery({
+    queryKey: ['finance', 'request-participants'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('finance_request_participants')
+      if (error) throw error
+      const names = new Map<string, string>()
+      for (const row of data ?? []) {
+        if (row.profile_id) names.set(row.profile_id, row.display_name ?? 'Unknown')
+      }
+      return names
     },
   })
 }
@@ -87,6 +114,7 @@ function useRequestMutation<TInput>(
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.all })
       queryClient.invalidateQueries({ queryKey: ['finance', 'budgets'] })
+      queryClient.invalidateQueries({ queryKey: ['finance', 'request-participants'] })
       for (const key of extraKeys) queryClient.invalidateQueries({ queryKey: key })
       toast.success(success)
     },
@@ -98,7 +126,67 @@ export function useCreateFinanceRequest() {
   return useRequestMutation<TablesInsert<'finance_requests'>>(async (values) => {
     const { error } = await supabase.from('finance_requests').insert(values)
     if (error) throw error
-  }, 'Request saved as a draft.')
+  }, "Draft saved. Submit it when you're ready to send it to Finance.")
+}
+
+/**
+ * Write it and send it, in that order.
+ *
+ * Filling in a request form usually means intending to send it, and the old
+ * flow made that four steps: save, close, find it again, open it, submit. This
+ * is one button.
+ *
+ * It is still two operations, because it has to be: the browser must not insert
+ * a request already in pending_validation. Status belongs to
+ * transition_finance_request, which decides whether this person may make this
+ * move -- letting the client choose the starting status would hand it the one
+ * thing the whole chain exists to keep.
+ *
+ * So a failure between the two leaves a draft, and says so. Retrying from My
+ * Requests submits THAT draft rather than writing a second one; there is no
+ * path here that creates two requests from one intention.
+ */
+export function useCreateAndSubmitRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (values: TablesInsert<'finance_requests'>) => {
+      const { data, error } = await supabase
+        .from('finance_requests')
+        .insert(values)
+        .select('id')
+        .single()
+      if (error) throw error
+
+      const { error: submitError } = await supabase.rpc('transition_finance_request', {
+        _request_id: data.id,
+        _to_status: 'pending_validation',
+      })
+      if (submitError) {
+        // The draft exists and is the requester's to submit. Saying it was
+        // saved is the difference between "try again" and "type it all again".
+        throw new DraftSavedButNotSubmitted()
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: ['finance', 'request-participants'] })
+      toast.success('Request submitted to Finance.')
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof DraftSavedButNotSubmitted
+          ? 'Your request was saved as a draft but could not be submitted. Open it from My Requests and try again.'
+          : describeFinanceError(error),
+      )
+    },
+  })
+}
+
+export class DraftSavedButNotSubmitted extends Error {
+  constructor() {
+    super('draft saved, submission failed')
+    this.name = 'DraftSavedButNotSubmitted'
+  }
 }
 
 /**
@@ -150,6 +238,7 @@ export function useTransitionRequest() {
       queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.one(input.requestId) })
       queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.trail(input.requestId) })
       queryClient.invalidateQueries({ queryKey: ['finance', 'budgets'] })
+      queryClient.invalidateQueries({ queryKey: ['finance', 'request-participants'] })
       toast.success(TRANSITION_TOAST[input.to] ?? 'Request updated.')
     },
     onError: (error) => toast.error(describeFinanceError(error)),

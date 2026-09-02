@@ -32,6 +32,7 @@ import {
 } from '@/lib/financeRequests'
 import {
   useFinanceRequest,
+  useRequestParticipants,
   useRequestTrail,
   useTransitionRequest,
   useUpdateFinanceRequest,
@@ -102,7 +103,9 @@ function ClassificationPanel({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="classify-budget">Budget</Label>
+          <Label htmlFor="classify-budget">
+            Budget <span className="text-destructive">*</span>
+          </Label>
           <Select value={budgetId} onValueChange={setBudgetId}>
             <SelectTrigger id="classify-budget">
               <SelectValue placeholder="No budget" />
@@ -181,6 +184,68 @@ function ClassificationPanel({
   )
 }
 
+/** Where a request has got to, and who owns it now.
+ *
+ * Four stages rather than eight statuses: the statuses are what the database
+ * enforces, this is what a person needs to know. A returned, rejected or
+ * cancelled request says so instead, because it is not progressing. */
+function RequestStages({ status, type }: { status: RequestStatus; type: RequestType }) {
+  const stages = [
+    'Submitted',
+    'Finance validation',
+    'Manager approval',
+    type === 'reimbursement' ? 'Payment' : 'Procurement',
+  ]
+
+  const reached: Record<string, number> = {
+    draft: 0,
+    pending_validation: 1,
+    pending_approval: 2,
+    approved: 3,
+    completed: 4,
+  }
+
+  if (status === 'returned' || status === 'rejected' || status === 'cancelled') {
+    return (
+      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        {status === 'returned'
+          ? 'Sent back to the requester. It returns to Finance when they resubmit it.'
+          : status === 'rejected'
+            ? 'Refused. Nothing is reserved against the budget.'
+            : 'Withdrawn by the requester before Finance acted on it.'}
+      </div>
+    )
+  }
+
+  const current = reached[status] ?? 0
+
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs" aria-label="Progress">
+      {stages.map((stage, i) => {
+        const done = i < current
+        const active = i === current
+        return (
+          <li key={stage} className="flex items-center gap-1.5">
+            <span
+              className={
+                done
+                  ? 'rounded-full bg-accent/15 px-2 py-0.5 font-medium text-accent'
+                  : active
+                    ? 'rounded-full bg-accent px-2 py-0.5 font-medium text-accent-foreground'
+                    : 'rounded-full bg-muted px-2 py-0.5 text-muted-foreground'
+              }
+              aria-current={active ? 'step' : undefined}
+            >
+              {stage}
+            </span>
+            {i < stages.length - 1 && <span className="text-muted-foreground/60">→</span>}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
@@ -207,6 +272,7 @@ export function RequestDetail({
   const { profile } = useAuth()
   const { data: request, isLoading } = useFinanceRequest(requestId ?? undefined)
   const { data: trail = [] } = useRequestTrail(requestId ?? undefined)
+  const { data: names } = useRequestParticipants()
   const transition = useTransitionRequest()
 
   const [pending, setPending] = React.useState<RequestAction | null>(null)
@@ -226,6 +292,15 @@ export function RequestDetail({
         profile?.id,
       )
     : []
+
+  // A purchase charged to no budget reserves nothing on approval, so the
+  // ceiling it is supposed to be drawn against never sees it. Better to say so
+  // at validation, where it can still be fixed, than to let it through silently.
+  const needsBudget =
+    !!request &&
+    request.status === 'pending_validation' &&
+    request.type === 'purchase' &&
+    !request.budget_id
 
   async function run(action: RequestAction) {
     if (!request) return
@@ -261,11 +336,16 @@ export function RequestDetail({
               </DialogTitle>
               <DialogDescription>
                 {REQUEST_TYPE_LABEL[request.type as RequestType]} ·{' '}
-                {request.profiles?.full_name ?? 'Unknown requester'}
+                {names?.get(request.requester_id) ?? '…'}
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
+              <RequestStages
+                status={request.status as RequestStatus}
+                type={request.type as RequestType}
+              />
+
               <div>
                 <p className="font-medium text-foreground">{request.title}</p>
                 {request.description && (
@@ -298,12 +378,16 @@ export function RequestDetail({
 
               {request.status === 'approved' && (
                 <Card>
-                  <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">
-                      Approved and reserved against the budget.{' '}
+                  <CardContent className="flex flex-col gap-1 py-3">
+                    <p className="text-sm font-medium text-foreground">
                       {request.type === 'reimbursement'
-                        ? 'Payment is settled in a later phase — approval is authorization to pay, not a payment.'
-                        : 'Procurement happens in a later phase — approval is authorization to buy, not a purchase.'}
+                        ? 'Approved — awaiting payment'
+                        : 'Approved — awaiting procurement'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {request.type === 'reimbursement'
+                        ? 'Finance approved this reimbursement and reserved its budget. Payment is the next step.'
+                        : 'Finance approved this request and reserved its budget. Procurement is the next step.'}
                     </p>
                   </CardContent>
                 </Card>
@@ -325,7 +409,7 @@ export function RequestDetail({
                             {APPROVAL_ACTION_LABEL[entry.action] ?? entry.action}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {entry.profiles?.full_name ?? 'Unknown'}
+                            {(entry.actor_id && names?.get(entry.actor_id)) ?? '…'}
                             {entry.remarks ? ` — ${entry.remarks}` : ''}
                           </p>
                         </div>
@@ -360,6 +444,12 @@ export function RequestDetail({
                     </div>
                   )}
 
+                  {needsBudget && !pending && (
+                    <p className="text-xs text-warning">
+                      Assign a budget before validating this request.
+                    </p>
+                  )}
+
                   <div className="flex flex-wrap justify-end gap-2">
                     {pending ? (
                       <>
@@ -375,22 +465,29 @@ export function RequestDetail({
                         </Button>
                       </>
                     ) : (
-                      actions.map((action) => (
-                        <Button
-                          key={action.to + action.label}
-                          variant={
-                            action.tone === 'primary'
-                              ? 'default'
-                              : action.tone === 'destructive'
-                                ? 'destructive'
-                                : 'outline'
-                          }
-                          disabled={transition.isPending}
-                          onClick={() => (action.requiresRemarks ? setPending(action) : run(action))}
-                        >
-                          {action.label}
-                        </Button>
-                      ))
+                      actions.map((action) => {
+                        // Only the forward move is blocked. Returning or
+                        // rejecting an unclassified request is exactly what
+                        // somebody should be able to do with one.
+                        const blocked = needsBudget && action.tone === 'primary'
+                        return (
+                          <Button
+                            key={action.to + action.label}
+                            variant={
+                              action.tone === 'primary'
+                                ? 'default'
+                                : action.tone === 'destructive'
+                                  ? 'destructive'
+                                  : 'outline'
+                            }
+                            disabled={transition.isPending || blocked}
+                            title={blocked ? 'Assign a budget before validating this request.' : undefined}
+                            onClick={() => (action.requiresRemarks ? setPending(action) : run(action))}
+                          >
+                            {action.label}
+                          </Button>
+                        )
+                      })
                     )}
                   </div>
                 </div>

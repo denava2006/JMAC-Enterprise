@@ -36,7 +36,12 @@ import {
   type RequestType,
 } from '@/lib/financeRequests'
 import { RequestDetail, StatusBadge } from '@/components/fms/RequestDetail'
-import { useCreateFinanceRequest, useFinanceRequests, type FinanceRequestRow } from '@/hooks/useFinanceRequests'
+import {
+  useCreateAndSubmitRequest,
+  useCreateFinanceRequest,
+  useFinanceRequests,
+  type FinanceRequestRow,
+} from '@/hooks/useFinanceRequests'
 
 const schema = z
   .object({
@@ -63,7 +68,8 @@ function NewRequestDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const { profile } = useAuth()
-  const create = useCreateFinanceRequest()
+  const saveDraft = useCreateFinanceRequest()
+  const submitNow = useCreateAndSubmitRequest()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -81,10 +87,11 @@ function NewRequestDialog({
 
   const type = form.watch('type')
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    if (!profile?.id) return
-    await create.mutateAsync({
-      requester_id: profile.id,
+  const labels = { title: 'What this is for', expense_date: 'Date spent', needed_by: 'Needed by' }
+
+  function toRow(values: FormValues) {
+    return {
+      requester_id: profile!.id,
       type: values.type,
       title: values.title.trim(),
       description: values.description?.trim() || null,
@@ -93,10 +100,27 @@ function NewRequestDialog({
       needed_by: values.needed_by || null,
       expense_date: values.type === 'reimbursement' ? values.expense_date || null : null,
       priority: values.priority,
-    })
+    }
+  }
+
+  // Filling in this form usually means intending to send it. Saving a draft is
+  // the deliberate other choice, so both are offered and neither is hidden
+  // behind the other.
+  const onSaveDraft = form.handleSubmit(async (values) => {
+    if (!profile?.id) return
+    await saveDraft.mutateAsync(toRow(values))
     form.reset()
     onOpenChange(false)
-  }, reportInvalid({ title: 'What this is for', expense_date: 'Date spent', needed_by: 'Needed by' }))
+  }, reportInvalid(labels))
+
+  const onSubmitNow = form.handleSubmit(async (values) => {
+    if (!profile?.id) return
+    await submitNow.mutateAsync(toRow(values))
+    form.reset()
+    onOpenChange(false)
+  }, reportInvalid(labels))
+
+  const busy = saveDraft.isPending || submitNow.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,12 +128,12 @@ function NewRequestDialog({
         <DialogHeader>
           <DialogTitle>New request</DialogTitle>
           <DialogDescription>
-            Saved as a draft. Nothing reaches Finance until you submit it, and you can still change
-            it after it comes back to you.
+            Send this request to Finance now, or save it as a draft to finish later. Nothing reaches
+            Finance until you submit it, and you can still change it if it comes back to you.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <form onSubmit={onSubmitNow} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="request-type">Type</Label>
@@ -192,11 +216,14 @@ function NewRequestDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? 'Saving…' : 'Save draft'}
+            <Button type="button" variant="outline" onClick={onSaveDraft} disabled={busy}>
+              {saveDraft.isPending ? 'Saving…' : 'Save as Draft'}
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {submitNow.isPending ? 'Submitting…' : 'Submit Request'}
             </Button>
           </DialogFooter>
         </form>

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/lib/database.types'
+import { classifyAuthError, messageFor } from '@/lib/authErrors'
 import { NO_POS_ACCESS, type PosAccess } from '@/lib/portals'
 import type { PosRole } from '@/lib/enums'
 
@@ -17,6 +18,9 @@ interface AuthContextValue {
   /** True while the initial session is being restored on page load. */
   initializing: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  /** Set when a restored session turned out to be stale and was cleared. The
+   *  login page says so, so nobody is left wondering why they are back here. */
+  sessionExpired: boolean
   signOut: () => Promise<void>
   /** Re-read the profile for the current session.
    *
@@ -81,24 +85,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = React.useState<Profile | null>(null)
   const [posAccess, setPosAccess] = React.useState<PosAccess>(NO_POS_ACCESS)
   const [initializing, setInitializing] = React.useState(true)
+  const [sessionExpired, setSessionExpired] = React.useState(false)
 
   React.useEffect(() => {
     let isMounted = true
 
-    supabase.auth.getSession().then(async ({ data }) => {
+    /**
+     * getSession reads what is in local storage; it does not ask whether that
+     * is still true. A session whose refresh token has been revoked restores
+     * happily and then fails on the first real request -- which is what left
+     * accounts stuck, and why refreshing a few times eventually "worked": each
+     * reload was another chance for the token to be refreshed or discarded.
+     *
+     * getUser asks the server. If it says no, the stored session is cleared
+     * through the SDK and the person is shown the login page with a reason,
+     * rather than being left to discover it.
+     */
+    const bootstrap = async () => {
+      const { data } = await supabase.auth.getSession()
       if (!isMounted) return
-      setSession(data.session)
-      if (data.session) {
-        const [nextProfile, nextPosAccess] = await Promise.all([
-          fetchProfile(data.session.user.id),
-          fetchPosAccess(),
-        ])
-        if (!isMounted) return
-        setProfile(nextProfile)
-        setPosAccess(nextPosAccess)
+
+      if (!data.session) {
+        setInitializing(false)
+        return
       }
+
+      const { data: verified, error } = await supabase.auth.getUser()
+      if (!isMounted) return
+
+      if (error || !verified?.user) {
+        await supabase.auth.signOut()
+        if (!isMounted) return
+        setSession(null)
+        setProfile(null)
+        setPosAccess(NO_POS_ACCESS)
+        setSessionExpired(true)
+        setInitializing(false)
+        return
+      }
+
+      setSession(data.session)
+      const [nextProfile, nextPosAccess] = await Promise.all([
+        fetchProfile(data.session.user.id),
+        fetchPosAccess(),
+      ])
+      if (!isMounted) return
+      setProfile(nextProfile)
+      setPosAccess(nextPosAccess)
       setInitializing(false)
-    })
+    }
+
+    void bootstrap()
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       if (!isMounted) return
@@ -135,23 +172,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signIn = React.useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      // Reporting every failure as "wrong password" sends people hunting for
-      // a typo when the real problem is that the backend isn't reachable --
-      // the Supabase stack isn't running, or VITE_SUPABASE_URL points
-      // somewhere dead. Those need very different fixes, so they say so.
-      const status = (error as { status?: number }).status
-      const isUnreachable =
-        status === undefined || status === 0 || status >= 500 || /fetch|network/i.test(error.message)
+    setSessionExpired(false)
 
-      if (isUnreachable) {
-        return {
-          error:
-            'Can\u2019t reach the server. Check that Supabase is running (supabase start) and that VITE_SUPABASE_URL is correct.',
-        }
+    // One attempt, and one retry only for a fault that a retry can actually
+    // fix. Retrying a rejected password just rejects it again; retrying a rate
+    // limit makes it worse; retrying a deactivated account is pointless. The
+    // classifier decides, so the rule lives in one place and is testable.
+    let attempt = await supabase.auth.signInWithPassword({ email, password })
+
+    if (attempt.error) {
+      const classified = classifyAuthError(attempt.error)
+      console.error('Sign-in failed:', classified.failure, attempt.error.message)
+
+      if (classified.retryable) {
+        attempt = await supabase.auth.signInWithPassword({ email, password })
       }
-      return { error: 'That email and password combination doesn\u2019t match our records.' }
+
+      if (attempt.error) {
+        return { error: classifyAuthError(attempt.error).message }
+      }
+    }
+
+    const { data } = attempt
+    if (!data.user) {
+      return { error: messageFor('unknown') }
     }
 
     const activeProfile = await fetchProfile(data.user.id)
@@ -160,7 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // valid credentials (mirrors Admin's "Deactivate HR Account" action).
     if (!activeProfile || activeProfile.status !== 'active') {
       await supabase.auth.signOut()
-      return { error: 'This account has been deactivated. Contact your administrator.' }
+      return { error: messageFor('deactivated') }
     }
 
     void supabase
@@ -189,8 +233,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient])
 
   const value = React.useMemo(
-    () => ({ session, profile, posAccess, initializing, signIn, signOut, refreshProfile }),
-    [session, profile, posAccess, initializing, signIn, signOut, refreshProfile]
+    () => ({ session, profile, posAccess, initializing, signIn, signOut, refreshProfile, sessionExpired }),
+    [session, profile, posAccess, initializing, signIn, signOut, refreshProfile, sessionExpired]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
