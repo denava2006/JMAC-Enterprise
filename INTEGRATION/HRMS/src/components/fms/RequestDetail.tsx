@@ -2,7 +2,6 @@ import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -12,21 +11,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import {
   APPROVAL_ACTION_LABEL,
   REQUEST_TYPE_LABEL,
-  STATUS_LABEL,
   STATUS_TONE,
   actionsFor,
+  statusLabel,
   type RequestAction,
   type RequestStatus,
   type RequestType,
@@ -36,13 +28,20 @@ import {
   useRequestTrail,
   useTransitionRequest,
 } from '@/hooks/useFinanceRequests'
-import { useFinanceAccounts } from '@/hooks/useFinanceMasterData'
 
-export function StatusBadge({ status }: { status: RequestStatus }) {
+export function StatusBadge({
+  status,
+  type = 'purchase',
+}: {
+  status: RequestStatus
+  /** Approved means "awaiting procurement" for a purchase and "awaiting
+   *  payment" for a reimbursement. Neither has happened. */
+  type?: RequestType
+}) {
   const tone = STATUS_TONE[status]
   return (
     <Badge variant={tone === 'good' ? 'default' : tone === 'bad' ? 'destructive' : 'secondary'}>
-      {STATUS_LABEL[status]}
+      {statusLabel(status, type)}
     </Badge>
   )
 }
@@ -73,20 +72,15 @@ export function RequestDetail({
   const { profile } = useAuth()
   const { data: request, isLoading } = useFinanceRequest(requestId ?? undefined)
   const { data: trail = [] } = useRequestTrail(requestId ?? undefined)
-  const { data: accounts = [] } = useFinanceAccounts()
   const transition = useTransitionRequest()
 
   const [pending, setPending] = React.useState<RequestAction | null>(null)
   const [remarks, setRemarks] = React.useState('')
-  const [accountId, setAccountId] = React.useState('')
-  const [reference, setReference] = React.useState('')
 
   React.useEffect(() => {
     if (!requestId) {
       setPending(null)
       setRemarks('')
-      setAccountId('')
-      setReference('')
     }
   }, [requestId])
 
@@ -98,19 +92,14 @@ export function RequestDetail({
       )
     : []
 
-  const openAccounts = accounts.filter((a) => a.is_active)
-
   async function run(action: RequestAction) {
     if (!request) return
     if (action.requiresRemarks && !remarks.trim()) return
-    if (action.requiresPayment && !accountId) return
 
     await transition.mutateAsync({
       requestId: request.id,
       to: action.to,
       remarks: remarks.trim() || null,
-      paidFromAccountId: action.requiresPayment ? accountId : null,
-      paymentReference: action.requiresPayment ? reference.trim() || null : null,
     })
     setPending(null)
     setRemarks('')
@@ -130,7 +119,10 @@ export function RequestDetail({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 {request.request_no}
-                <StatusBadge status={request.status as RequestStatus} />
+                <StatusBadge
+                  status={request.status as RequestStatus}
+                  type={request.type as RequestType}
+                />
               </DialogTitle>
               <DialogDescription>
                 {REQUEST_TYPE_LABEL[request.type as RequestType]} ·{' '}
@@ -169,15 +161,15 @@ export function RequestDetail({
                 </div>
               )}
 
-              {request.status === 'completed' && (
+              {request.status === 'approved' && (
                 <Card>
-                  <CardContent className="grid grid-cols-2 gap-3 py-3 sm:grid-cols-3">
-                    <Field label="Paid from" value={request.finance_accounts?.name} />
-                    <Field label="Reference" value={request.payment_reference} />
-                    <Field
-                      label="Paid on"
-                      value={request.paid_at ? new Date(request.paid_at).toLocaleDateString() : null}
-                    />
+                  <CardContent className="py-3">
+                    <p className="text-xs text-muted-foreground">
+                      Approved and reserved against the budget.{' '}
+                      {request.type === 'reimbursement'
+                        ? 'Payment is settled in a later phase — approval is authorization to pay, not a payment.'
+                        : 'Procurement happens in a later phase — approval is authorization to buy, not a purchase.'}
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -229,35 +221,6 @@ export function RequestDetail({
                     </div>
                   )}
 
-                  {pending?.requiresPayment && (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="request-account">Paid from</Label>
-                        <Select value={accountId} onValueChange={setAccountId}>
-                          <SelectTrigger id="request-account">
-                            <SelectValue placeholder="Select an account" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {openAccounts.map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="request-reference">Reference</Label>
-                        <Input
-                          id="request-reference"
-                          value={reference}
-                          onChange={(e) => setReference(e.target.value)}
-                          placeholder="OR / cheque no."
-                        />
-                      </div>
-                    </div>
-                  )}
-
                   <div className="flex flex-wrap justify-end gap-2">
                     {pending ? (
                       <>
@@ -266,11 +229,7 @@ export function RequestDetail({
                         </Button>
                         <Button
                           variant={pending.tone === 'destructive' ? 'destructive' : 'default'}
-                          disabled={
-                            transition.isPending ||
-                            (pending.requiresRemarks && !remarks.trim()) ||
-                            (pending.requiresPayment && !accountId)
-                          }
+                          disabled={transition.isPending || (pending.requiresRemarks && !remarks.trim())}
                           onClick={() => run(pending)}
                         >
                           {transition.isPending ? 'Working…' : `Confirm — ${pending.label}`}
@@ -288,11 +247,7 @@ export function RequestDetail({
                                 : 'outline'
                           }
                           disabled={transition.isPending}
-                          onClick={() =>
-                            action.requiresRemarks || action.requiresPayment
-                              ? setPending(action)
-                              : run(action)
-                          }
+                          onClick={() => (action.requiresRemarks ? setPending(action) : run(action))}
                         >
                           {action.label}
                         </Button>

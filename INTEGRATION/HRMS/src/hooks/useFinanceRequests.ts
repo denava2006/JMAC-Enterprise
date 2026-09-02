@@ -130,8 +130,6 @@ export interface TransitionInput {
   requestId: string
   to: RequestStatus
   remarks?: string | null
-  paidFromAccountId?: string | null
-  paymentReference?: string | null
 }
 
 /** The one door. Every move goes through the database's transition function,
@@ -144,8 +142,6 @@ export function useTransitionRequest() {
         _request_id: input.requestId,
         _to_status: input.to,
         _remarks: input.remarks ?? undefined,
-        _paid_from_account_id: input.paidFromAccountId ?? undefined,
-        _payment_reference: input.paymentReference ?? undefined,
       })
       if (error) throw error
     },
@@ -163,8 +159,7 @@ export function useTransitionRequest() {
 const TRANSITION_TOAST: Partial<Record<RequestStatus, string>> = {
   pending_validation: 'Submitted to Finance.',
   pending_approval: 'Validated and sent to the Finance Manager.',
-  pending_payment: 'Approved. The amount is now reserved against the budget.',
-  completed: 'Payment recorded.',
+  approved: 'Approved. The amount is now reserved against the budget.',
   returned: 'Returned for revision.',
   rejected: 'Request rejected.',
   cancelled: 'Request cancelled.',
