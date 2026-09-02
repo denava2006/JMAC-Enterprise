@@ -33,6 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { financeCan } from '@/lib/financeAuthority'
 import {
@@ -84,7 +85,7 @@ function CategoryDialog({
       },
     })
     onOpenChange(false)
-  })
+  }, reportInvalid({ kind: 'Side' }))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

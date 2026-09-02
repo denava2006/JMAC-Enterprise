@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { canEditAllocation, financeCan } from '@/lib/financeAuthority'
 import { formatMoney } from '@/lib/currency'
@@ -124,7 +125,7 @@ function BudgetDialog({
       },
     })
     onOpenChange(false)
-  })
+  }, reportInvalid({ amount: 'Approved ceiling', fiscal_year: 'Fiscal year' }))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -338,7 +339,7 @@ function AllocationsDialog({
     })
     setEditingId(null)
     form.reset({ amount: 0, allocated_to: '', reference: '', note: '' })
-  })
+  }, reportInvalid({ allocated_to: 'Allocated to' }))
 
   return (
     <Dialog open={!!budget} onOpenChange={onOpenChange}>

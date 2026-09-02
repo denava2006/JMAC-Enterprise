@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import {
@@ -95,7 +96,7 @@ function NewRequestDialog({
     })
     form.reset()
     onOpenChange(false)
-  })
+  }, reportInvalid({ title: 'What this is for', expense_date: 'Date spent', needed_by: 'Needed by' }))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

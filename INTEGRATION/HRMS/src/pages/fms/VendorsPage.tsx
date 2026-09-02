@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { financeCan } from '@/lib/financeAuthority'
 import {
@@ -106,7 +107,7 @@ function VendorDialog({
       categoryIds: selected,
     })
     onOpenChange(false)
-  })
+  }, reportInvalid({ contact_person: 'Contact person', tin: 'TIN' }))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

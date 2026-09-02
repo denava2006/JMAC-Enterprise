@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { financeCan } from '@/lib/financeAuthority'
 import { formatMoney } from '@/lib/currency'
@@ -149,7 +150,7 @@ function AccountDialog({
       },
     })
     onOpenChange(false)
-  })
+  }, reportInvalid({ opening_balance_as_of: 'Opening balance date', account_subtype: 'Kind' }))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
