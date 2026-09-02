@@ -5,6 +5,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -27,7 +34,9 @@ import {
   useFinanceRequest,
   useRequestTrail,
   useTransitionRequest,
+  useUpdateFinanceRequest,
 } from '@/hooks/useFinanceRequests'
+import { useBudgets, useFinanceCategories, useVendors } from '@/hooks/useFinanceMasterData'
 
 export function StatusBadge({
   status,
@@ -43,6 +52,132 @@ export function StatusBadge({
     <Badge variant={tone === 'good' ? 'default' : tone === 'bad' ? 'destructive' : 'secondary'}>
       {statusLabel(status, type)}
     </Badge>
+  )
+}
+
+const UNSET = '__unset__'
+
+/**
+ * Which budget line a request is charged to.
+ *
+ * The requester cannot choose this: budgets, categories and vendors are Finance
+ * master data and they cannot read any of it. Deciding it is what "Finance Staff
+ * check the documents and the budget" means, so it belongs to validation — and
+ * after validation it is fixed, because what was approved was approved against a
+ * particular line.
+ */
+function ClassificationPanel({
+  request,
+}: {
+  request: { id: string; budget_id: string | null; finance_category_id: string | null; vendor_id: string | null }
+}) {
+  const { data: budgets = [] } = useBudgets()
+  const { data: categories = [] } = useFinanceCategories()
+  const { data: vendors = [] } = useVendors()
+  const update = useUpdateFinanceRequest()
+
+  const [budgetId, setBudgetId] = React.useState(request.budget_id ?? UNSET)
+  const [categoryId, setCategoryId] = React.useState(request.finance_category_id ?? UNSET)
+  const [vendorId, setVendorId] = React.useState(request.vendor_id ?? UNSET)
+
+  React.useEffect(() => {
+    setBudgetId(request.budget_id ?? UNSET)
+    setCategoryId(request.finance_category_id ?? UNSET)
+    setVendorId(request.vendor_id ?? UNSET)
+  }, [request.id, request.budget_id, request.finance_category_id, request.vendor_id])
+
+  const dirty =
+    budgetId !== (request.budget_id ?? UNSET) ||
+    categoryId !== (request.finance_category_id ?? UNSET) ||
+    vendorId !== (request.vendor_id ?? UNSET)
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+      <div>
+        <p className="text-sm font-semibold text-foreground">Classification</p>
+        <p className="text-xs text-muted-foreground">
+          Charge this to a budget before validating it. After validation these are fixed.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="classify-budget">Budget</Label>
+          <Select value={budgetId} onValueChange={setBudgetId}>
+            <SelectTrigger id="classify-budget">
+              <SelectValue placeholder="No budget" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNSET}>No budget</SelectItem>
+              {budgets
+                .filter((b) => b.status === 'active' && b.id)
+                .map((b) => (
+                  <SelectItem key={b.id!} value={b.id!}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="classify-category">Category</Label>
+          <Select value={categoryId} onValueChange={setCategoryId}>
+            <SelectTrigger id="classify-category">
+              <SelectValue placeholder="None" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNSET}>None</SelectItem>
+              {categories
+                .filter((c) => c.kind === 'expense' && c.is_active)
+                .map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="classify-vendor">Vendor</Label>
+          <Select value={vendorId} onValueChange={setVendorId}>
+            <SelectTrigger id="classify-vendor">
+              <SelectValue placeholder="None" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNSET}>None</SelectItem>
+              {vendors
+                .filter((v) => v.is_active)
+                .map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          disabled={!dirty || update.isPending}
+          onClick={() =>
+            update.mutate({
+              id: request.id,
+              values: {
+                budget_id: budgetId === UNSET ? null : budgetId,
+                finance_category_id: categoryId === UNSET ? null : categoryId,
+                vendor_id: vendorId === UNSET ? null : vendorId,
+              },
+            })
+          }
+        >
+          {update.isPending ? 'Saving…' : 'Save classification'}
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -202,6 +337,10 @@ export function RequestDetail({
                   )}
                 </div>
               </div>
+
+              {profile?.role === 'finance_staff' &&
+                request.status === 'pending_validation' &&
+                request.requester_id !== profile?.id && <ClassificationPanel request={request} />}
 
               {/* What this person may do next. */}
               {actions.length > 0 && (

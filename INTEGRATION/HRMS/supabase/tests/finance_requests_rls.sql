@@ -73,7 +73,7 @@ $$;
 do $$
 declare
   admin_id uuid; staff uuid; manager uuid; acct uuid; worker uuid; hr uuid;
-  cat_id uuid; budget_id uuid; account_id uuid;
+  cat_id uuid; budget_id_v uuid; account_id uuid;
   req uuid; n integer; txt text; num numeric;
   tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
@@ -90,7 +90,7 @@ begin
   perform pg_temp.acts_as(manager); set local role authenticated;
   select id into cat_id from public.finance_categories where kind='expense' and is_active limit 1;
   insert into public.budgets (name, finance_category_id, amount, status, fiscal_year)
-  values ('ZZ Request Budget ' || tag, cat_id, 100000, 'active', 2026) returning id into budget_id;
+  values ('ZZ Request Budget ' || tag, cat_id, 100000, 'active', 2026) returning id into budget_id_v;
   reset role;
 
   perform pg_temp.acts_as(acct); set local role authenticated;
@@ -101,7 +101,7 @@ begin
   -- ======================================================================
   -- 1. An employee asks
   -- ======================================================================
-  req := pg_temp.raise_request(worker, 20000, budget_id);
+  req := pg_temp.raise_request(worker, 20000, budget_id_v);
 
   perform pg_temp.acts_as(worker); set local role authenticated;
   select request_no, status into txt, txt from public.finance_requests where id = req;
@@ -208,11 +208,11 @@ begin
   perform pg_temp.acts_as(manager); set local role authenticated;
   perform public.transition_finance_request(req, 'approved', 'Approved');
 
-  select reserved into num from public.budget_status where id = budget_id;
+  select reserved into num from public.budget_status where id = budget_id_v;
   if num <> 20000 then raise exception 'FAIL 4a reserved reads %, expected 20000', num; end if;
-  select spent into num from public.budget_status where id = budget_id;
+  select spent into num from public.budget_status where id = budget_id_v;
   if num <> 0 then raise exception 'FAIL 4b spent reads %, expected 0 -- nothing can settle yet', num; end if;
-  select remaining into num from public.budget_status where id = budget_id;
+  select remaining into num from public.budget_status where id = budget_id_v;
   if num <> 80000 then raise exception 'FAIL 4c remaining reads %, expected 80000', num; end if;
   raise notice 'PASS  4a-c approval reserves the amount; spent stays 0 because nothing can settle it';
 
@@ -224,9 +224,9 @@ begin
   exception when insufficient_privilege then
     null;
   end;
-  select reserved into num from public.budget_status where id = budget_id;
+  select reserved into num from public.budget_status where id = budget_id_v;
   if num <> 20000 then raise exception 'FAIL 4d a retry moved reserved to %', num; end if;
-  select reserved into num from public.budget_status where id = budget_id;
+  select reserved into num from public.budget_status where id = budget_id_v;
   if num <> 20000 then raise exception 'FAIL 4e re-reading changed reserved to %', num; end if;
   raise notice 'PASS  4d-e approving twice is refused, and reserved is held exactly once';
 
@@ -247,15 +247,15 @@ begin
     raise notice 'PASS  5b payment details are refused outright in this phase';
   end;
 
-  select spent into num from public.budget_status where id = budget_id;
+  select spent into num from public.budget_status where id = budget_id_v;
   if num <> 0 then raise exception 'FAIL 5c spent moved to % without a settlement', num; end if;
   raise notice 'PASS  5c spent cannot be moved by the request workflow at all';
 
   -- Withdrawing an approval releases the hold, exactly once.
   perform public.transition_finance_request(req, 'rejected', 'Not needed after all');
-  select reserved into num from public.budget_status where id = budget_id;
+  select reserved into num from public.budget_status where id = budget_id_v;
   if num <> 0 then raise exception 'FAIL 5d reserved stayed at % after rejection', num; end if;
-  select remaining into num from public.budget_status where id = budget_id;
+  select remaining into num from public.budget_status where id = budget_id_v;
   if num <> 100000 then raise exception 'FAIL 5e remaining reads %, expected the full ceiling', num; end if;
   raise notice 'PASS  5d-e withdrawing an approval releases the reservation and restores the ceiling';
 
@@ -279,15 +279,15 @@ begin
     -- ledger, a supplier invoice or a journal -- and F3 has none of those.
     insert into public.finance_requests (type, title, requester_id, amount, budget_id, status,
                                          paid_from_account_id, paid_at)
-    values ('purchase', 'ZZ Forced complete', worker, 50000, budget_id, 'completed',
+    values ('purchase', 'ZZ Forced complete', worker, 50000, budget_id_v, 'completed',
             account_id, now())
     returning id into _forced;
 
-    select spent into num from public.budget_status where id = budget_id;
+    select spent into num from public.budget_status where id = budget_id_v;
     if num <> 0 then
       raise exception 'FAIL 5g a completed request moved spent to % with nothing settling it', num;
     end if;
-    select reserved into num from public.budget_status where id = budget_id;
+    select reserved into num from public.budget_status where id = budget_id_v;
     if num <> 0 then
       raise exception 'FAIL 5g a completed request was counted as reserved (%)', num;
     end if;
@@ -299,7 +299,7 @@ begin
   -- ======================================================================
   -- 6. A finance officer asking for money is a requester like anyone else
   -- ======================================================================
-  req := pg_temp.raise_request(staff, 5000, budget_id);
+  req := pg_temp.raise_request(staff, 5000, budget_id_v);
   perform pg_temp.acts_as(staff); set local role authenticated;
   perform public.transition_finance_request(req, 'pending_validation');
   begin
@@ -318,7 +318,7 @@ begin
   perform pg_temp.acts_as(staff); set local role authenticated;
   reset role;
 
-  req := pg_temp.raise_request(worker, 3000, budget_id);
+  req := pg_temp.raise_request(worker, 3000, budget_id_v);
   perform pg_temp.acts_as(worker); set local role authenticated;
   perform public.transition_finance_request(req, 'pending_validation');
   reset role;
@@ -342,7 +342,7 @@ begin
   -- ======================================================================
   -- One approval fits; the next one would breach the ceiling once the first is
   -- counted. The ceiling is about the total held, not any single request.
-  req := pg_temp.raise_request(worker, 70000, budget_id);
+  req := pg_temp.raise_request(worker, 70000, budget_id_v);
   perform pg_temp.acts_as(worker); set local role authenticated;
   perform public.transition_finance_request(req, 'pending_validation');
   reset role;
@@ -351,11 +351,11 @@ begin
   reset role;
   perform pg_temp.acts_as(manager); set local role authenticated;
   perform public.transition_finance_request(req, 'approved');
-  select reserved into num from public.budget_status where id = budget_id;
+  select reserved into num from public.budget_status where id = budget_id_v;
   if num <> 70000 then raise exception 'FAIL 8a reserved reads %, expected 70000', num; end if;
   reset role;
 
-  req := pg_temp.raise_request(worker, 40000, budget_id);
+  req := pg_temp.raise_request(worker, 40000, budget_id_v);
   perform pg_temp.acts_as(worker); set local role authenticated;
   perform public.transition_finance_request(req, 'pending_validation');
   reset role;
@@ -369,9 +369,9 @@ begin
   exception when check_violation then
     raise notice 'PASS  8a-b one approval reserves; the next that would breach the ceiling is refused';
   end;
-  select reserved into num from public.budget_status where id = budget_id;
+  select reserved into num from public.budget_status where id = budget_id_v;
   if num <> 70000 then raise exception 'FAIL 8c a refused approval still moved reserved to %', num; end if;
-  select spent into num from public.budget_status where id = budget_id;
+  select spent into num from public.budget_status where id = budget_id_v;
   if num <> 0 then raise exception 'FAIL 8d spent moved to %', num; end if;
   raise notice 'PASS  8c-d a refused approval reserves nothing, and spent never moves';
   reset role;
@@ -418,6 +418,45 @@ begin
   select count(*) into n from public.finance_request_approvals where request_id = req;
   if n < 2 then raise exception 'FAIL 10b the trail has % entries, expected the chain', n; end if;
   raise notice 'PASS  10b every step it took is on the record';
+  reset role;
+
+  -- ======================================================================
+  -- 11. Finance Staff classify during validation, and only then
+  -- ======================================================================
+  -- A requester cannot read budgets, categories or vendors, so they cannot
+  -- choose them. Charging a request to a budget line is part of validating it.
+  req := pg_temp.raise_request(worker, 1000, null);
+  perform pg_temp.acts_as(worker); set local role authenticated;
+  perform public.transition_finance_request(req, 'pending_validation');
+  reset role;
+
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  update public.finance_requests
+     set budget_id = budget_id_v, finance_category_id = cat_id
+   where id = req;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FAIL 11a Finance Staff could not classify a request under validation'; end if;
+  raise notice 'PASS  11a Finance Staff charge a request to a budget while validating it';
+
+  begin
+    update public.finance_requests set amount = 9999 where id = req;
+    raise exception 'FAIL 11b Finance Staff changed the requested amount';
+  exception when insufficient_privilege then
+    raise notice 'PASS  11b classifying does not let Finance Staff change what was asked for';
+  end;
+
+  perform public.transition_finance_request(req, 'pending_approval');
+  update public.finance_requests set budget_id = null where id = req;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FAIL 11c the budget was changed after validation'; end if;
+  raise notice 'PASS  11c after validation the budget, category and vendor are fixed';
+  reset role;
+
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.transition_finance_request(req, 'approved');
+  select reserved into num from public.budget_status where id = budget_id_v;
+  if num <> 71000 then raise exception 'FAIL 11d reserved reads % after approving a classified request', num; end if;
+  raise notice 'PASS  11d a request classified at validation reserves against that budget on approval';
   reset role;
 end $$;
 
