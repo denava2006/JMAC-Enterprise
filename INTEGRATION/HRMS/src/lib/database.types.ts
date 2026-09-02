@@ -4479,6 +4479,27 @@ export type Database = {
           system: Database["public"]["Enums"]["entitlement_system"]
         }[]
       }
+      get_procurement_demand: {
+        Args: never
+        Returns: {
+          amount: number
+          branch_id: string
+          branch_name: string
+          demand_state: string
+          product_id: string
+          purchase_order_id: string
+          purchase_order_no: string
+          purchase_order_status: string
+          reason: string
+          reference: string
+          requested_at: string
+          requested_by_name: string
+          requested_quantity: number
+          source_id: string
+          source_kind: string
+          title: string
+        }[]
+      }
       get_public_job_posting: {
         Args: { _id: string }
         Returns: {

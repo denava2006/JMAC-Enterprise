@@ -29,6 +29,7 @@ import {
 import { reportInvalid } from '@/lib/formFeedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { financeCan } from '@/lib/financeAuthority'
+import { formatTin, vendorSchema } from '@/lib/vendorValidation'
 import {
   type Vendor,
   useFinanceCategories,
@@ -38,21 +39,9 @@ import {
   useVendors,
 } from '@/hooks/useFinanceMasterData'
 
-const schema = z.object({
-  name: z.string().min(1, 'A vendor name is required').max(150),
-  contact_person: z.string().max(150).optional(),
-  email: z.string().email('That is not a valid email address').or(z.literal('')).optional(),
-  // Digits with an optional leading +, matching how the rest of JMAC stores a
-  // phone number. Formatting is a display concern, not a storage one.
-  phone: z
-    .string()
-    .regex(/^\+?\d{7,15}$/, 'Digits only, with an optional leading +')
-    .or(z.literal(''))
-    .optional(),
-  tin: z.string().max(30).optional(),
-  address: z.string().max(300).optional(),
-  notes: z.string().max(500).optional(),
-})
+// The rules live next to the ones the database enforces, so the form and the
+// constraint cannot drift into disagreeing about what a valid TIN is.
+const schema = vendorSchema
 type FormValues = z.infer<typeof schema>
 
 function VendorDialog({
@@ -132,10 +121,25 @@ function VendorDialog({
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendor-contact">Contact person</Label>
               <Input id="vendor-contact" {...form.register('contact_person')} />
+              {form.formState.errors.contact_person && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.contact_person.message}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendor-tin">TIN</Label>
-              <Input id="vendor-tin" {...form.register('tin')} />
+              <Input
+                id="vendor-tin"
+                placeholder="000-000-000-00000"
+                {...form.register('tin')}
+                // Formats as the digits arrive, so the stored shape is the shape
+                // that was on screen.
+                onChange={(e) => form.setValue('tin', formatTin(e.target.value))}
+              />
+              {form.formState.errors.tin && (
+                <p className="text-xs text-destructive">{form.formState.errors.tin.message}</p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendor-email">Email</Label>
@@ -146,7 +150,7 @@ function VendorDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendor-phone">Phone</Label>
-              <Input id="vendor-phone" {...form.register('phone')} placeholder="+639171234567" />
+              <Input id="vendor-phone" {...form.register('phone')} placeholder="09171234567" />
               {form.formState.errors.phone && (
                 <p className="text-xs text-destructive">{form.formState.errors.phone.message}</p>
               )}

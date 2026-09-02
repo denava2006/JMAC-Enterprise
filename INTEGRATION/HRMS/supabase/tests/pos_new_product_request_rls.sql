@@ -23,6 +23,52 @@
 
 begin;
 
+/** A Finance Staff reviewer.
+ *
+ * F4.1 moved restock review out of the Administrator's hands: a branch asking
+ * for stock is asking Finance to buy something. These suites therefore need a
+ * finance actor for the restock steps, and keep the Administrator for the
+ * catalogue ones.
+ */
+create or replace function pg_temp.finance_reviewer()
+returns uuid
+language plpgsql as $helper$
+declare
+  _emp uuid; _uid uuid; _pos uuid; _dept uuid; _admin uuid;
+  _tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
+  _saved text := current_setting('request.jwt.claims', true);
+begin
+  select id into _admin from public.profiles where role='admin' and status='active' limit 1;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', _admin, 'role', 'authenticated')::text, true);
+
+  select p.id, p.department_id into _pos, _dept
+  from public.positions p where lower(p.title) = 'finance staff' limit 1;
+  if _pos is null then raise exception 'fixture: no Finance Staff position'; end if;
+
+  insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                hire_date, employment_status)
+  values ('ZZ', 'Fin Reviewer ' || _tag, 'zz.fin.' || _tag || '@jmac-test.invalid',
+          _dept, _pos, current_date, 'active')
+  returning id into _emp;
+
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                          email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+                          created_at, updated_at, confirmation_token, email_change,
+                          email_change_token_new, recovery_token)
+  values ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated',
+          'authenticated', 'zz.fin.' || _tag || '@jmac-test.invalid',
+          crypt('x', gen_salt('bf')), now(),
+          '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '')
+  returning id into _uid;
+
+  update public.profiles set employee_id = _emp, status = 'active' where id = _uid;
+  perform set_config('request.jwt.claims', coalesce(_saved, ''), true);
+  return _uid;
+end;
+$helper$;
+
+
 create function pg_temp.make_manager(_profile_id uuid, _branch_id uuid)
 returns void language plpgsql as $helper$
 declare
@@ -262,8 +308,9 @@ begin
   end if;
   raise notice 'PASS  5a the new product can immediately be restocked through the existing engine';
 
+  -- The product was the Administrator's decision; restocking it is Finance's.
   perform set_config('request.jwt.claims',
-    json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+    json_build_object('sub', pg_temp.finance_reviewer(), 'role', 'authenticated')::text, true);
   set local role authenticated;
   perform public.approve_pos_request(req, 'ok');
   reset role;

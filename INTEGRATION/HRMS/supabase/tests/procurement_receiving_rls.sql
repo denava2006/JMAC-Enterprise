@@ -366,6 +366,181 @@ begin
   if n <> 0 then raise exception 'FAIL 8b % budgets report spending', n; end if;
   raise notice 'PASS  8b approving and receiving an order moves neither reserved nor spent';
   reset role;
+
+  -- ======================================================================
+  -- 9. Restock demand reaches Finance with no Administrator in the way
+  -- ======================================================================
+  -- The defect this section exists for: a branch asked for stock and Finance
+  -- never saw it, because can_review_pos_request('restock') was is_admin() --
+  -- a stand-in left in place until there was an FMS to hand it to.
+  declare restock uuid;
+  begin
+    insert into public.pos_inventory_requests
+      (branch_id, product_id, request_type, requested_quantity, reason, status,
+       requested_by, branch_name_snapshot, product_name_snapshot, requester_name_snapshot)
+    values (branch_a, product, 'restock', 10, 'ZZ running low', 'pending',
+            mgr_a, 'Branch A', 'ZZ Procurement Cola', 'ZZ Branch A Mgr')
+    returning id into restock;
+
+    -- Finance sees it immediately. No Administrator has touched it.
+    perform pg_temp.acts_as(staff); set local role authenticated;
+    select count(*) into n from public.get_procurement_demand()
+     where source_kind = 'pos_restock' and source_id = restock;
+    if n <> 1 then
+      raise exception 'FAIL 9a Finance cannot see a submitted restock request (% rows)', n;
+    end if;
+
+    select demand_state into txt from public.get_procurement_demand()
+     where source_id = restock;
+    if txt <> 'awaiting_finance_review' then
+      raise exception 'FAIL 9a the demand state reads %', txt;
+    end if;
+    raise notice 'PASS  9a a submitted restock reaches Finance with no Administrator step';
+
+    -- And Finance, not the Administrator, is who accepts it for procurement.
+    perform public.approve_pos_request(restock, 'Accepted for procurement');
+    select demand_state into txt from public.get_procurement_demand()
+     where source_id = restock;
+    if txt <> 'accepted_for_procurement' then
+      raise exception 'FAIL 9b after acceptance the state reads %', txt;
+    end if;
+    raise notice 'PASS  9b Finance Staff accept restock demand for procurement';
+    reset role;
+
+    -- Accepting a restock is not general POS authority.
+    perform pg_temp.acts_as(staff); set local role authenticated;
+    if public.can_review_pos_request('carry_existing_product') then
+      raise exception 'FAIL 9c Finance Staff gained catalogue authority';
+    end if;
+    if public.can_review_pos_request('new_product') then
+      raise exception 'FAIL 9c Finance Staff gained product-creation authority';
+    end if;
+    raise notice 'PASS  9c Finance Staff review restock only, not the catalogue';
+    reset role;
+
+    -- The Administrator keeps catalogue authority and loses the procurement
+    -- step, which is the dependency this correction removes.
+    perform pg_temp.acts_as(admin_id); set local role authenticated;
+    if public.can_review_pos_request('restock') then
+      raise exception 'FAIL 9d the Administrator is still an approver for restock';
+    end if;
+    if not public.can_review_pos_request('new_product') then
+      raise exception 'FAIL 9d the Administrator lost catalogue authority';
+    end if;
+    raise notice 'PASS  9d the Administrator keeps the catalogue and leaves procurement';
+    reset role;
+
+    -- A cashier reviews nothing and sees no procurement demand.
+    perform pg_temp.acts_as(cashier); set local role authenticated;
+    if public.can_review_pos_request('restock') then
+      raise exception 'FAIL 9e a cashier can review restock';
+    end if;
+    select count(*) into n from public.get_procurement_demand();
+    if n <> 0 then raise exception 'FAIL 9e a cashier read % procurement demand rows', n; end if;
+    raise notice 'PASS  9e a cashier reviews nothing and sees no procurement demand';
+    reset role;
+
+    -- Finance still cannot read the underlying POS table directly.
+    perform pg_temp.acts_as(staff); set local role authenticated;
+    begin
+      select count(*) into n from public.pos_inventory_requests;
+      if n <> 0 then
+        raise exception 'FAIL 9f Finance read % rows of pos_inventory_requests directly', n;
+      end if;
+    exception when insufficient_privilege then
+      null;  -- refused outright is at least as good
+    end;
+    raise notice 'PASS  9f Finance reads procurement demand through the RPC, not the POS table';
+    reset role;
+  end;
+
+  -- ======================================================================
+  -- 10. A vendor's details are checked by the database, not just the form
+  -- ======================================================================
+  perform pg_temp.acts_as(staff); set local role authenticated;
+
+  -- TIN: fourteen digits, stored in one canonical shape.
+  insert into public.vendors (name, tin) values ('ZZ Tin Digits ' || tag, '12345678901234');
+  select tin into txt from public.vendors where name = 'ZZ Tin Digits ' || tag;
+  if txt <> '123-456-789-01234' then
+    raise exception 'FAIL 10a a plain 14-digit TIN stored as %', txt;
+  end if;
+
+  insert into public.vendors (name, tin) values ('ZZ Tin Spaced ' || tag, ' 223 456 789 01234 ');
+  select tin into txt from public.vendors where name = 'ZZ Tin Spaced ' || tag;
+  if txt <> '223-456-789-01234' then
+    raise exception 'FAIL 10a a spaced TIN stored as %', txt;
+  end if;
+  raise notice 'PASS  10a a TIN is stored in one canonical shape however it was typed';
+
+  begin
+    insert into public.vendors (name, tin) values ('ZZ Tin Short ' || tag, '123456');
+    raise exception 'FAIL 10b a six-digit TIN was accepted';
+  exception when check_violation then null; end;
+
+  begin
+    insert into public.vendors (name, tin) values ('ZZ Tin Alpha ' || tag, 'ABC-456-789-01234');
+    raise exception 'FAIL 10b a TIN with letters was accepted';
+  exception when check_violation then null; end;
+
+  begin
+    insert into public.vendors (name, tin) values ('ZZ Tin Slash ' || tag, '123/456/789/01234');
+    raise exception 'FAIL 10b a TIN with slashes was accepted';
+  exception when check_violation then null; end;
+  raise notice 'PASS  10b a short, alphabetic or punctuated TIN is refused';
+
+  begin
+    insert into public.vendors (name, tin) values ('ZZ Tin Dup ' || tag, '123-456-789-01234');
+    raise exception 'FAIL 10c two vendors share a TIN';
+  exception when unique_violation then
+    raise notice 'PASS  10c a TIN identifies one business, and spacing cannot defeat that';
+  end;
+
+  -- Email: a real address, lowercased and trimmed.
+  insert into public.vendors (name, email) values ('ZZ Mail OK ' || tag, '  Supplier@Example.COM ');
+  select email into txt from public.vendors where name = 'ZZ Mail OK ' || tag;
+  if txt <> 'supplier@example.com' then raise exception 'FAIL 10d email stored as %', txt; end if;
+
+  foreach txt in array array['supplier', 'supplier@', '@example.com', 'supplier@example',
+                             'supplier example@example.com'] loop
+    begin
+      insert into public.vendors (name, email) values ('ZZ Mail Bad ' || tag || txt, txt);
+      raise exception 'FAIL 10d "%" was accepted as an email', txt;
+    exception when check_violation then null; end;
+  end loop;
+  raise notice 'PASS  10d an email must be an address, and is stored lowercased and trimmed';
+
+  -- Phone: digits only, refused rather than silently stripped.
+  insert into public.vendors (name, phone) values ('ZZ Phone A ' || tag, '09171234567');
+  insert into public.vendors (name, phone) values ('ZZ Phone B ' || tag, '639171234567');
+
+  foreach txt in array array['+639171234567', '0917-123-4567', '0917 123 4567', 'abc0917', '0917'] loop
+    begin
+      insert into public.vendors (name, phone) values ('ZZ Phone Bad ' || tag || txt, txt);
+      raise exception 'FAIL 10e "%" was accepted as a phone number', txt;
+    exception when check_violation then null; end;
+  end loop;
+  raise notice 'PASS  10e a phone number is digits only -- a + or a dash is refused, not stripped';
+
+  -- Contact person: letters and spaces.
+  insert into public.vendors (name, contact_person)
+  values ('ZZ Contact OK ' || tag, '  Juan   Dela Cruz ');
+  select contact_person into txt from public.vendors where name = 'ZZ Contact OK ' || tag;
+  if txt <> 'Juan Dela Cruz' then raise exception 'FAIL 10f contact stored as "%"', txt; end if;
+
+  foreach txt in array array['Juan123', 'Juan/Cruz', 'Juan.Cruz', 'Juan_Cruz', 'Juan+Cruz', 'Juan=Cruz'] loop
+    begin
+      insert into public.vendors (name, contact_person)
+      values ('ZZ Contact Bad ' || tag || txt, txt);
+      raise exception 'FAIL 10f "%" was accepted as a contact person', txt;
+    exception when check_violation then null; end;
+  end loop;
+  raise notice 'PASS  10f a contact person is letters and spaces, collapsed and trimmed';
+
+  -- A business name is not a person's name and keeps its own rule.
+  insert into public.vendors (name) values ('ZZ 7-Eleven & Co. ' || tag);
+  raise notice 'PASS  10g a business name may still contain digits, & and punctuation';
+  reset role;
 end $$;
 
 rollback;

@@ -173,31 +173,94 @@ export function useTransitionPurchaseOrder() {
  * approved finance request, and a POS stock request a branch raised. Each keeps
  * its own lifecycle and its own home; procurement links to them.
  */
+export interface ProcurementDemand {
+  source_kind: 'finance_request' | 'pos_restock'
+  source_id: string
+  reference: string | null
+  title: string | null
+  branch_id: string | null
+  branch_name: string | null
+  product_id: string | null
+  requested_quantity: number | null
+  amount: number | null
+  reason: string | null
+  requested_by_name: string | null
+  requested_at: string | null
+  demand_state: 'awaiting_finance_review' | 'accepted_for_procurement' | 'awaiting_procurement' | 'ordered'
+  purchase_order_id: string | null
+  purchase_order_no: string | null
+  purchase_order_status: string | null
+}
+
+export const DEMAND_STATE_LABEL: Record<string, string> = {
+  awaiting_finance_review: 'Awaiting Finance review',
+  accepted_for_procurement: 'Accepted for procurement',
+  awaiting_procurement: 'Awaiting procurement',
+  ordered: 'Ordered',
+}
+
+/**
+ * What Finance is waiting to procure.
+ *
+ * One server-authoritative call rather than two client queries. The previous
+ * version read pos_inventory_requests directly with status = 'approved', which
+ * quietly preserved the Administrator gate this correction removes — a branch
+ * could ask for stock and Finance would never see it.
+ *
+ * It also swallowed a failure into an empty list, so a permission problem, a
+ * broken query and genuinely nothing to do all rendered as "Demand (0)". The
+ * error is surfaced now: a page that cannot load its work should say so.
+ */
 export function useProcurementDemand() {
   return useQuery({
     queryKey: PROCUREMENT_KEYS.demand,
     queryFn: async () => {
-      const [requests, stock] = await Promise.all([
-        supabase
-          .from('finance_requests')
-          .select('id, request_no, title, amount, type, status, budget_id')
-          .eq('status', 'approved')
-          .eq('type', 'purchase')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('pos_inventory_requests')
-          .select('id, branch_id, product_id, requested_quantity, status, branch_name_snapshot, product_name_snapshot, requested_at')
-          .eq('status', 'approved')
-          .order('requested_at', { ascending: false }),
-      ])
-      if (requests.error) throw requests.error
-      // POS stock requests may not be readable by every finance role; an empty
-      // list is a valid answer rather than a failure of the whole page.
-      return {
-        financeRequests: requests.data ?? [],
-        stockRequests: stock.error ? [] : (stock.data ?? []),
-      }
+      const { data, error } = await supabase.rpc('get_procurement_demand')
+      if (error) throw error
+      return (data ?? []) as ProcurementDemand[]
     },
+  })
+}
+
+/** Finance Staff accepting branch demand for procurement.
+ *
+ *  Deliberately labelled differently from the Finance Manager's approval of a
+ *  purchase order: one says this should be bought, the other commits the
+ *  company to buying it. Calling both "Approve" is how a two-step control
+ *  starts looking like a formality. */
+export function useAcceptRestockDemand() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { requestId: string; note?: string | null }) => {
+      const { error } = await supabase.rpc('approve_pos_request', {
+        _request_id: input.requestId,
+        _note: input.note ?? 'Accepted for procurement',
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
+      toast.success('Accepted for procurement. Raise a purchase order when you are ready.')
+    },
+    onError: (error) => toast.error(describeFinanceError(error)),
+  })
+}
+
+export function useDeclineRestockDemand() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { requestId: string; note: string }) => {
+      const { error } = await supabase.rpc('decline_pos_request', {
+        _request_id: input.requestId,
+        _note: input.note,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
+      toast.success('Returned to the branch with your reason.')
+    },
+    onError: (error) => toast.error(describeFinanceError(error)),
   })
 }
 

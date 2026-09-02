@@ -23,6 +23,52 @@
 
 begin;
 
+/** A Finance Staff reviewer.
+ *
+ * F4.1 moved restock review out of the Administrator's hands: a branch asking
+ * for stock is asking Finance to buy something. These suites therefore need a
+ * finance actor for the restock steps, and keep the Administrator for the
+ * catalogue ones.
+ */
+create or replace function pg_temp.finance_reviewer()
+returns uuid
+language plpgsql as $helper$
+declare
+  _emp uuid; _uid uuid; _pos uuid; _dept uuid; _admin uuid;
+  _tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
+  _saved text := current_setting('request.jwt.claims', true);
+begin
+  select id into _admin from public.profiles where role='admin' and status='active' limit 1;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', _admin, 'role', 'authenticated')::text, true);
+
+  select p.id, p.department_id into _pos, _dept
+  from public.positions p where lower(p.title) = 'finance staff' limit 1;
+  if _pos is null then raise exception 'fixture: no Finance Staff position'; end if;
+
+  insert into public.employees (first_name, last_name, email, department_id, position_id,
+                                hire_date, employment_status)
+  values ('ZZ', 'Fin Reviewer ' || _tag, 'zz.fin.' || _tag || '@jmac-test.invalid',
+          _dept, _pos, current_date, 'active')
+  returning id into _emp;
+
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                          email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+                          created_at, updated_at, confirmation_token, email_change,
+                          email_change_token_new, recovery_token)
+  values ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated',
+          'authenticated', 'zz.fin.' || _tag || '@jmac-test.invalid',
+          crypt('x', gen_salt('bf')), now(),
+          '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '')
+  returning id into _uid;
+
+  update public.profiles set employee_id = _emp, status = 'active' where id = _uid;
+  perform set_config('request.jwt.claims', coalesce(_saved, ''), true);
+  return _uid;
+end;
+$helper$;
+
+
 -- ---------------------------------------------------------------------------
 -- Phase 9A test fixture helper.
 --
@@ -140,6 +186,7 @@ declare
   spare_id    uuid;   -- a second uncarried product, for the cancel tests
   req_stock   uuid;
   req_carry   uuid;
+  req_own     uuid;
   n           integer;
   m           integer;
   qty_before  integer;
@@ -379,13 +426,28 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
   set local role authenticated;
 
+  -- One, not two. The restock left the Administrator's queue when F4.1 handed
+  -- procurement to Finance; the carry request is a catalogue decision and stays.
   select count(*) into n from public.get_pos_request_queue();
-  if n <> 2 then raise exception 'FAIL  7a the queue holds % requests, expected 2', n; end if;
+  if n <> 1 then
+    raise exception 'FAIL  7a the Administrator queue holds % requests, expected 1', n;
+  end if;
+  if exists (select 1 from public.get_pos_request_queue() q where q.request_type = 'restock') then
+    raise exception 'FAIL  7a a restock is still sitting in the Administrator queue';
+  end if;
   select count(*) into n from public.get_pos_request_queue(_branch_id => branch_b);
   if n <> 0 then raise exception 'FAIL  7b the branch filter returned % rows for an empty branch', n; end if;
   select count(*) into n from public.get_pos_request_queue(_status => 'approved');
   if n <> 0 then raise exception 'FAIL  7c the status filter returned % rows', n; end if;
   raise notice 'PASS  7a the review queue lists every branch, and its filters work';
+
+  -- Restock review is Finance's from F4.1, so the restock steps act as Finance.
+  -- Provisioning the reviewer writes to auth.users, which the authenticated
+  -- role may not do, so the role is dropped for the fixture and taken up again.
+  reset role;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', pg_temp.finance_reviewer(), 'role', 'authenticated')::text, true);
+  set local role authenticated;
 
   -- A decline needs a reason.
   begin
@@ -429,6 +491,13 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   end;
 
   ------------------------------- 8. a carry approval, and what it may create
+  -- Back to the Administrator: carrying a product is a catalogue decision and
+  -- did not move to Finance. Only restock did.
+  reset role;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
   select coalesce(sum(quantity_on_hand), 0) into qty_before from public.pos_branch_inventory;
   perform public.approve_pos_request(req_carry, null);
 
@@ -447,25 +516,42 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
 
   ---------------------------------------- 9. nobody reviews their own request
   --
-  -- The Administrator raises a request in their own right, then tries to
-  -- review it. (has_pos_role admits admins, as on every branch RPC.)
+  -- A CARRY request, deliberately: the Administrator still reviews those, so a
+  -- refusal here is the self-review guard and not merely "wrong role". Using a
+  -- restock would now fail at the authority check first and this test would
+  -- pass for a reason it was not written to prove.
   perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  select public.create_pos_stock_request(branch_a, carried_id, 7, 'admin''s own request') into req_stock;
+  select public.create_pos_carry_request(branch_a, spare_id, 'admin''s own request') into req_own;
   begin
-    perform public.approve_pos_request(req_stock, 'approving my own');
+    perform public.approve_pos_request(req_own, 'approving my own');
     raise exception 'FAIL  9a a reviewer approved their own request';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
     raise notice 'PASS  9a nobody may review a request they submitted themselves';
   end;
+  -- Withdrawn so the later carry-request checks start from a clean product.
+  perform public.cancel_pos_request(req_own);
+  reset role;
+
+  -- The Administrator is no longer a reviewer of restock at all, which is the
+  -- dependency F4.1 removed.
+  perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  if public.can_review_pos_request('restock') then
+    raise exception 'FAIL  9b the Administrator can still review restock';
+  end if;
+  if not public.can_review_pos_request('carry_existing_product') then
+    raise exception 'FAIL  9b the Administrator lost catalogue review';
+  end if;
+  raise notice 'PASS  9b restock review left the Administrator; the catalogue did not';
   reset role;
 
   ------------------------------------------------------- 10. cancellation
   perform set_config('request.jwt.claims', json_build_object('sub', manager_id, 'role', 'authenticated')::text, true);
   set local role authenticated;
   begin
-    perform public.cancel_pos_request(req_stock);   -- the admin's request
+    perform public.cancel_pos_request(req_stock);   -- somebody else's request
     raise exception 'FAIL 10a a manager cancelled somebody else''s request';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;

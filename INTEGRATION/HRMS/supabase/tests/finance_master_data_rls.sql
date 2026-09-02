@@ -183,7 +183,7 @@ begin
   -- ======================================================================
   perform pg_temp.acts_as(staff); set local role authenticated;
   insert into public.vendors (name, contact_person, tin)
-  values ('ZZ Supplier ' || tag, 'Test Contact', '000000000000') returning id into vendor_id;
+  values ('ZZ Supplier ' || tag, 'Test Contact', '123-456-789-01234') returning id into vendor_id;
   insert into public.vendor_categories (vendor_id, finance_category_id) values (vendor_id, cat_id);
   raise notice 'PASS  3a Finance Staff keep the vendor list and what each vendor supplies';
 

@@ -11,9 +11,12 @@ import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import { financeCan } from '@/lib/financeAuthority'
 import {
+  DEMAND_STATE_LABEL,
   PO_STATUS_LABEL,
+  useAcceptRestockDemand,
   useProcurementDemand,
   usePurchaseOrders,
+  type ProcurementDemand,
   type PurchaseOrder,
 } from '@/hooks/useProcurement'
 import { PurchaseOrderDetail } from '@/components/fms/PurchaseOrderDetail'
@@ -34,7 +37,8 @@ type Scope = 'demand' | 'orders'
 export default function ProcurementPage() {
   const { profile } = useAuth()
   const { data: orders = [], isLoading } = usePurchaseOrders()
-  const { data: demand } = useProcurementDemand()
+  const { data: demand = [], isError: demandFailed, error: demandError } = useProcurementDemand()
+  const acceptDemand = useAcceptRestockDemand()
   const [scope, setScope] = React.useState<Scope>('demand')
   const [openOrder, setOpenOrder] = React.useState<string | null>(null)
   const [newOrderFor, setNewOrderFor] = React.useState<
@@ -44,8 +48,9 @@ export default function ProcurementPage() {
   const canPrepare = financeCan(profile?.role, 'budgets', 'read') &&
     (profile?.role === 'finance_staff' || profile?.role === 'finance_manager')
 
-  const financeDemand = demand?.financeRequests ?? []
-  const stockDemand = demand?.stockRequests ?? []
+  // Demand that has not yet produced an order. Once one exists the row moves on
+  // rather than inviting a second order for the same need.
+  const openDemand = demand.filter((d) => d.demand_state !== 'ordered')
   const awaitingDelivery = orders.filter(
     (o) => o.status === 'approved' && (o.quantity_outstanding ?? 0) > 0,
   )
@@ -116,7 +121,7 @@ export default function ProcurementPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           label="Awaiting procurement"
-          value={financeDemand.length + stockDemand.length}
+          value={demandFailed ? '—' : openDemand.length}
           icon={ClipboardList}
           isLoading={isLoading}
         />
@@ -136,7 +141,7 @@ export default function ProcurementPage() {
 
       <div className="flex flex-wrap gap-2">
         <Button variant={scope === 'demand' ? 'default' : 'outline'} size="sm" onClick={() => setScope('demand')}>
-          Demand ({financeDemand.length + stockDemand.length})
+          Demand ({demandFailed ? '—' : openDemand.length})
         </Button>
         <Button variant={scope === 'orders' ? 'default' : 'outline'} size="sm" onClick={() => setScope('orders')}>
           Purchase Orders ({orders.length})
@@ -145,45 +150,50 @@ export default function ProcurementPage() {
 
       {scope === 'demand' ? (
         <div className="flex flex-col gap-3">
-          {financeDemand.length === 0 && stockDemand.length === 0 ? (
+          {demandFailed ? (
+            // A page that cannot load its work says so. Reporting a failure as
+            // "Demand (0)" makes a permission problem and an empty queue look
+            // identical, which is how a branch's request goes unnoticed.
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-sm font-medium text-destructive">
+                  Procurement demand could not be loaded.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {(demandError as { message?: string } | null)?.message ??
+                    'Try again, and tell an administrator if it persists.'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : openDemand.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center">
                 <p className="text-sm text-muted-foreground">
-                  Nothing is waiting to be procured. Approved purchase requests and approved branch
-                  stock requests appear here.
+                  Nothing is waiting to be procured. Approved purchase requests and branch stock
+                  requests appear here as soon as they are raised.
                 </p>
               </CardContent>
             </Card>
           ) : (
-            <>
-              {financeDemand.map((r) => (
-                <DemandRow
-                  key={r.id}
-                  reference={r.request_no ?? 'Request'}
-                  title={r.title}
-                  detail={`Approved request · ${formatMoney(Number(r.amount))}`}
-                  canPrepare={canPrepare}
-                  onCreate={() =>
-                    setNewOrderFor({ financeRequestId: r.id, label: r.request_no ?? r.title })
-                  }
-                />
-              ))}
-              {stockDemand.map((r) => (
-                <DemandRow
-                  key={r.id}
-                  reference="Stock request"
-                  title={r.product_name_snapshot ?? 'Branch stock'}
-                  detail={`${r.branch_name_snapshot ?? 'Branch'} · ${r.requested_quantity} requested`}
-                  canPrepare={canPrepare}
-                  onCreate={() =>
-                    setNewOrderFor({
-                      posInventoryRequestId: r.id,
-                      label: r.product_name_snapshot ?? 'Branch stock',
-                    })
-                  }
-                />
-              ))}
-            </>
+            openDemand.map((d) => (
+              <DemandRow
+                key={`${d.source_kind}-${d.source_id}`}
+                demand={d}
+                canPrepare={canPrepare}
+                accepting={acceptDemand.isPending}
+                onAccept={() => acceptDemand.mutate({ requestId: d.source_id })}
+                onCreate={() =>
+                  setNewOrderFor(
+                    d.source_kind === 'finance_request'
+                      ? { financeRequestId: d.source_id, label: d.reference ?? d.title ?? 'Request' }
+                      : {
+                          posInventoryRequestId: d.source_id,
+                          label: d.title ?? 'Branch stock',
+                        },
+                  )
+                }
+              />
+            ))
           )}
         </div>
       ) : (
@@ -217,30 +227,57 @@ export default function ProcurementPage() {
 }
 
 function DemandRow({
-  reference,
-  title,
-  detail,
+  demand,
   canPrepare,
+  accepting,
+  onAccept,
   onCreate,
 }: {
-  reference: string
-  title: string
-  detail: string
+  demand: ProcurementDemand
   canPrepare: boolean
+  accepting: boolean
+  onAccept: () => void
   onCreate: () => void
 }) {
+  const isRestock = demand.source_kind === 'pos_restock'
+  const awaitingReview = demand.demand_state === 'awaiting_finance_review'
+
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
         <div className="min-w-0">
-          <p className="font-mono text-xs text-muted-foreground">{reference}</p>
-          <p className="truncate font-medium text-foreground">{title}</p>
-          <p className="text-xs text-muted-foreground">{detail}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-mono text-xs text-muted-foreground">{demand.reference}</p>
+            <Badge variant={awaitingReview ? 'default' : 'secondary'}>
+              {DEMAND_STATE_LABEL[demand.demand_state] ?? demand.demand_state}
+            </Badge>
+          </div>
+          <p className="truncate font-medium text-foreground">{demand.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {isRestock
+              ? `${demand.branch_name ?? 'Branch'} · ${demand.requested_quantity} requested · ${demand.requested_by_name ?? 'Unknown'}`
+              : `${formatMoney(Number(demand.amount ?? 0))} · ${demand.requested_by_name ?? 'Unknown'}`}
+          </p>
+          {demand.reason && (
+            <p className="truncate text-xs text-muted-foreground">{demand.reason}</p>
+          )}
         </div>
+
         {canPrepare && (
-          <Button size="sm" variant="outline" onClick={onCreate}>
-            Create purchase order
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {/* Two different decisions, named differently on purpose: Finance
+                Staff say this should be bought; the Finance Manager commits the
+                company to buying it, on the order. */}
+            {isRestock && awaitingReview ? (
+              <Button size="sm" disabled={accepting} onClick={onAccept}>
+                {accepting ? 'Accepting…' : 'Accept for procurement'}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={onCreate}>
+                Create purchase order
+              </Button>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
