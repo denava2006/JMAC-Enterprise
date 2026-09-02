@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -114,6 +114,39 @@ const STEP_FIELDS: (keyof EmployeeFormValues)[][] = [
 
 const STEPS = ['Personal Information', 'Employment Information', 'Documents', 'Review'] as const
 
+/** What to call a field when telling somebody it is the one holding Save back. */
+const FIELD_LABELS: Record<keyof EmployeeFormValues, string> = {
+  firstName: 'First name',
+  middleName: 'Middle name',
+  lastName: 'Last name',
+  gender: 'Gender',
+  birthDate: 'Birth date',
+  civilStatus: 'Civil status',
+  nationality: 'Nationality',
+  phone: 'Phone number',
+  email: 'Email',
+  province: 'Province',
+  city: 'City or municipality',
+  barangay: 'Barangay',
+  address: 'Residential address',
+  departmentId: 'Department',
+  positionId: 'Position',
+  employmentType: 'Employment type',
+  salaryGradeId: 'Salary grade',
+  basicSalary: 'Basic salary',
+  currency: 'Currency',
+  hireDate: 'Date hired',
+  employmentStatus: 'Employment status',
+  workScheduleId: 'Work schedule',
+}
+
+/** Which step a field lives on, so an invalid one can be shown rather than
+ *  merely flagged on a page nobody is looking at. */
+function stepOfField(field: keyof EmployeeFormValues): number {
+  const index = STEP_FIELDS.findIndex((fields) => fields.includes(field))
+  return index === -1 ? 0 : index
+}
+
 interface StagedDocument {
   id: string
   documentType: string
@@ -210,15 +243,32 @@ export default function CreateEmployeePage() {
     trigger,
     watch,
     setValue,
+    setFocus,
+    getFieldState,
     reset,
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
+      firstName: '',
+      middleName: '',
+      lastName: '',
+      gender: '',
+      birthDate: '',
+      civilStatus: '',
+      nationality: '',
+      phone: '',
+      email: '',
+      address: '',
       province: '',
       city: '',
       barangay: '',
+      departmentId: '',
+      positionId: '',
+      salaryGradeId: '',
+      basicSalary: '',
+      workScheduleId: '',
       employmentType: 'regular',
       currency: DEFAULT_CURRENCY,
       hireDate: todayISODate(),
@@ -299,10 +349,61 @@ export default function CreateEmployeePage() {
     [positions, departmentId]
   )
 
+  /**
+   * Say which field is holding things up, and put it on screen.
+   *
+   * Both of this form's gates used to fail by doing nothing: goNext returned
+   * without advancing, and handleSubmit with no onInvalid callback returned
+   * without submitting. React Hook Form focuses the first invalid field for
+   * you, but only when that field is MOUNTED -- and on a four-step wizard the
+   * offending field is usually on a step the person is not looking at. The
+   * result was a Save button that looked live and did nothing.
+   */
+  const announceInvalidField = React.useCallback(
+    (field: keyof EmployeeFormValues, message?: string) => {
+      const targetStep = stepOfField(field)
+      setStep(targetStep)
+      // A resolver message written for a developer ("Invalid input: expected
+      // string, received undefined") is worse than no message at all, so the
+      // field's own name is used instead.
+      const readable = message && !/^Invalid input/i.test(message) ? message : null
+      toast.error(readable || `${FIELD_LABELS[field]} is required.`)
+      // After the step has rendered, so the input exists to be focused.
+      window.setTimeout(() => setFocus(field), 0)
+    },
+    [setFocus]
+  )
+
   const goNext = async () => {
     const fields = STEP_FIELDS[step]
-    const valid = fields.length === 0 || (await trigger(fields))
-    if (valid) setStep((s) => Math.min(s + 1, STEPS.length - 1))
+    if (fields.length === 0 || (await trigger(fields))) {
+      setStep((s) => Math.min(s + 1, STEPS.length - 1))
+      return
+    }
+    // Re-checked one at a time so the first failure is reported deterministically
+    // in the order the fields appear, rather than in whatever order the resolver
+    // happened to put them.
+    for (const field of fields) {
+      if (!(await trigger(field))) {
+        announceInvalidField(field, getFieldState(field).error?.message)
+        return
+      }
+    }
+    toast.error('Some details are still missing. Check the highlighted fields.')
+  }
+
+  /** Reached when Save is pressed and the whole form does not validate. */
+  const onInvalid = (formErrors: FieldErrors<EmployeeFormValues>) => {
+    for (const fields of STEP_FIELDS) {
+      for (const field of fields) {
+        const fieldError = formErrors[field]
+        if (fieldError) {
+          announceInvalidField(field, fieldError.message as string | undefined)
+          return
+        }
+      }
+    }
+    toast.error('This employee could not be saved. Check the highlighted fields.')
   }
   const goBack = () => setStep((s) => Math.max(s - 1, 0))
 
@@ -331,13 +432,27 @@ export default function CreateEmployeePage() {
     submittingRef.current = true
     try {
       await submitEmployee(values)
+    } catch {
+      // Caught, not swallowed: every mutation this calls reports its own
+      // failure through a toast, so re-throwing here would add nothing except
+      // an unhandled rejection. What matters is that the form stays on Review
+      // with the entered values intact, so the person can read the message and
+      // try again -- and that createdEmployeeRef stops a retry from creating
+      // the same person twice.
     } finally {
       submittingRef.current = false
     }
   }
 
+  // What has already been written, so a retry after a later failure resumes
+  // instead of creating the person a second time. Without this, an invitation
+  // that failed left a saved employee on screen behind an error, and pressing
+  // Create Employee again produced a duplicate record.
+  const createdEmployeeRef = React.useRef<{ id: string } | null>(null)
+  const uploadedDocumentsRef = React.useRef<Set<string>>(new Set())
+
   const submitEmployee = async (values: EmployeeFormValues) => {
-    const employee = await createEmployee.mutateAsync({
+    const employee = createdEmployeeRef.current ?? (await createEmployee.mutateAsync({
       applicationId,
       firstName: values.firstName,
       middleName: values.middleName || undefined,
@@ -361,18 +476,33 @@ export default function CreateEmployeePage() {
       hireDate: values.hireDate,
       employmentStatus: values.employmentStatus as EmploymentStatus,
       workScheduleId: values.workScheduleId,
-    })
+    }))
+    createdEmployeeRef.current = employee
 
     for (const doc of staged) {
+      if (uploadedDocumentsRef.current.has(doc.id)) continue
       await uploadDocument.mutateAsync({ employeeId: employee.id, documentType: doc.documentType, file: doc.file })
+      uploadedDocumentsRef.current.add(doc.id)
     }
 
     if (sendInviteNowRef.current) {
-      await createAccount.mutateAsync({
-        employeeId: employee.id,
-        email: values.email,
-        fullName: `${values.firstName} ${values.lastName}`,
-      })
+      try {
+        await createAccount.mutateAsync({
+          employeeId: employee.id,
+          email: values.email,
+          fullName: `${values.firstName} ${values.lastName}`,
+        })
+      } catch {
+        // The record exists; only the invitation failed. Saying so and going to
+        // the employee is better than stranding a saved employee behind an
+        // error that reads as though nothing was saved. The account can be
+        // created from their details page.
+        toast.error(
+          'The employee was saved, but the setup email could not be sent. Create their account from the employee page.'
+        )
+        navigate(`/dashboard/employees/${employee.id}`)
+        return
+      }
     }
 
     navigate(`/dashboard/employees/${employee.id}`)
@@ -1053,7 +1183,7 @@ export default function CreateEmployeePage() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <Button type="button" loading={isSubmitting || createEmployee.isPending} onClick={handleSubmit(onSubmit)}>
+                <Button type="button" loading={isSubmitting || createEmployee.isPending} onClick={handleSubmit(onSubmit, onInvalid)}>
                   Create Employee
                 </Button>
               )}
