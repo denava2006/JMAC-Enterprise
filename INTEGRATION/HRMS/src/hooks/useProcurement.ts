@@ -340,3 +340,56 @@ export const PO_STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelled',
   closed: 'Closed',
 }
+
+/* ------------------------------------------------ the branch's own view */
+
+/**
+ * What became of what this branch asked for.
+ *
+ * Read from the procurement documents rather than copied into the request, so
+ * there is no second version of the truth to fall out of step. The function
+ * returns no cost of any kind: a POS Manager is told what was ordered and what
+ * arrived, never what it cost or who supplied it.
+ */
+export const REQUEST_PROGRESS_LABEL: Record<string, string> = {
+  with_finance: 'With Finance',
+  accepted: 'Accepted — not yet ordered',
+  being_ordered: 'Being ordered',
+  ordered: 'Ordered — awaiting delivery',
+  part_delivered: 'Part delivered',
+  delivered: 'Delivered',
+  order_stopped: 'Order stopped',
+  declined: 'Declined',
+  withdrawn: 'Withdrawn',
+}
+
+export interface BranchRequestProgress {
+  request_id: string
+  product_id: string | null
+  product_name: string | null
+  requested_quantity: number | null
+  requested_at: string | null
+  request_status: string | null
+  po_number: string | null
+  po_status: string | null
+  quantity_ordered: number | null
+  quantity_received: number | null
+  quantity_outstanding: number | null
+  progress: string | null
+}
+
+export function useBranchRequestProgress(branchId: string | undefined) {
+  return useQuery({
+    queryKey: ['procurement', 'branch-progress', branchId ?? 'none'],
+    enabled: !!branchId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_branch_request_progress', {
+        _branch_id: branchId!,
+      })
+      // Surfaced, never swallowed: an empty list has to mean "nothing asked
+      // for", not "the query failed and nobody noticed".
+      if (error) throw error
+      return (data ?? []) as BranchRequestProgress[]
+    },
+  })
+}

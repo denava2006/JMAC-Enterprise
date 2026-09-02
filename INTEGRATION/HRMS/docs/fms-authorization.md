@@ -28,28 +28,43 @@ A blank cell is a denial enforced by RLS, not an omission.
 
 ### `finance_categories` — the expense and income taxonomy
 
-| | Read | Create | Edit | Archive |
-| --- | :-: | :-: | :-: | :-: |
-| Finance Staff | R | C | E | |
-| Finance Manager | R | C | E | A |
-| Accountant | R | | | |
-| Administrator | R | | | |
+| | Read | Create | Edit | Archive | Approve |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Finance Staff | R | C | E | | |
+| Finance Manager | R | | | A | Y |
+| Accountant | R | | | | |
+| Administrator | R | | | | |
 
 Archiving a category changes how past classifications read, so it is a Manager
 decision. The Accountant reads the taxonomy to post against it and does not
 shape it.
 
+**F4.2.** Authorship became Finance Staff's alone, and the Manager gained a
+review instead. A checker who can also write the record is approving their own
+work under another name. Archiving stays the Manager's, because withdrawing a
+category is governance rather than authorship — the RLS policy still admits the
+Manager to UPDATE for exactly that, and a trigger refuses any change they make
+to the name or kind.
+
 ### `vendors` — suppliers
 
-| | Read | Create | Edit | Archive |
-| --- | :-: | :-: | :-: | :-: |
-| Finance Staff | R | C | E | |
-| Finance Manager | R | C | E | A |
-| Accountant | R | | | |
-| Administrator | R | | | |
+| | Read | Create | Edit | Archive | Approve |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Finance Staff | R | C | E | | |
+| Finance Manager | R | | | A | Y |
+| Accountant | R | | | | |
+| Administrator | R | | | | |
 
 Finance Staff meet the suppliers and check their documents, so they maintain the
 list. Retiring a supplier the company has transacted with is a Manager decision.
+
+**F4.2.** A vendor is now proposed and then admitted. A newly created vendor is
+`pending_approval` and cannot be selected on a purchase order until a Finance
+Manager approves it — checked when the order is submitted and again when it is
+approved. A *material* edit to an approved vendor (name, TIN, email, phone,
+address, contact person) returns it to `pending_approval`; a note does not.
+Without that, the control would be decorative: get a harmless vendor approved,
+then change its bank details.
 
 ### `vendor_categories` — what each vendor supplies
 
@@ -81,12 +96,12 @@ single owner and every other role reads it.
 
 ### `budgets` — approved ceilings
 
-| | Read | Create | Edit | Archive |
-| --- | :-: | :-: | :-: | :-: |
-| Finance Staff | R | | | |
-| Finance Manager | R | C | E | A |
-| Accountant | R | | | |
-| Administrator | R | | | |
+| | Read | Create | Edit | Close | Approve |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Finance Staff | R | C | E | | |
+| Finance Manager | R | | E | A | Y |
+| Accountant | R | | | | |
+| Administrator | R | | | | |
 
 This is the rule the standalone system got wrong. Its `rbac.ts` reads:
 
@@ -98,7 +113,19 @@ canAllocateBudget  -> finance_manager, finance_staff, administrator
 and its RLS grants `has_role('administrator', ...)` write access on every
 finance table. The Administrator is not a finance officer in JMAC, and an
 account that can both grant finance privilege and set the ceilings those
-officers work under is not oversight — it is the absence of it.
+officers work under is not oversight — it is the absence of it. Nothing in
+F4.2 changes that: splitting the ceiling between a maker and a checker moves
+work between the two Finance roles and gives the Administrator no share of it.
+
+**F4.2.** This was Manager-only in F2, which made one person both the author and
+the approver of what the company is allowed to spend. Finance Staff draft a
+ceiling now and the Finance Manager puts it in force. A budget is created as
+`draft` whatever the insert asks for, and becomes `active` only through
+`review_budget` — it cannot be activated by editing it, which is why the form
+does not offer "Active" in its status list. Declining returns it to `draft`
+with a note rather than inventing a rejected state; a draft reserves nothing
+either way, so F3's reservation semantics are untouched. Existing active
+budgets were not reopened.
 
 ### `budget_allocations` — portions drawn against a ceiling
 
@@ -116,6 +143,26 @@ money to the ceiling, so it belongs to the same authority that set the ceiling.
 
 An allocation is never deleted. Released is a status, because who committed what
 against which budget, and when, is the point of having a budget.
+
+## Maker and checker (F4.2)
+
+One rule, stated once, enforced in three places:
+
+**Nobody approves their own proposal.** `assert_may_review_finance_master`
+refuses a review whose `proposed_by` is the caller, and
+`transition_purchase_order` refuses an approval whose `created_by` is the
+caller.
+
+The role matrix very nearly guarantees this on its own — a Finance Manager
+cannot author master data or raise a purchase order — but not quite. The gap is
+promotion: the Staff member who proposed a vendor last month and is the Manager
+today. The identity check is what actually holds, so it is written as a rule
+rather than left as a consequence of the matrix.
+
+Approval fields are never writable directly. The review functions are
+`SECURITY DEFINER` and announce themselves with a transaction-local setting;
+an ordinary UPDATE that touches `approval_status`, `reviewed_by` or
+`reviewed_at` is refused by the guard trigger.
 
 ## Two invariants the database holds, not the UI
 

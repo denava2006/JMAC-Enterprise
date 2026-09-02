@@ -21,9 +21,14 @@ const branches: Branch[] = [
   { id: MAIN, name: 'Main Office', address: null, phone: null, is_active: true, created_at: '', updated_at: '' },
 ]
 
-const state: { assignments: PosAssignment[]; rows: ManagerRequest[] } = {
+const state: {
+  assignments: PosAssignment[]
+  rows: ManagerRequest[]
+  progress: Array<Record<string, unknown>>
+} = {
   assignments: [],
   rows: [],
+  progress: [],
 }
 const asked: string[] = []
 const cancelled: string[] = []
@@ -69,6 +74,20 @@ vi.mock('@/hooks/usePosInventory', () => ({
   useBranchInventory: () => ({ data: [{ product_id: 'p1', product_name: 'Cola 1.5L' }], isLoading: false }),
 }))
 
+// Where procurement got to with each request. Quantities only -- the "no cost,
+// price, budget or supplier" assertion below reads this rendered output, so the
+// fixture deliberately carries a purchase order number and received counts and
+// still must not produce a peso sign anywhere.
+vi.mock('@/hooks/useProcurement', () => ({
+  REQUEST_PROGRESS_LABEL: {
+    with_finance: 'With Finance',
+    ordered: 'Ordered — awaiting delivery',
+    part_delivered: 'Part delivered',
+    delivered: 'Delivered',
+  },
+  useBranchRequestProgress: () => ({ data: state.progress, isLoading: false }),
+}))
+
 vi.mock('@/hooks/usePosRequests', () => ({
   useManagerRequests: (branchId?: string) => {
     if (branchId) asked.push(branchId)
@@ -97,6 +116,7 @@ afterEach(() => {
   cleanup()
   state.assignments = []
   state.rows = []
+  state.progress = []
   asked.length = 0
   cancelled.length = 0
 })
@@ -209,5 +229,66 @@ describe('someone who manages nothing', () => {
     state.assignments = [{ branchId: CAVITE, role: 'cashier' }]
     show()
     expect(screen.getByText(/Stock requests are for the branch you manage/)).toBeTruthy()
+  })
+})
+
+describe('what became of it', () => {
+  function progressFor(overrides: Record<string, unknown> = {}) {
+    return {
+      request_id: 'r1',
+      product_id: 'p1',
+      product_name: 'Cola 1.5L',
+      requested_quantity: 24,
+      requested_at: '2026-08-27T02:00:00Z',
+      request_status: 'approved',
+      po_number: 'PO-2026-0007',
+      po_status: 'approved',
+      quantity_ordered: 24,
+      quantity_received: 10,
+      quantity_outstanding: 14,
+      progress: 'part_delivered',
+      ...overrides,
+    }
+  }
+
+  it('tells the branch where procurement got to, and against which order', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.rows = [request({ status: 'approved', reviewer_name: 'Alice Dela Cruz' })]
+    state.progress = [progressFor()]
+    show()
+    expect(screen.getByText(/Part delivered/)).toBeTruthy()
+    expect(screen.getByText(/PO-2026-0007/)).toBeTruthy()
+    expect(screen.getByText('10 of 24 received')).toBeTruthy()
+  })
+
+  it('still shows no cost, price, budget or supplier once progress is on screen', () => {
+    // The guarantee that matters: the branch learns what arrived, never what it
+    // cost or who supplied it. The function feeding this returns no such column.
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.rows = [request({ status: 'approved', reviewer_name: 'Alice Dela Cruz' })]
+    state.progress = [progressFor()]
+    const { container } = show()
+    const text = container.textContent ?? ''
+    expect(text).not.toMatch(/\bcost\b/i)
+    expect(text).not.toMatch(/budget|supplier|vendor|invoice|margin/i)
+    expect(text).not.toMatch(/₱/)
+  })
+
+  it('says nothing at all for a request procurement has not touched', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.rows = [request()]
+    state.progress = []
+    show()
+    expect(screen.queryByText(/received$/)).toBeNull()
+    expect(screen.queryByText(/PO-/)).toBeNull()
+  })
+
+  it('does not attach one request’s progress to another', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.rows = [request({ request_id: 'r1' }), request({ request_id: 'r2' })]
+    state.progress = [progressFor({ request_id: 'r2', quantity_received: 3 })]
+    show()
+    // One row has progress; the other must not borrow it.
+    expect(screen.getAllByText('3 of 24 received')).toHaveLength(1)
   })
 })

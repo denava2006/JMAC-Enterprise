@@ -645,6 +645,50 @@ begin
   raise notice 'PASS  14e an order with no stock lines closes freely and moves nothing';
 
   -- ======================================================================
+  -- 15. A branch can see what became of what it asked for -- and no money
+  -- ======================================================================
+  --
+  -- Section 9 leaves restock_req raised by mgr_a and accepted by Finance. The
+  -- branch that raised it should be able to see where it got to without asking
+  -- anybody, and without learning what anything cost.
+  perform pg_temp.acts_as(mgr_a); set local role authenticated;
+  select count(*) into n from public.get_branch_request_progress(branch_a);
+  if n = 0 then raise exception 'FAIL 15a the branch cannot see its own requests'; end if;
+  raise notice 'PASS  15a a branch manager sees what became of their restock requests';
+
+  -- The progress word is derived from the documents, not stored anywhere.
+  select progress into txt from public.get_branch_request_progress(branch_a)
+   order by requested_at desc limit 1;
+  if txt is null then raise exception 'FAIL 15b no progress for an accepted request'; end if;
+  raise notice 'PASS  15b progress is derived from the procurement documents (%)', txt;
+  reset role;
+
+  -- Not another branch's, and not a cashier's.
+  perform pg_temp.acts_as(mgr_b); set local role authenticated;
+  select count(*) into n from public.get_branch_request_progress(branch_a);
+  if n <> 0 then raise exception 'FAIL 15c another branch''s manager read branch A''s requests'; end if;
+  reset role;
+
+  perform pg_temp.acts_as(cashier); set local role authenticated;
+  select count(*) into n from public.get_branch_request_progress(branch_a);
+  if n <> 0 then raise exception 'FAIL 15c a cashier read the branch''s request progress'; end if;
+  raise notice 'PASS  15c the answer is per branch, and per manager';
+  reset role;
+
+  -- The money guarantee, checked against the function's signature rather than
+  -- against one row: a column that does not exist cannot leak.
+  select string_agg(a.attname, ', ') into txt
+    from pg_proc pr
+    join unnest(pr.proallargtypes, pr.proargnames) with ordinality as a(typ, attname, ord) on true
+   where pr.proname = 'get_branch_request_progress'
+     and (a.attname ilike '%cost%' or a.attname ilike '%price%' or a.attname ilike '%total%'
+          or a.attname ilike '%amount%' or a.attname ilike '%margin%' or a.attname ilike '%vendor%');
+  if txt is not null then
+    raise exception 'FAIL 15d the branch view exposes procurement money: %', txt;
+  end if;
+  raise notice 'PASS  15d a POS Manager is told what arrived, never what it cost';
+
+  -- ======================================================================
   -- 10. A vendor's details are checked by the database, not just the form
   -- ======================================================================
   perform pg_temp.acts_as(staff); set local role authenticated;

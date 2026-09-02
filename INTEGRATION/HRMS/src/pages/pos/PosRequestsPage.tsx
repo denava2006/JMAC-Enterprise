@@ -34,6 +34,7 @@ import {
 import { ManagerBranchPicker, useManagerBranch } from '@/components/pos/ManagerBranchPicker'
 import { PosInventoryHeader } from '@/components/pos/PosInventoryHeader'
 import { useAuth } from '@/contexts/AuthContext'
+import { REQUEST_PROGRESS_LABEL, useBranchRequestProgress } from '@/hooks/useProcurement'
 import { useBranchInventory } from '@/hooks/usePosInventory'
 import {
   useCancelRequest,
@@ -199,8 +200,14 @@ function NewRequestDialog({
 export default function PosRequestsPage() {
   const { profile } = useAuth()
   const { branchId, setBranchId, managed, isLoading: branchesLoading } = useManagerBranch()
+  // What procurement did with these, read from the orders themselves.
+  const { data: progress = [] } = useBranchRequestProgress(branchId || undefined)
 
   const [status, setStatus] = React.useState<string>(ANY)
+  const progressByRequest = React.useMemo(
+    () => new Map(progress.map((row) => [row.request_id, row])),
+    [progress],
+  )
   const [page, setPage] = React.useState(1)
   const [composing, setComposing] = React.useState(false)
 
@@ -355,6 +362,27 @@ export default function PosRequestsPage() {
                           Reviewed by {row.reviewer_name}
                         </p>
                       )}
+                      {(() => {
+                        // Where procurement has got to. Quantities only: what
+                        // was ordered and what has arrived. Never the cost, and
+                        // never which supplier -- those are procurement's
+                        // judgement and are not in the function that feeds this.
+                        const p = progressByRequest.get(row.request_id)
+                        if (!p?.progress) return null
+                        return (
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            <p className="text-xs font-medium text-foreground">
+                              {REQUEST_PROGRESS_LABEL[p.progress] ?? p.progress}
+                              {p.po_number ? ` · ${p.po_number}` : ''}
+                            </p>
+                            {p.quantity_ordered !== null && (
+                              <p className="text-xs text-muted-foreground tabular-nums">
+                                {p.quantity_received ?? 0} of {p.quantity_ordered} received
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell className="text-right">
                       {isCancellable(row, profile?.id) && (

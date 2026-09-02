@@ -4210,6 +4210,23 @@ export type Database = {
           unit_cost: number
         }[]
       }
+      get_branch_request_progress: {
+        Args: { _branch_id: string }
+        Returns: {
+          po_number: string
+          po_status: string
+          product_id: string
+          product_name: string
+          progress: string
+          quantity_ordered: number
+          quantity_outstanding: number
+          quantity_received: number
+          request_id: string
+          request_status: string
+          requested_at: string
+          requested_quantity: number
+        }[]
+      }
       get_branch_transactions: {
         Args: {
           _branch_id: string
