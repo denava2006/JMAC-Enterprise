@@ -26,6 +26,7 @@ import {
   Receipt as ReceiptIcon,
   PiggyBank,
   Landmark,
+  ReceiptText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
@@ -62,6 +63,7 @@ const employeeNav: NavItem[] = [
   { label: 'My Attendance', to: '/dashboard/my-attendance', icon: CalendarClock },
   { label: 'My Leave', to: '/dashboard/my-leave', icon: CalendarCheck },
   { label: 'My Payroll', to: '/dashboard/my-payroll', icon: Wallet },
+  { label: 'My Requests', to: '/dashboard/my-requests', icon: ReceiptText },
 ]
 
 // Reference data every HR role can reach. What each may actually *do* there
@@ -80,6 +82,7 @@ const referenceNav: NavItem[] = [
 // access to. The same reasoning as employeeNav above.
 const financeNav: NavItem[] = [
   { label: 'Overview', to: '/fms', icon: LayoutDashboard },
+  { label: 'Requests', to: '/fms/requests', icon: ReceiptText },
   { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
   { label: 'Vendors', to: '/fms/vendors', icon: Store },
   { label: 'Categories', to: '/fms/categories', icon: Tags },

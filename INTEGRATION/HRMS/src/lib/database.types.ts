@@ -1237,6 +1237,230 @@ export type Database = {
           },
         ]
       }
+      finance_request_approvals: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          remarks: string | null
+          request_id: string
+          role_at_action: string | null
+          to_status: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          remarks?: string | null
+          request_id: string
+          role_at_action?: string | null
+          to_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          remarks?: string | null
+          request_id?: string
+          role_at_action?: string | null
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_request_approvals_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_request_approvals_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "finance_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_request_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          kind: string
+          request_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          kind?: string
+          request_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          kind?: string
+          request_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_request_attachments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "finance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_request_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_requests: {
+        Row: {
+          amount: number
+          budget_id: string | null
+          created_at: string
+          department_id: string | null
+          description: string | null
+          expense_date: string | null
+          finance_category_id: string | null
+          id: string
+          justification: string | null
+          needed_by: string | null
+          paid_at: string | null
+          paid_from_account_id: string | null
+          payment_reference: string | null
+          priority: string
+          request_no: string | null
+          requester_id: string
+          status: string
+          title: string
+          type: string
+          updated_at: string
+          vendor_id: string | null
+        }
+        Insert: {
+          amount: number
+          budget_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          expense_date?: string | null
+          finance_category_id?: string | null
+          id?: string
+          justification?: string | null
+          needed_by?: string | null
+          paid_at?: string | null
+          paid_from_account_id?: string | null
+          payment_reference?: string | null
+          priority?: string
+          request_no?: string | null
+          requester_id: string
+          status?: string
+          title: string
+          type: string
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Update: {
+          amount?: number
+          budget_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          expense_date?: string | null
+          finance_category_id?: string | null
+          id?: string
+          justification?: string | null
+          needed_by?: string | null
+          paid_at?: string | null
+          paid_from_account_id?: string | null
+          payment_reference?: string | null
+          priority?: string
+          request_no?: string | null
+          requester_id?: string
+          status?: string
+          title?: string
+          type?: string
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_requests_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budget_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_finance_category_id_fkey"
+            columns: ["finance_category_id"]
+            isOneToOne: false
+            referencedRelation: "finance_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_paid_from_account_id_fkey"
+            columns: ["paid_from_account_id"]
+            isOneToOne: false
+            referencedRelation: "finance_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generated_reports: {
         Row: {
           created_at: string
@@ -3255,6 +3479,10 @@ export type Database = {
       }
       can_manage_pos_catalogue: { Args: never; Returns: boolean }
       can_read_finance_master: { Args: never; Returns: boolean }
+      can_read_finance_request: {
+        Args: { _request_id: string }
+        Returns: boolean
+      }
       can_review_pos_request: {
         Args: { _request_type: Database["public"]["Enums"]["pos_request_type"] }
         Returns: boolean
@@ -4234,6 +4462,16 @@ export type Database = {
         }[]
       }
       sync_employment_statuses: { Args: never; Returns: undefined }
+      transition_finance_request: {
+        Args: {
+          _paid_from_account_id?: string
+          _payment_reference?: string
+          _remarks?: string
+          _request_id: string
+          _to_status: string
+        }
+        Returns: undefined
+      }
       update_pos_product_details: {
         Args: { _category_id: string; _name: string; _product_id: string }
         Returns: undefined

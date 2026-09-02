@@ -41,6 +41,8 @@ import PosBranchProductsPage from '@/pages/pos/PosProductsPage'
 import PosBranchSettingsPage from '@/pages/pos/PosSettingsPage'
 import FinanceHomePage from '@/pages/fms/FinanceHomePage'
 import BudgetsPage from '@/pages/fms/BudgetsPage'
+import FinanceRequestsPage from '@/pages/fms/FinanceRequestsPage'
+import MyRequestsPage from '@/pages/employee-portal/MyRequestsPage'
 import VendorsPage from '@/pages/fms/VendorsPage'
 import FinanceCategoriesPage from '@/pages/fms/FinanceCategoriesPage'
 import FinanceAccountsPage from '@/pages/fms/FinanceAccountsPage'
@@ -142,6 +144,7 @@ export default function App() {
               }
             >
               <Route index element={<FinanceHomePage />} />
+              <Route path="requests" element={<FinanceRequestsPage />} />
               <Route path="budgets" element={<BudgetsPage />} />
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />
@@ -416,6 +419,14 @@ export default function App() {
                 element={
                   <ProtectedRoute requireEmployee>
                     <MyPayrollPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="my-requests"
+                element={
+                  <ProtectedRoute requireEmployee>
+                    <MyRequestsPage />
                   </ProtectedRoute>
                 }
               />

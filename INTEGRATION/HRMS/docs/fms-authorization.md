@@ -141,3 +141,129 @@ that two of the four have no source yet.
 and reads as the full ceiling until the phases that supply those two numbers
 exist. `budget_status` reports all of them so the distinction is visible from
 the first screen rather than retrofitted onto it.
+
+---
+
+# F3 — the request workflow
+
+Master data said what money *is*. This says how money *moves*: an employee asks,
+Finance Staff validate, the Finance Manager approves, the Accountant pays. The
+one-active-role rule from F1 exists for exactly this chain — one person holding
+two of these roles carries a payment from validation to disbursement with nobody
+else in the room.
+
+## What the standalone system got wrong here
+
+Its entire approval chain lived in the UI. The database policy was:
+
+```sql
+create policy requests_update on requests
+  for update to authenticated
+  using (requester_id = auth.uid() or is_reviewer())
+  with check (requester_id = auth.uid() or is_reviewer());
+```
+
+with `is_reviewer()` meaning "everyone except plain employees". Three holes
+follow directly, and none is theoretical:
+
+1. **No state machine.** Any reviewer could set any request to any status. The
+   Accountant could mark a request `completed` that no one had approved; Finance
+   Staff could send their own request straight to payment.
+2. **The requester could edit an approved request.** `requester_id = auth.uid()`
+   holds at every status, so ₱5,000 could be approved and then edited to
+   ₱500,000 before the Accountant paid it.
+3. **The requester could delete it**, taking the approval history with it.
+
+None of that is ported. In JMAC a status change is not an UPDATE anyone may
+write — it is a function that checks who is asking, what the request's current
+status is, and whether that transition exists at all.
+
+## Statuses
+
+Named for the act that is pending rather than the actor who performs it, so a
+role rename never silently changes what a status means.
+
+| Status | Meaning |
+| --- | --- |
+| `draft` | The requester is still preparing it. Nothing is committed. |
+| `pending_validation` | Submitted. Finance Staff check the documents and the budget. |
+| `pending_approval` | Validated. The Finance Manager decides. |
+| `pending_payment` | Approved. **Budget is reserved from here.** The Accountant pays. |
+| `completed` | Paid and recorded. The reservation becomes spend. |
+| `returned` | Sent back for revision. Editable again. |
+| `rejected` | Refused. Terminal. |
+| `cancelled` | Withdrawn by the requester before anyone acted. Terminal. |
+
+## Transitions
+
+Every row is a permitted move. Anything not listed is refused by the database,
+including moves a role would otherwise seem senior enough to make.
+
+| Actor | From | To | Act |
+| --- | --- | --- | --- |
+| Requester | `draft` | `pending_validation` | submit |
+| Requester | `returned` | `pending_validation` | resubmit |
+| Requester | `draft`, `returned` | `cancelled` | withdraw |
+| Finance Staff | `pending_validation` | `pending_approval` | validate |
+| Finance Staff | `pending_validation` | `returned` | return for revision |
+| Finance Staff | `pending_validation` | `rejected` | reject |
+| Finance Manager | `pending_approval` | `pending_payment` | approve — **reserves budget** |
+| Finance Manager | `pending_approval` | `returned` | return for revision |
+| Finance Manager | `pending_approval` | `rejected` | reject |
+| Accountant | `pending_payment` | `completed` | pay and record — **reservation becomes spend** |
+| Accountant | `pending_payment` | `returned` | return — documents wrong; **releases the reservation** |
+
+The Administrator appears nowhere in this table. They read requests and the
+approval history for oversight and move nothing, because an account that grants
+finance privilege must not also be able to move money through the chain those
+officers staff.
+
+Finance Staff cannot validate their own request, the Finance Manager cannot
+approve their own, and the Accountant cannot pay their own — a finance officer
+raising a request is a requester like anyone else, and the next step belongs to
+somebody else.
+
+## What may be edited, and when
+
+| Field group | Editable at |
+| --- | --- |
+| Title, description, justification, needed-by | `draft`, `returned` — by the requester |
+| **Amount, type, vendor, category, budget** | `draft`, `returned` **only** |
+| Payment account and reference | at completion, by the Accountant |
+| Status | Never by UPDATE — only through the transition function |
+
+Once a request leaves `draft`/`returned` its financial substance is frozen. What
+was approved is what gets paid.
+
+## Records
+
+| | Read | Create | Edit | Transition |
+| --- | :-: | :-: | :-: | :-: |
+| Own requests (any employee) | R | C | E (draft/returned) | submit, resubmit, cancel |
+| Finance Staff | all | C (own) | — | validate, return, reject |
+| Finance Manager | all | C (own) | — | approve, return, reject |
+| Accountant | all | C (own) | payment fields at completion | pay, return |
+| Administrator | all | | | **none** |
+
+`request_approvals` is append-only for everyone. It is the record of who decided
+what, and a record that can be edited is not one.
+
+## Budgets stop being hypothetical
+
+F2 shipped `budget_status` with `reserved` and `spent` reading zero and a comment
+naming the phase that would supply them. This is that phase:
+
+- **reserved** — the sum of requests at `pending_payment` against the budget.
+- **spent** — the sum of requests at `completed`.
+
+Both derived from the requests table rather than stored, so they cannot drift and
+double deduction is impossible: at completion a request leaves `reserved` and
+enters `spent` in the same instant, and `remaining` does not move.
+
+## Still not F3
+
+Supplier invoices, accounts payable, a general payments ledger, purchase orders,
+the stock-demand and receiving bridges, POS sales posting, PayMongo
+reconciliation, payroll accounting and journal entries. The Accountant records
+*which account a request was paid from and under what reference* — that is the
+end of this chain, not the beginning of a ledger.
