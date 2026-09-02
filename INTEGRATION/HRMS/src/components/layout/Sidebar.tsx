@@ -34,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { portalForPath } from '@/lib/portals'
 import { canAccessModule } from '@/lib/roles'
 import { JmacWordmark } from '@/components/Brand'
+import { BuildStamp } from '@/components/BuildStamp'
 
 export interface NavItem {
   label: string
@@ -215,6 +216,12 @@ export function Sidebar() {
           </>
         )}
       </nav>
+
+      {/* Which build, which environment, which database. Small enough to ignore
+          and specific enough to settle an argument. */}
+      <div className="border-t border-border p-2">
+        <BuildStamp />
+      </div>
     </aside>
   )
 }

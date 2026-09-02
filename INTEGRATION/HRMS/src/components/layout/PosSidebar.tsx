@@ -3,6 +3,7 @@ import { NavRow, type NavItem } from '@/components/layout/Sidebar'
 import { JmacWordmark } from '@/components/Brand'
 import { useAuth } from '@/contexts/AuthContext'
 import { hasAnyManagerAssignment } from '@/lib/portals'
+import { BuildStamp } from '@/components/BuildStamp'
 
 /**
  * The POS portal's navigation.
@@ -67,6 +68,12 @@ export function PosSidebar() {
           <NavRow key={item.to} item={item} />
         ))}
       </nav>
+
+      {/* Which build, which environment, which database. Small enough to ignore
+          and specific enough to settle an argument. */}
+      <div className="border-t border-border p-2">
+        <BuildStamp />
+      </div>
     </aside>
   )
 }
