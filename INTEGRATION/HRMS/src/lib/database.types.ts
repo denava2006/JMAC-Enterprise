@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -38,6 +38,7 @@ export type Database = {
         Row: {
           application_id: string
           attempts: number
+          claimed_at: string | null
           created_at: string
           dedupe_key: string
           event_type: string
@@ -55,6 +56,7 @@ export type Database = {
         Insert: {
           application_id: string
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           dedupe_key: string
           event_type: string
@@ -72,6 +74,7 @@ export type Database = {
         Update: {
           application_id?: string
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           dedupe_key?: string
           event_type?: string
@@ -4027,6 +4030,60 @@ export type Database = {
       }
     }
     Views: {
+      applicant_notification_latency: {
+        Row: {
+          attempts: number | null
+          event_type: string | null
+          id: string | null
+          next_attempt_at: string | null
+          provider_accepted: boolean | null
+          provider_seconds: number | null
+          queue_seconds: number | null
+          queued_at: string | null
+          sent_at: string | null
+          status:
+            | Database["public"]["Enums"]["applicant_notification_status"]
+            | null
+          total_seconds: number | null
+          updated_at: string | null
+          worker_started_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          event_type?: string | null
+          id?: string | null
+          next_attempt_at?: string | null
+          provider_accepted?: never
+          provider_seconds?: never
+          queue_seconds?: never
+          queued_at?: string | null
+          sent_at?: string | null
+          status?:
+            | Database["public"]["Enums"]["applicant_notification_status"]
+            | null
+          total_seconds?: never
+          updated_at?: string | null
+          worker_started_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          event_type?: string | null
+          id?: string | null
+          next_attempt_at?: string | null
+          provider_accepted?: never
+          provider_seconds?: never
+          queue_seconds?: never
+          queued_at?: string | null
+          sent_at?: string | null
+          status?:
+            | Database["public"]["Enums"]["applicant_notification_status"]
+            | null
+          total_seconds?: never
+          updated_at?: string | null
+          worker_started_at?: string | null
+        }
+        Relationships: []
+      }
       budget_status: {
         Row: {
           alert_threshold: number | null
@@ -4776,6 +4833,79 @@ export type Database = {
           reference_number: string
         }[]
       }
+      get_finance_sales_collections: {
+        Args: {
+          _branch_id?: string
+          _cashier_id?: string
+          _from_date?: string
+          _payment_method?: string
+          _to_date?: string
+        }
+        Returns: {
+          amount_collected: number
+          payment_method: string
+          transaction_count: number
+        }[]
+      }
+      get_finance_sales_filters: {
+        Args: { _from_date?: string; _to_date?: string }
+        Returns: {
+          id: string
+          kind: string
+          label: string
+        }[]
+      }
+      get_finance_sales_summary: {
+        Args: {
+          _branch_id?: string
+          _cashier_id?: string
+          _from_date?: string
+          _payment_method?: string
+          _to_date?: string
+        }
+        Returns: {
+          average_sale: number
+          date_from: string
+          date_to: string
+          discounts: number
+          fees_collected: number
+          gross_sales: number
+          items_sold: number
+          net_sales: number
+          refunds: number
+          total_collected: number
+          transaction_count: number
+        }[]
+      }
+      get_finance_sales_transactions: {
+        Args: {
+          _branch_id?: string
+          _cashier_id?: string
+          _from_date?: string
+          _limit?: number
+          _offset?: number
+          _payment_method?: string
+          _to_date?: string
+        }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          cashier_id: string
+          cashier_name: string
+          discounts: number
+          fees_total: number
+          gross_sales: number
+          item_count: number
+          net_sales: number
+          payment_method: string
+          payment_reference: string
+          refunds: number
+          sale_id: string
+          sold_at: string
+          total_collected: number
+          total_rows: number
+        }[]
+      }
       get_hr_account_candidates: {
         Args: { _hr_role?: string }
         Returns: {
@@ -5396,6 +5526,7 @@ export type Database = {
         Args: { _category_id: string; _direction: number }
         Returns: undefined
       }
+      request_applicant_notification_run: { Args: never; Returns: undefined }
       require_business_reason: {
         Args: { _reason: string; _what: string }
         Returns: string

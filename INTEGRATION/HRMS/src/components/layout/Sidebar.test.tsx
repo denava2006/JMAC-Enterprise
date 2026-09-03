@@ -88,6 +88,7 @@ describe('exactly one navigation row is ever active', () => {
   it.each([
     ['/fms', 'Overview'],
     ['/fms/requests', 'Requests'],
+    ['/fms/sales', 'Sales & Collections'],
     ['/fms/procurement', 'Procurement'],
     ['/fms/budgets', 'Budgets'],
     ['/fms/vendors', 'Vendors'],

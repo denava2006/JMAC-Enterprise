@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Landmark, PiggyBank, Store, Tags } from 'lucide-react'
+import { Landmark, PiggyBank, Store, Tags, TrendingUp, Wallet } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
@@ -15,6 +15,7 @@ import {
   useFinanceCategories,
   useVendors,
 } from '@/hooks/useFinanceMasterData'
+import { useFinanceSalesPresets, useFinanceSalesSummary } from '@/hooks/useFinanceSales'
 
 /**
  * The Finance overview.
@@ -23,6 +24,11 @@ import {
  * it is for. It deliberately shows no spending figure: nothing in JMAC can yet
  * produce one, and a dashboard reporting ₱0.00 spent would be read as a fact
  * about the business rather than as a phase that has not been built.
+ *
+ * Today's sales are the exception, and they earn it: POS genuinely records
+ * them, so the figure means what it says. Two numbers only -- the Sales &
+ * Collections page is where the breakdown lives, and duplicating it here would
+ * give the enterprise two places to disagree about a day's takings.
  */
 export default function FinanceHomePage() {
   const { profile } = useAuth()
@@ -30,6 +36,18 @@ export default function FinanceHomePage() {
   const { data: vendors = [], isLoading: vendorsLoading } = useVendors()
   const { data: categories = [], isLoading: categoriesLoading } = useFinanceCategories()
   const { data: accounts = [], isLoading: accountsLoading } = useFinanceAccounts()
+
+  // Today's trading. The preset carries the Philippine business date the
+  // database computed, so the browser's clock never decides which day this is.
+  const { data: presets } = useFinanceSalesPresets()
+  const todayPreset = (presets ?? []).find((p) => p.preset === 'today')
+  const { data: today, isLoading: todayLoading } = useFinanceSalesSummary({
+    dateFrom: todayPreset?.date_from ?? '',
+    dateTo: todayPreset?.date_to ?? '',
+    branchId: null,
+    paymentMethod: null,
+    cashierId: null,
+  })
 
   const activeBudgets = budgets.filter((b) => b.status === 'active')
   const ceiling = activeBudgets.reduce((sum, b) => sum + Number(b.amount), 0)
@@ -96,6 +114,24 @@ export default function FinanceHomePage() {
           value={vendors.filter((v) => v.is_active).length}
           icon={Store}
           isLoading={vendorsLoading}
+        />
+      </div>
+
+      {/* Today's trading, from the same server query the Sales page uses --
+          two figures, not a second copy of that page. "Today" is the
+          Philippine business day the database resolves, not the browser's. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <StatCard
+          label="Today's net sales"
+          value={formatMoney(Number(today?.net_sales ?? 0))}
+          icon={TrendingUp}
+          isLoading={todayLoading}
+        />
+        <StatCard
+          label="Today's collections"
+          value={formatMoney(Number(today?.total_collected ?? 0))}
+          icon={Wallet}
+          isLoading={todayLoading}
         />
       </div>
 

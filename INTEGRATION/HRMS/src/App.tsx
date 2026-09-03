@@ -44,6 +44,7 @@ import SupplierInvoicesPage from '@/pages/fms/SupplierInvoicesPage'
 import BudgetsPage from '@/pages/fms/BudgetsPage'
 import FinanceRequestsPage from '@/pages/fms/FinanceRequestsPage'
 import ProcurementPage from '@/pages/fms/ProcurementPage'
+import FinanceSalesPage from '@/pages/fms/FinanceSalesPage'
 import PosDeliveriesPage from '@/pages/pos/PosDeliveriesPage'
 import MyRequestsPage from '@/pages/employee-portal/MyRequestsPage'
 import VendorsPage from '@/pages/fms/VendorsPage'
@@ -153,6 +154,9 @@ export default function App() {
                   an account payable is an approved invoice nobody has
                   paid, not a separate document. */}
               <Route path="invoices" element={<SupplierInvoicesPage />} />
+              {/* Read-only. POS owns every sale behind this page, and a
+                  correction has to start where the transaction did. */}
+              <Route path="sales" element={<FinanceSalesPage />} />
               <Route path="budgets" element={<BudgetsPage />} />
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />
