@@ -1,8 +1,24 @@
 import * as React from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { Branch } from '@/hooks/useBranches'
 import { cn } from '@/lib/utils'
+
+/**
+ * What the map needs to know about a branch, and no more.
+ *
+ * Declared here rather than importing the internal Branch type, so the public
+ * landing page can pass rows from public_branch_locations without dragging the
+ * back-office record -- and its operational columns -- into a public bundle.
+ * The admin Branch type satisfies this structurally.
+ */
+export interface MappableBranch {
+  id: string
+  name: string
+  address: string | null
+  phone?: string | null
+  latitude: number | null
+  longitude: number | null
+}
 
 /**
  * Where the branches are.
@@ -35,7 +51,7 @@ const PIN = L.divIcon({
   popupAnchor: [0, -30],
 })
 
-function popupHtml(branch: Branch) {
+function popupHtml(branch: MappableBranch) {
   // Escaped by hand: a branch name is administrator-entered text going into an
   // innerHTML popup, and Leaflet does no escaping of its own.
   const escape = (value: string) =>
@@ -69,6 +85,10 @@ const HEIGHT = {
   /** Inside a dialog, where it sits between the branch details and the
    *  coordinate fields and must leave both of them on screen. */
   compact: 'h-[200px] sm:h-[260px]',
+  /** The public landing page, where the map is a showpiece and has a whole
+   *  section to itself -- taller than the dialog, shorter than the admin page
+   *  it shares a screen with nothing else on. */
+  public: 'h-[280px] sm:h-[400px]',
 } as const
 
 export function BranchMap({
@@ -76,7 +96,7 @@ export function BranchMap({
   variant = 'page',
   caption = true,
 }: {
-  branches: Branch[]
+  branches: MappableBranch[]
   variant?: keyof typeof HEIGHT
   /** The page wants the "1 of 2 pinned" line; the dialog has its own copy. */
   caption?: boolean

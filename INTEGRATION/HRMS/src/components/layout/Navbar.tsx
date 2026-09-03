@@ -14,12 +14,21 @@ import { CalendarWidget } from '@/components/layout/CalendarWidget'
 import { ClockWidget } from '@/components/layout/ClockWidget'
 import { useMyEmployeeRecord } from '@/hooks/useEmployeePortal'
 import { availablePortals, portalForPath } from '@/lib/portals'
-import { compactIdentity } from '@/lib/displayName'
 import { roleBadge } from '@/lib/roleBadge'
 
-function initials(name: string) {
-  return name
-    .split(' ')
+/**
+ * Two letters for the avatar.
+ *
+ * Null-safe because an account can genuinely have no full_name yet -- an
+ * invited user who has not completed their profile -- and the previous version
+ * called .split on it and took the whole header down with a TypeError. An
+ * account with no name at all falls back to the person icon.
+ */
+function initials(name: string | null | undefined) {
+  return (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
     .map((p) => p[0])
     .slice(0, 2)
     .join('')
@@ -53,18 +62,32 @@ export function Navbar() {
 
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            {/*
+              One role indicator, and it is the badge.
+
+              This block used to say it three times over: the name was rendered
+              through a helper that prefixed the role to it ("HR Staff Chan"),
+              the line under it repeated the role in full ("HR Staff"), and then
+              the badge said it a third time ("HRS"). The name is now just the
+              name, and the full wording lives on the badge's tooltip and its
+              accessible label, plus the account menu below.
+
+              The second line survives only for employees, and only because
+              position and department are their actual job -- not another way of
+              writing the role. A Cashier reads "Cashier · Operations" there and
+              POSC on the badge, which are two different facts.
+            */}
             <div className="hidden text-right leading-tight sm:block">
-              {/* Short here on purpose; the full name is in the menu below. */}
               <p className="text-sm font-medium text-foreground">
-                {isEmployee ? profile?.full_name : compactIdentity(profile?.full_name, profile?.role)}
+                {profile?.full_name || profile?.email}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {isEmployee && myEmployee
-                  ? [myEmployee.positions?.title, myEmployee.departments?.name].filter(Boolean).join(' · ')
-                  : badge
-                    ? badge.full
-                    : ''}
-              </p>
+              {isEmployee && myEmployee && (
+                <p className="text-xs text-muted-foreground">
+                  {[myEmployee.positions?.title, myEmployee.departments?.name]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
             </div>
             {/* Which hat you are wearing, at a glance -- the thing you cannot
                 tell from a name and an avatar when one person holds several
@@ -81,11 +104,22 @@ export function Navbar() {
               </span>
             )}
             <Avatar>
-              <AvatarFallback>{profile ? initials(profile.full_name) : <User className="h-4 w-4" />}</AvatarFallback>
+              <AvatarFallback>
+                {initials(profile?.full_name || profile?.email) || <User className="h-4 w-4" />}
+              </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{profile?.email}</DropdownMenuLabel>
+            {/* The one place the role is spelled out. The top bar shows the
+                abbreviation; anybody who does not recognise it opens this. */}
+            <DropdownMenuLabel>
+              <span className="block truncate">{profile?.email}</span>
+              {badge && (
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  {badge.full}
+                </span>
+              )}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {portals.length > 1 && (
               <>

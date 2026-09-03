@@ -435,6 +435,13 @@ export type Database = {
             referencedRelation: "branches"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "branch_pos_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       branches: {
@@ -791,6 +798,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deployment_records_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
             referencedColumns: ["id"]
           },
           {
@@ -1470,6 +1484,13 @@ export type Database = {
             columns: ["delivery_branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_delivery_branch_id_fkey"
+            columns: ["delivery_branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
             referencedColumns: ["id"]
           },
           {
@@ -2374,6 +2395,13 @@ export type Database = {
             referencedRelation: "branches"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pos_audit_events_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pos_branch_assignments: {
@@ -2416,6 +2444,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_branch_assignments_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
             referencedColumns: ["id"]
           },
           {
@@ -2503,6 +2538,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_branch_products_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
             referencedColumns: ["id"]
           },
           {
@@ -2656,6 +2698,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pos_inventory_requests_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pos_inventory_requests_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -2756,6 +2805,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_attempts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
             referencedColumns: ["id"]
           },
           {
@@ -3017,6 +3073,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pos_sales_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pos_sales_cashier_id_fkey"
             columns: ["cashier_id"]
             isOneToOne: false
@@ -3271,6 +3334,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "purchase_order_items_destination_branch_id_fkey"
+            columns: ["destination_branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "purchase_order_items_pos_product_id_fkey"
             columns: ["pos_product_id"]
             isOneToOne: false
@@ -3434,6 +3504,13 @@ export type Database = {
             columns: ["delivery_branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_delivery_branch_id_fkey"
+            columns: ["delivery_branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
             referencedColumns: ["id"]
           },
           {
@@ -3665,6 +3742,13 @@ export type Database = {
             referencedRelation: "branches"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "work_locations_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       work_schedules: {
@@ -3765,6 +3849,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      public_branch_locations: {
+        Row: {
+          address: string | null
+          id: string | null
+          latitude: number | null
+          longitude: number | null
+          name: string | null
+        }
+        Insert: {
+          address?: string | null
+          id?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          name?: string | null
+        }
+        Update: {
+          address?: string | null
+          id?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          name?: string | null
+        }
+        Relationships: []
       }
       purchase_order_status: {
         Row: {

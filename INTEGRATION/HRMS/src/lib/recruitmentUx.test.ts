@@ -8,7 +8,6 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MILESTONE_LABEL } from '@/hooks/useApplicantPortal'
-import { compactIdentity } from '@/lib/displayName'
 import { canAccessModule } from '@/lib/roles'
 import { IMPORTABLE_FIELDS, importedFields, resolveSubmittedApplicant } from '@/lib/hiring'
 
@@ -166,27 +165,21 @@ describe('the general Approvals screen', () => {
 })
 
 describe('the header identity', () => {
-  it("is short, and uses the person's real first name", () => {
-    expect(compactIdentity('Clark Kint Ong De Nava', 'hr_manager')).toBe('HRM Clark')
-    expect(compactIdentity('Sam Chan', 'hr_staff')).toBe('HR Staff Sam')
-    expect(compactIdentity('Alex Reyes', 'admin')).toBe('Admin Alex')
-  })
+  it('is the name, not the name with the role stapled to the front', () => {
+    // compactIdentity used to render "HR Staff Sam" in the top bar, which meant
+    // the role appeared there three times over: in the name, again in full on
+    // the line beneath, and again as the badge. The helper is gone with it.
+    const helpers = read('src', 'lib', 'displayName.ts')
+    expect(helpers).not.toContain('compactIdentity')
+    expect(helpers).not.toContain('ROLE_SHORT')
 
-  it('falls back to the name alone for a role with no short form', () => {
-    expect(compactIdentity('Ana Cruz', 'employee')).toBe('Ana')
-  })
-
-  it('copes with a missing name', () => {
-    expect(compactIdentity(null, 'hr_manager')).toBe('HRM')
-    expect(compactIdentity('', undefined)).toBe('')
+    const navbar = read('src', 'components', 'layout', 'Navbar.tsx')
+    expect(navbar).not.toContain('compactIdentity')
+    expect(navbar).toContain('profile?.full_name')
   })
 
   it('is presentation only — the stored name is untouched', () => {
-    // compactIdentity is a display helper. Nothing here writes anything, and
-    // the full legal name is what every record and audit entry still holds.
     const helpers = read('src', 'lib', 'displayName.ts')
     expect(helpers).not.toMatch(/supabase|update|insert/i)
-    const navbar = read('src', 'components', 'layout', 'Navbar.tsx')
-    expect(navbar).toContain('profile?.full_name')
   })
 })

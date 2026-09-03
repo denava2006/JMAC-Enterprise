@@ -15,24 +15,3 @@ export function firstName(fullName: string | null | undefined, fallback = 'there
   return first || fallback
 }
 
-/** Short role labels for compact identity. Absent roles fall back to the name
- *  alone rather than inventing an abbreviation. */
-const ROLE_SHORT: Record<string, string> = {
-  admin: 'Admin',
-  hr_manager: 'HRM',
-  hr_staff: 'HR Staff',
-}
-
-/**
- * A compact identity: a short role and a first name, e.g. "HRM Clark".
- *
- * Used where space is tight and the person is looking at their own name -- the
- * account header. Anywhere the reader needs to identify SOMEBODY ELSE
- * definitively, show the full name.
- */
-export function compactIdentity(fullName: string | null | undefined, role: string | undefined): string {
-  const first = (fullName ?? '').trim().split(/\s+/)[0] ?? ''
-  const short = role ? ROLE_SHORT[role] : undefined
-  if (!first) return short ?? ''
-  return short ? `${short} ${first}` : first
-}

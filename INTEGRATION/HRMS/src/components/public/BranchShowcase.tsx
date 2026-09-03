@@ -1,49 +1,29 @@
-import { MapPin, Navigation } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Reveal, RevealGroup, RevealItem, CARD_HOVER } from '@/components/public/Reveal'
+import { BranchMap } from '@/components/admin/BranchMap'
+import { usePublicBranches } from '@/hooks/usePublicBranches'
 
 /**
- * Where JMAC operates.
+ * Where JMAC operates, read from the record rather than retyped here.
  *
- * Deliberately a curated list rather than a live query. The branches table has
- * SELECT policies for `authenticated` only, so an anonymous visitor reading it
- * would get an empty section — and opening branch records to the public web to
- * fill a marketing panel is a security decision, not a layout one. It is not
- * mine to make inside a landing-page refresh.
+ * The cards and the map come from one query. Keeping a hardcoded list beside a
+ * live map is how the two end up disagreeing, and the one that is wrong is
+ * always the one nobody is looking at. Open a branch in the back office, give
+ * it coordinates, and it appears here on the next load; archive it and it
+ * leaves. There is no second place to remember to edit.
  *
- * The shape below is the shape the real thing has: name, address, a label, and
- * an optional coordinate pair. When branches are exposed publicly (a narrow
- * view, or an RPC returning name/address/coordinates only) this array is
- * replaced by that query and nothing else on the page changes. The map slot is
- * already here, sized and captioned, waiting for the same BranchMap component
- * the admin Branches page uses.
+ * The query reads public_branch_locations, a view carrying name, address and
+ * coordinates for active branches only. The branches table itself stays closed
+ * to anonymous visitors, so nothing operational can reach this page even by
+ * mistake.
  */
-
-export interface ShowcaseBranch {
-  name: string
-  address: string
-  role: string
-  /** Present once somebody has located the branch. Drives the future map. */
-  latitude?: number
-  longitude?: number
-}
-
-/** Mirrors the live branch records. Kept truthful rather than padded out with
- *  invented locations — two branches is what JMAC has. */
-export const SHOWCASE_BRANCHES: ShowcaseBranch[] = [
-  {
-    name: 'Main Office',
-    address: '123 Ayala Avenue, Makati City',
-    role: 'Head office · HR, Finance and enterprise administration',
-  },
-  {
-    name: 'Cavite Branch',
-    address: 'Aguinaldo Highway, Dasmariñas, Cavite',
-    role: 'Retail branch · Point of sale, stock and receiving',
-  },
-]
-
 export function BranchShowcase() {
+  const { data: branches = [], isLoading, isError } = usePublicBranches()
+
+  const located = branches.filter((b) => b.latitude != null && b.longitude != null)
+
   return (
     <section id="branches" className="border-t border-border bg-muted/30 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -58,43 +38,91 @@ export function BranchShowcase() {
           </p>
         </Reveal>
 
-        <RevealGroup className="mt-12 grid gap-5 sm:grid-cols-2">
-          {SHOWCASE_BRANCHES.map((branch) => (
-            <RevealItem key={branch.name}>
-              <Card className={`h-full ${CARD_HOVER}`}>
-                <CardContent className="flex h-full flex-col gap-3 p-6">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
-                      <MapPin className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="font-display text-lg font-semibold text-foreground">{branch.name}</h3>
-                      <p className="mt-0.5 text-sm text-muted-foreground">{branch.address}</p>
-                    </div>
-                  </div>
-                  <p className="mt-auto border-t border-border pt-3 font-mono text-xs leading-relaxed tracking-[0.02em] text-muted-foreground">
-                    {branch.role}
-                  </p>
-                </CardContent>
-              </Card>
-            </RevealItem>
-          ))}
-        </RevealGroup>
-
-        {/* The map slot. Sized and captioned now so the section is composed
-            around it, rather than the map being wedged in later and shifting
-            everything. Dropping BranchMap in here is the whole change. */}
-        <Reveal delay={0.1} className="mt-6">
-          <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-card/60 px-5 py-4">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <Navigation className="h-4 w-4" />
-            </span>
-            <p className="text-sm text-muted-foreground">
-              An interactive branch map is coming to this section — the component already runs on the
-              internal Branches page and needs each branch located before it means anything publicly.
-            </p>
+        {isLoading ? (
+          <div className="mt-12 flex flex-col gap-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Skeleton className="h-32 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+            </div>
+            <Skeleton className="h-[280px] w-full rounded-lg sm:h-[400px]" />
           </div>
-        </Reveal>
+        ) : isError ? (
+          /* Public-safe: it says the section could not load and stops there.
+             A visitor can do nothing with a Postgres error, and it is not
+             theirs to read. */
+          <Reveal className="mt-12">
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Our locations could not be loaded just now.
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Please refresh the page, or get in touch and we will point you to your nearest
+                  branch.
+                </p>
+              </CardContent>
+            </Card>
+          </Reveal>
+        ) : branches.length === 0 ? (
+          <Reveal className="mt-12">
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Locations will appear here as branches are added.
+                </p>
+              </CardContent>
+            </Card>
+          </Reveal>
+        ) : (
+          <>
+            <RevealGroup className="mt-12 grid gap-5 sm:grid-cols-2">
+              {branches.map((branch) => {
+                const mapped = branch.latitude != null && branch.longitude != null
+                return (
+                  <RevealItem key={branch.id}>
+                    <Card className={`h-full ${CARD_HOVER}`}>
+                      <CardContent className="flex h-full flex-col gap-3 p-6">
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                            <MapPin className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <h3 className="font-display text-lg font-semibold text-foreground">
+                              {branch.name}
+                            </h3>
+                            {branch.address && (
+                              <p className="mt-0.5 text-sm text-muted-foreground">{branch.address}</p>
+                            )}
+                          </div>
+                        </div>
+                        {/* A branch with no coordinates still gets a card. It is
+                            listed, it is simply not pinned -- which is the
+                            honest rendering of "nobody has located it yet"
+                            rather than quietly dropping a real location. */}
+                        {!mapped && (
+                          <p className="mt-auto border-t border-border pt-3 font-mono text-xs tracking-[0.02em] text-muted-foreground">
+                            Location not mapped yet
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </RevealItem>
+                )
+              })}
+            </RevealGroup>
+
+            <Reveal delay={0.1} className="mt-6">
+              <BranchMap branches={branches} variant="public" caption={false} />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                {located.length === 0
+                  ? 'None of our branches are pinned yet — the addresses above are the ones to use.'
+                  : located.length === branches.length
+                    ? 'Select a pin for the address. Scroll-zoom is off; use the buttons or Ctrl and the wheel.'
+                    : `${located.length} of ${branches.length} locations pinned.`}
+              </p>
+            </Reveal>
+          </>
+        )}
       </div>
     </section>
   )
