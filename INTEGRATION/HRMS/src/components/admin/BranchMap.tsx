@@ -51,6 +51,15 @@ const PIN = L.divIcon({
   popupAnchor: [0, -30],
 })
 
+/**
+ * Six decimal places is about a tenth of a metre, which is far finer than
+ * anybody pinning a shopfront needs and well inside numeric(9,6) -- the column
+ * would round anyway, and rounding here means the field shows what was stored.
+ */
+function round6(value: number): number {
+  return Math.round(value * 1e6) / 1e6
+}
+
 function popupHtml(branch: MappableBranch) {
   // Escaped by hand: a branch name is administrator-entered text going into an
   // innerHTML popup, and Leaflet does no escaping of its own.
@@ -95,15 +104,28 @@ export function BranchMap({
   branches,
   variant = 'page',
   caption = true,
+  onPick,
 }: {
   branches: MappableBranch[]
   variant?: keyof typeof HEIGHT
   /** The page wants the "1 of 2 pinned" line; the dialog has its own copy. */
   caption?: boolean
+  /**
+   * Turns the map into the way a location is chosen: click to pin, drag to
+   * adjust. Absent, the map stays exactly what it was -- a read-only display,
+   * which is what both the Branches page and the public landing page want.
+   */
+  onPick?: (latitude: number, longitude: number) => void
 }) {
   const holder = React.useRef<HTMLDivElement | null>(null)
   const map = React.useRef<L.Map | null>(null)
   const layer = React.useRef<L.LayerGroup | null>(null)
+
+  // Leaflet handlers are registered once against a map that outlives every
+  // render, so they would close over the first onPick for ever. The ref keeps
+  // them calling the current one without re-registering anything.
+  const pick = React.useRef(onPick)
+  pick.current = onPick
 
   const located = React.useMemo(
     () => branches.filter((b) => b.latitude != null && b.longitude != null),
@@ -127,6 +149,17 @@ export function BranchMap({
 
     layer.current = L.layerGroup().addTo(map.current)
 
+    // Click anywhere to pin. Registered unconditionally and gated on the ref,
+    // so a component that gains or loses onPick does not need the map rebuilt
+    // underneath it.
+    map.current.on('click', (e: L.LeafletMouseEvent) => {
+      // Leaflet hands back whatever the projection produced, and dragging past
+      // the antimeridian can put longitude outside -180..180. wrap() folds it
+      // back, which matters because the database constraint refuses the rest.
+      const { lat, lng } = e.latlng.wrap()
+      pick.current?.(round6(lat), round6(lng))
+    })
+
     // Leaflet measures its container once, on creation. Inside a dialog that
     // container is mid-animation and often still zero-height, so the tiles come
     // out grey or half-drawn and stay that way. Watching the element covers the
@@ -147,14 +180,34 @@ export function BranchMap({
     if (!map.current || !layer.current) return
     layer.current.clearLayers()
 
+    const pinnable = !!pick.current
+
     for (const branch of located) {
-      L.marker([Number(branch.latitude), Number(branch.longitude)], {
+      const marker = L.marker([Number(branch.latitude), Number(branch.longitude)], {
         icon: PIN,
         title: branch.name,
         alt: branch.name,
+        draggable: pinnable,
+        // Touch devices need this to pick the marker up rather than pan the
+        // map underneath it.
+        autoPan: pinnable,
       })
-        .bindPopup(popupHtml(branch))
-        .addTo(layer.current)
+
+      if (pinnable) {
+        // Fine-tuning after the first click. dragend rather than drag: updating
+        // on every frame would re-render the form sixty times a second, and the
+        // number that matters is where the pin was let go.
+        marker.on('dragend', () => {
+          const { lat, lng } = marker.getLatLng().wrap()
+          pick.current?.(round6(lat), round6(lng))
+        })
+      } else {
+        // A popup on a draggable pin fights the drag: press-and-hold to move it
+        // reads as a click and opens the bubble instead.
+        marker.bindPopup(popupHtml(branch))
+      }
+
+      marker.addTo(layer.current)
     }
 
   }, [located])
@@ -165,8 +218,18 @@ export function BranchMap({
   // centre each time they touched an unrelated field.
   const frame = located.map((b) => `${b.latitude},${b.longitude}`).join('|')
 
+  // In pick mode the map frames once and then leaves the view alone. Every
+  // click and every drag changes the coordinates, and re-centring on each one
+  // would yank the map out from under the person placing the pin -- clicking
+  // at a wide zoom would snap to zoom 15 mid-gesture. Opening the dialog on an
+  // existing branch still centres on where that branch already is, which is
+  // the framing that was actually wanted.
+  const framed = React.useRef(false)
+
   React.useEffect(() => {
     if (!map.current || located.length === 0) return
+    if (pick.current && framed.current) return
+    framed.current = true
 
     if (located.length === 1) {
       map.current.setView([Number(located[0].latitude), Number(located[0].longitude)], 15)
@@ -202,6 +265,9 @@ export function BranchMap({
           // numbers are resolved against each other inside this box and none of
           // them can compete with anything outside it.
           'isolate relative z-0',
+          // Says the map is something you act on, before anybody clicks to
+          // find out.
+          onPick && '[&_.leaflet-container]:cursor-crosshair',
         )}
       />
       {caption && (

@@ -38,7 +38,9 @@ import {
   type WorkLocation,
 } from '@/hooks/useBranches'
 
-function BranchDialog({
+/** Exported for its own tests: the location-pinning flow is worth exercising
+ *  without standing up the whole Branches page around it. */
+export function BranchDialog({
   open,
   onOpenChange,
   branch,
@@ -168,50 +170,90 @@ function BranchDialog({
               placeholder="Optional — printed on POS receipts"
             />
           </div>
-          {/* Where the branch is, for the map. Optional: a branch with no
-              coordinates still lists everywhere it listed before, it simply is
-              not pinned. Nothing operational reads these. */}
+          {/* Where the branch is. The map is how it is chosen now: nobody
+              should have to look up decimal degrees to say where a shop is.
+              The numbers stay on screen underneath, because a coordinate is
+              worth being able to read and copy -- but they are shown, not
+              asked for, and they are what the map produced. */}
           <div className="flex flex-col gap-2">
             <Label>Location</Label>
-            {/* A fixed, compact height -- 200px on a phone, 260px above sm --
-                so the coordinate fields and the footer buttons below stay on
-                screen. The map previews what has been typed rather than
-                accepting input: this dialog edits a branch, and clicking a map
-                to move a real location is a different decision that deserves
-                its own confirmation. */}
-            <BranchMap branches={previewPin} variant="compact" caption={false} />
             <p className="text-xs text-muted-foreground">
-              {previewPin.length > 0
-                ? 'Previewing the coordinates below.'
-                : 'Enter coordinates to preview the location here.'}
+              Click anywhere on the map to pin the branch location. You can drag the marker to
+              adjust it.
             </p>
+            {/* Fixed, compact height -- 200px on a phone, 260px above sm -- so
+                the coordinates and the footer buttons stay on screen. */}
+            <BranchMap
+              branches={previewPin}
+              variant="compact"
+              caption={false}
+              onPick={(lat, lng) => {
+                setLatitude(String(lat))
+                setLongitude(String(lng))
+                if (error) setError(null)
+              }}
+            />
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <p className="text-xs font-medium text-foreground">
+                {previewPin.length > 0 ? 'Location pinned' : 'No location pinned yet'}
+              </p>
+              {previewPin.length > 0 && (
+                <p className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {latitude}, {longitude}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="branch_latitude">Latitude</Label>
-              <Input
-                id="branch_latitude"
-                inputMode="decimal"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-                placeholder="14.4791"
-              />
+          {/* Kept for transparency and for the rare case of pasting a
+              surveyed coordinate, but read-only: the map is the input, and two
+              editable copies of one fact is how they end up disagreeing.
+              Clearing is a deliberate act rather than an empty text field. */}
+          <details className="rounded-lg border border-border px-3 py-2">
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              Coordinates
+            </summary>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="branch_latitude">Latitude</Label>
+                <Input
+                  id="branch_latitude"
+                  readOnly
+                  value={latitude}
+                  placeholder="Not pinned"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="branch_longitude">Longitude</Label>
+                <Input
+                  id="branch_longitude"
+                  readOnly
+                  value={longitude}
+                  placeholder="Not pinned"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={previewPin.length === 0}
+                  onClick={() => {
+                    setLatitude('')
+                    setLongitude('')
+                  }}
+                >
+                  Clear pin
+                </Button>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  A branch with no pin still lists everywhere it listed before — it simply is not
+                  shown on a map until somebody places it.
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="branch_longitude">Longitude</Label>
-              <Input
-                id="branch_longitude"
-                inputMode="decimal"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-                placeholder="120.8970"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              Decimal degrees, both or neither. Leave empty until somebody knows where it is.
-            </p>
-          </div>
+          </details>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

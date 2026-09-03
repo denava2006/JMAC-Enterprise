@@ -14,8 +14,23 @@ import type { Branch } from '@/hooks/useBranches'
  * about the ones that do not.
  */
 
-const markers: Array<{ at: [number, number]; title: string; popup: string }> = []
+const markers: Array<{
+  at: [number, number]
+  title: string
+  popup: string
+  draggable: boolean
+  /** Moves the marker and fires dragend, the way a person would. */
+  dragTo: (lat: number, lng: number) => void
+}> = []
 const views: Array<string> = []
+
+/** Map-level handlers, so a test can click the map the way Leaflet would. */
+const mapHandlers: Record<string, (e: unknown) => void> = {}
+
+/** A click at a point, as Leaflet delivers it: a LatLng with .wrap(). */
+function clickMap(lat: number, lng: number) {
+  mapHandlers.click?.({ latlng: { lat, lng, wrap: () => ({ lat, lng }) } })
+}
 
 // jsdom has no ResizeObserver. The component uses one to call invalidateSize
 // when its container is measured -- which is what makes the map draw correctly
@@ -29,13 +44,33 @@ class StubResizeObserver {
 vi.stubGlobal('ResizeObserver', StubResizeObserver)
 
 vi.mock('leaflet', () => {
-  const marker = (at: [number, number], opts: { title: string }) => {
+  const marker = (at: [number, number], opts: { title: string; draggable?: boolean }) => {
+    let position = { lat: at[0], lng: at[1] }
+    const handlers: Record<string, () => void> = {}
+
+    const entry = {
+      at,
+      title: opts.title,
+      popup: '',
+      draggable: !!opts.draggable,
+      dragTo(lat: number, lng: number) {
+        position = { lat, lng }
+        handlers.dragend?.()
+      },
+    }
+
     const m = {
       bindPopup(html: string) {
-        markers.push({ at, title: opts.title, popup: html })
+        entry.popup = html
         return m
       },
+      on(event: string, fn: () => void) {
+        handlers[event] = fn
+        return m
+      },
+      getLatLng: () => ({ ...position, wrap: () => position }),
       addTo() {
+        markers.push(entry)
         return m
       },
     }
@@ -58,6 +93,11 @@ vi.mock('leaflet', () => {
           views.push('fitBounds')
           return this
         },
+        on(event: string, fn: (e: unknown) => void) {
+          mapHandlers[event] = fn
+          return this
+        },
+        invalidateSize() {},
         remove() {},
       }),
       tileLayer: () => ({ addTo() {} }),
@@ -92,6 +132,7 @@ afterEach(() => {
   cleanup()
   markers.length = 0
   views.length = 0
+  for (const k of Object.keys(mapHandlers)) delete mapHandlers[k]
 })
 
 describe('which branches get a pin', () => {
@@ -222,5 +263,129 @@ describe('staying inside its box', () => {
   it('drops the page caption where the dialog supplies its own', () => {
     render(<BranchMap branches={[branch()]} variant="compact" caption={false} />)
     expect(screen.queryByText(/No branch has coordinates yet/)).toBeNull()
+  })
+})
+
+describe('pinning a location on the map', () => {
+  it('reports where somebody clicked, so nothing has to be typed', () => {
+    const picked: Array<[number, number]> = []
+    render(<BranchMap branches={[]} onPick={(lat, lng) => picked.push([lat, lng])} />)
+
+    clickMap(14.3294, 120.9367)
+    expect(picked).toEqual([[14.3294, 120.9367]])
+  })
+
+  it('reports the second click too, so the pin can be moved', () => {
+    const picked: Array<[number, number]> = []
+    render(<BranchMap branches={[]} onPick={(lat, lng) => picked.push([lat, lng])} />)
+
+    clickMap(14.3294, 120.9367)
+    clickMap(14.5995, 120.9842)
+    expect(picked).toHaveLength(2)
+    expect(picked[1]).toEqual([14.5995, 120.9842])
+  })
+
+  it('rounds to six places, which is what the column stores', () => {
+    // numeric(9,6) would round anyway; doing it here means the field shows the
+    // number that was actually saved rather than one that differs in the tail.
+    const picked: Array<[number, number]> = []
+    render(<BranchMap branches={[]} onPick={(lat, lng) => picked.push([lat, lng])} />)
+
+    clickMap(14.32941234567, 120.93671234567)
+    expect(picked[0]).toEqual([14.329412, 120.936712])
+  })
+
+  it('makes the marker draggable, and reports where it was dropped', () => {
+    const picked: Array<[number, number]> = []
+    render(
+      <BranchMap
+        branches={[branch({ latitude: 14.3294, longitude: 120.9367 })]}
+        onPick={(lat, lng) => picked.push([lat, lng])}
+      />,
+    )
+
+    expect(markers[0].draggable).toBe(true)
+    markers[0].dragTo(14.331, 120.938)
+    expect(picked).toEqual([[14.331, 120.938]])
+  })
+
+  it('leaves the map read-only when nothing is being picked', () => {
+    // The Branches page and the public landing page both render this, and
+    // neither should let a visitor drag a branch somewhere else.
+    render(<BranchMap branches={[branch({ latitude: 14.3294, longitude: 120.9367 })]} />)
+    expect(markers[0].draggable).toBe(false)
+
+    // And a click reports nothing, because there is nobody to report it to.
+    expect(() => clickMap(1, 2)).not.toThrow()
+  })
+
+  it('gives a draggable pin no popup to fight the drag with', () => {
+    // Press-and-hold to move a marker reads as a click, so a bound popup opens
+    // instead of the drag starting.
+    render(
+      <BranchMap
+        branches={[branch({ latitude: 14.3294, longitude: 120.9367 })]}
+        onPick={() => {}}
+      />,
+    )
+    expect(markers[0].popup).toBe('')
+  })
+
+  it('shows the crosshair only where the map can be pinned', () => {
+    const { unmount } = render(<BranchMap branches={[]} onPick={() => {}} />)
+    expect(screen.getByRole('region', { name: 'Branch locations' }).className).toContain(
+      'cursor-crosshair',
+    )
+    unmount()
+
+    render(<BranchMap branches={[]} />)
+    expect(screen.getByRole('region', { name: 'Branch locations' }).className).not.toContain(
+      'cursor-crosshair',
+    )
+  })
+})
+
+describe('framing while pinning', () => {
+  it('centres on a branch that already has a location', () => {
+    // Opening Edit Branch should show where the branch is, not the whole country.
+    render(
+      <BranchMap
+        branches={[branch({ latitude: 14.3294, longitude: 120.9367 })]}
+        onPick={() => {}}
+      />,
+    )
+    expect(views.some((v) => v.startsWith('setView 14.3294,120.9367'))).toBe(true)
+  })
+
+  it('does not yank the view back on every click', () => {
+    // Re-centring mid-gesture is the thing that makes a pinnable map unusable:
+    // clicking at a wide zoom would snap to zoom 15 under the cursor.
+    const { rerender } = render(<BranchMap branches={[]} onPick={() => {}} />)
+
+    rerender(
+      <BranchMap
+        branches={[branch({ latitude: 14.3294, longitude: 120.9367 })]}
+        onPick={() => {}}
+      />,
+    )
+    const afterFirst = views.length
+
+    rerender(
+      <BranchMap
+        branches={[branch({ latitude: 14.5995, longitude: 120.9842 })]}
+        onPick={() => {}}
+      />,
+    )
+    expect(views).toHaveLength(afterFirst)
+  })
+
+  it('still re-frames a read-only map when its branches change', () => {
+    // The public map has no pinning and should follow its data.
+    const { rerender } = render(
+      <BranchMap branches={[branch({ latitude: 14.3294, longitude: 120.9367 })]} />,
+    )
+    const afterFirst = views.length
+    rerender(<BranchMap branches={[branch({ latitude: 14.5995, longitude: 120.9842 })]} />)
+    expect(views.length).toBeGreaterThan(afterFirst)
   })
 })
