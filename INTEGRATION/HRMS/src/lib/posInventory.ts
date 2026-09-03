@@ -1,4 +1,5 @@
 import type { Enums } from '@/lib/database.types'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * Inventory decisions that are pure, kept out of the hooks so they can be
@@ -149,7 +150,7 @@ export function inventoryConcernRank(row: Pick<InventoryRow, 'quantity_on_hand' 
 }
 
 export function describeInventoryError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   if (message.includes('below zero')) {
     // The RPC's own sentence already names the resulting number.

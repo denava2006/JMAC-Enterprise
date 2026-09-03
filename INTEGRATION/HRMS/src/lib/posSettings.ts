@@ -1,4 +1,5 @@
 import type { Fee } from '@/lib/posFees'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * The parts of branch POS settings that are pure decisions rather than network
@@ -39,7 +40,7 @@ export function emptySettings(branchId: string): BranchPosSettings {
  * act on, following useBranches' precedent for constraint errors.
  */
 export function describeSettingsError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   if (message.includes('branch_pos_settings_fees_valid')) {
     return 'That fee configuration is not valid. Check for negative values, percentages over 100, or a missing name.'

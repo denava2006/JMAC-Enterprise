@@ -1,4 +1,5 @@
 import type { PosRole, UserRole } from '@/lib/enums'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * The decisions behind the POS Access admin screen, kept out of the component
@@ -144,7 +145,7 @@ export function countByStatus(rows: { status: AssignmentStatus }[]): Record<Stat
  * useBranches' precedent for foreign-key errors.
  */
 export function describeAssignmentError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   if (message.includes('pos_branch_assignments_active_unique')) {
     return 'That person already has active POS access at this branch. Revoke it first, then grant the new role.'

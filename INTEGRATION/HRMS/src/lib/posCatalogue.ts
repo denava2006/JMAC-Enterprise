@@ -1,4 +1,5 @@
 import type { PosProductStatus } from '@/lib/enums'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * Catalogue decisions that are pure, kept out of the hooks so they can be
@@ -188,7 +189,7 @@ export function productImagePath(productId: string, fileName: string): string {
 }
 
 export function describeCatalogueError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   if (message.includes('pos_products_normalized_name_key')) {
     return 'A product with that name already exists.'

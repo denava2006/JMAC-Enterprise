@@ -1,5 +1,6 @@
 import type { PosAuditEntityType, PosAuditEventType, PosRole, UserRole } from '@/lib/enums'
 import type { PosReportRange } from '@/lib/posReports'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * The POS operational audit stream: the pure parts.
@@ -200,7 +201,7 @@ export function formatActorRole(
 }
 
 export function describeAuditError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
   if (message.includes('Sign in')) return 'Your session has expired. Sign in again.'
   if (message.includes('row-level security') || message.includes('permission denied')) {
     return 'You do not manage that branch.'

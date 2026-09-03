@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/sonner'
 import { describeFunctionError } from '@/lib/functionErrors'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * HR privilege, as the Administrator manages it.
@@ -77,7 +78,7 @@ export function useHrAccounts() {
 }
 
 function describeGrantError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
   if (message.includes('HR_GRANT_NOT_ELIGIBLE')) {
     return message.split('HR_GRANT_NOT_ELIGIBLE:')[1]?.trim() || 'That employee is not eligible for this HR role.'
   }

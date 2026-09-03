@@ -1,4 +1,5 @@
 import { computeFees, round2, sumFees, type AppliedFee, type Fee } from '@/lib/posFees'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * The till's own arithmetic and cart rules.
@@ -306,7 +307,7 @@ export function newCheckoutKey(): string {
 /* ------------------------------------------------------------------ errors */
 
 export function describeCheckoutError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   if (message.includes('already used for a different sale')) {
     return 'This till already recorded a different sale under that attempt. Start a new sale.'

@@ -1,4 +1,5 @@
 import type { PosRequestStatus, PosRequestType, UserRole } from '@/lib/enums'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * POS inventory and product requests: the pure parts.
@@ -138,7 +139,7 @@ export function validateRequest(input: {
 }
 
 export function describeRequestError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
   if (message.includes('already an open request')) {
     return 'There is already an open request for this product at this branch.'
   }

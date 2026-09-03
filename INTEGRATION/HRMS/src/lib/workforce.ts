@@ -1,5 +1,6 @@
 import { POS_ROLE_LABEL } from '@/lib/posAccess'
 import type { EntitlementSystem, PosRole } from '@/lib/enums'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * Workforce eligibility: the pure parts.
@@ -163,7 +164,7 @@ export function hasPosEligibility(entry: PositionEntitlements, role: PosRole): b
 }
 
 export function describeWorkforceError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   // The database's stable codes, turned into something a person can act on.
   if (message.includes('POS_ASSIGNMENT_NOT_ELIGIBLE')) {

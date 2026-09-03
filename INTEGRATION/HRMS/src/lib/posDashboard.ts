@@ -1,4 +1,5 @@
 import { saleMethodLabel } from '@/lib/posTill'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * The POS Manager's dashboard: the pure parts.
@@ -129,7 +130,7 @@ export function businessTodayISO(now = new Date()): string {
 }
 
 export function describeDashboardError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
   if (message.includes('Sign in')) return 'Your session has expired. Sign in again.'
   if (message.includes('row-level security') || message.includes('permission denied')) {
     return 'You do not manage that branch.'

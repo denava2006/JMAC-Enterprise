@@ -1,5 +1,6 @@
 import { formatMoney } from '@/lib/currency'
 import { saleMethodLabel } from '@/lib/posTill'
+import { errorMessage } from '@/lib/errorMessage'
 
 export const POS_REPORTS_KEY = ['pos-reports'] as const
 export const POS_REPORT_MAX_DAYS = 366
@@ -220,7 +221,7 @@ export function posReportPaymentMethodLabel(method: string): string {
 }
 
 export function describePosReportError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
   if (message.includes('Report ranges may cover at most 366 days')) {
     return 'Reports may cover at most 366 days.'
   }

@@ -1,5 +1,6 @@
 import type { Enums } from '@/lib/database.types'
 import { saleMethodLabel } from '@/lib/posTill'
+import { errorMessage } from '@/lib/errorMessage'
 
 /**
  * Transaction history: the pure parts.
@@ -96,7 +97,7 @@ export function paymentLabel(method: string): string {
 }
 
 export function describeTransactionError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  const message = errorMessage(error)
 
   if (message.includes('That receipt is not available')) {
     // The RPC gives the same answer for "does not exist" and "not yours", so a
