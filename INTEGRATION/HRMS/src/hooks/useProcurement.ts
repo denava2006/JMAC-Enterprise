@@ -325,6 +325,13 @@ export function useReceiveDelivery(branchId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: PROCUREMENT_KEYS.deliveries(branchId ?? 'none') })
       queryClient.invalidateQueries({ queryKey: ['pos'] })
       queryClient.invalidateQueries({ queryKey: ['branch-inventory'] })
+      // Receiving changes what Finance sees too: the order's received and
+      // outstanding quantities, the demand queue, and the branch's own progress
+      // view. Only the POS keys were invalidated before, so a Finance tab left
+      // open kept showing "awaiting delivery" against an order that had fully
+      // arrived. The whole procurement namespace goes, rather than a list of
+      // keys somebody has to remember to extend.
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
       toast.success('Delivery confirmed. Branch stock has been updated.')
     },
     onError: (error) => toast.error(describeFinanceError(error)),
@@ -455,6 +462,7 @@ export function useBuildPurchaseOrder() {
       vendorId: string
       expectedDelivery: string | null
       notes: string | null
+      budgetId: string | null
       quantity: number | null
       unitCost: number | null
       lines: Array<{ description: string; quantity: number; unit_cost: number }> | null
@@ -466,6 +474,7 @@ export function useBuildPurchaseOrder() {
         _vendor_id: input.vendorId,
         _expected_delivery_date: input.expectedDelivery ?? undefined,
         _notes: input.notes ?? undefined,
+        _budget_id: input.budgetId ?? undefined,
         _quantity: input.quantity ?? undefined,
         _unit_cost: input.unitCost ?? undefined,
         _lines: input.lines ?? undefined,
@@ -522,4 +531,94 @@ export function useCancelRemainder() {
     },
     onError: (error) => toast.error(describeFinanceError(error)),
   })
+}
+
+/* ------------------------------------------------- what has actually arrived */
+
+/**
+ * Where an order stands, as opposed to what its status column says.
+ *
+ * These are two different questions and the page was answering the second when
+ * it was asked the first. PO-2026-0004 was approved, twenty ordered and twenty
+ * received, and every screen still read "Approved — awaiting delivery" beside
+ * "20 of 20 received", because the label came from the status alone.
+ *
+ * The workflow status stays authoritative and stays the Finance Manager's:
+ * receiving twenty crates does not close an order, a person does. What changes
+ * is that the visible state is derived from the quantities, so the screen stops
+ * contradicting the numbers printed next to it.
+ */
+export type Fulfillment =
+  | 'awaiting'
+  | 'partial'
+  | 'complete'
+  | 'not_receivable'
+  | 'workflow'
+
+export interface FulfillmentView {
+  kind: Fulfillment
+  label: string
+  tone: 'default' | 'secondary' | 'success' | 'warning' | 'destructive'
+}
+
+export function fulfillmentOf(order: {
+  status?: string | null
+  quantity_ordered?: number | null
+  quantity_received?: number | null
+  quantity_outstanding?: number | null
+}): FulfillmentView {
+  const status = order.status ?? ''
+
+  // Anything that is not an approved, live order is described by its workflow
+  // state. A draft has nothing to be awaiting.
+  if (status !== 'approved') {
+    return {
+      kind: 'workflow',
+      label: PO_STATUS_LABEL[status] ?? status,
+      tone: status === 'closed' ? 'secondary' : ['rejected', 'cancelled'].includes(status)
+        ? 'destructive'
+        : 'secondary',
+    }
+  }
+
+  const received = Number(order.quantity_received ?? 0)
+  const outstanding = Number(order.quantity_outstanding ?? 0)
+
+  if (received === 0 && outstanding === 0) {
+    // An approved order with nothing to receive: services, rent, a licence.
+    return { kind: 'not_receivable', label: 'Approved', tone: 'default' }
+  }
+  if (received === 0) {
+    return { kind: 'awaiting', label: 'Approved — awaiting delivery', tone: 'default' }
+  }
+  if (outstanding > 0) {
+    return { kind: 'partial', label: 'Partially received', tone: 'warning' }
+  }
+  return { kind: 'complete', label: 'Fully received — ready to close', tone: 'success' }
+}
+
+/** The sentence under an approved order, matching what the numbers say. */
+export function fulfillmentNote(order: {
+  status?: string | null
+  quantity_ordered?: number | null
+  quantity_received?: number | null
+  quantity_outstanding?: number | null
+}): string | null {
+  const view = fulfillmentOf(order)
+  const ordered = Number(order.quantity_ordered ?? 0)
+  const received = Number(order.quantity_received ?? 0)
+  const outstanding = Number(order.quantity_outstanding ?? 0)
+
+  switch (view.kind) {
+    case 'awaiting':
+      return 'Approved. No units have been received yet. The destination branch confirms physical delivery, and that is what updates inventory.'
+    case 'partial':
+      return `Partially received. ${received} of ${ordered} units have arrived; ${outstanding} remain outstanding.`
+    case 'complete':
+      return `Delivery complete. All ${received} units have been received and branch stock has been updated. This purchase order is ready to close.`
+    case 'not_receivable':
+      return 'Approved. Nothing on this order is POS stock, so there is no delivery to receive and no inventory to move.'
+    default:
+      return null
+  }
 }

@@ -25,7 +25,16 @@ const GENERAL_SOURCE: ProcurementSourceRef = {
   label: 'PR-2026-0009',
 }
 
-const state: { detail: Record<string, unknown> | null } = { detail: null }
+const state: {
+  detail: Record<string, unknown> | null
+  budgets: Array<Record<string, unknown>>
+} = {
+  detail: null,
+  budgets: [
+    { id: 'bud1', name: 'Operations 2026', status: 'active', amount: 50000, remaining: 43700 },
+    { id: 'bud2', name: 'Draft Ceiling', status: 'draft', amount: 10000, remaining: 10000 },
+  ],
+}
 
 vi.mock('@/hooks/useFinanceMasterData', () => ({
   useVendors: () => ({
@@ -34,6 +43,7 @@ vi.mock('@/hooks/useFinanceMasterData', () => ({
       { id: 'v2', name: 'Proposed Supplier', is_active: true, approval_status: 'pending_approval' },
     ],
   }),
+  useBudgets: () => ({ data: state.budgets }),
 }))
 
 vi.mock('@/hooks/useProcurement', () => ({
@@ -59,6 +69,10 @@ afterEach(() => {
   cleanup()
   built.length = 0
   state.detail = null
+  state.budgets = [
+    { id: 'bud1', name: 'Operations 2026', status: 'active', amount: 50000, remaining: 43700 },
+    { id: 'bud2', name: 'Draft Ceiling', status: 'draft', amount: 10000, remaining: 10000 },
+  ]
 })
 
 describe('an order exists only when somebody meant to save one', () => {
@@ -187,5 +201,74 @@ describe('only an approved vendor can be chosen', () => {
     state.detail = { source_kind: 'pos_restock', reference: 'Stock request', outstanding: 20 }
     const { container } = show(POS_SOURCE)
     expect(container.textContent).not.toMatch(/Proposed Supplier/)
+  })
+})
+
+describe('a POS order names the budget that pays for it', () => {
+  const detail = {
+    source_kind: 'pos_restock',
+    reference: 'Stock request',
+    product_name: 'Coca-Cola 5.6',
+    branch_name: 'Cavite Branch',
+    requested_quantity: 20,
+    ordered_quantity: 0,
+    outstanding: 20,
+  }
+
+  it('asks for a budget, and marks it required', () => {
+    state.detail = detail
+    show(POS_SOURCE)
+    expect(screen.getByLabelText(/Budget/)).toBeTruthy()
+  })
+
+  it('treats a draft ceiling as no budget at all', () => {
+    // A draft has not been approved by anybody and the server refuses one, so
+    // offering it would only be a save that fails. Asserted through what the
+    // page says rather than the dropdown's contents: Radix renders a Select's
+    // items only once it is open, so a closed one proves nothing either way.
+    state.detail = detail
+    state.budgets = [
+      { id: 'bud2', name: 'Draft Ceiling', status: 'draft', amount: 10000, remaining: 10000 },
+    ]
+    show(POS_SOURCE)
+    expect(screen.getByText(/No active budget to charge this to/)).toBeTruthy()
+  })
+
+  it('says nothing of the sort when an approved ceiling exists', () => {
+    state.detail = detail
+    show(POS_SOURCE)
+    expect(screen.queryByText(/No active budget to charge this to/)).toBeNull()
+  })
+
+  it('will not save without one, however complete the rest is', () => {
+    state.detail = detail
+    show(POS_SOURCE)
+    fireEvent.change(screen.getByLabelText(/Unit cost/), { target: { value: '65' } })
+    expect(screen.getByRole('button', { name: 'Submit for approval' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    expect(screen.getByRole('button', { name: 'Save as draft' })).toHaveProperty('disabled', true)
+    expect(built).toEqual([])
+  })
+})
+
+describe('a general purchase does not take a budget of its own', () => {
+  const detail = {
+    source_kind: 'finance_request',
+    reference: 'PR-2026-0009',
+    title: 'Office materials',
+    requested_by_name: 'Jen Cruz',
+    branch_name: 'Main Office',
+    outstanding: null,
+  }
+
+  it('offers no budget field at all', () => {
+    // The request reserved its money when it was approved. Charging the order
+    // to a budget as well would commit the same pesos twice, and the server
+    // refuses it -- so the field is absent rather than present and rejected.
+    state.detail = detail
+    show(GENERAL_SOURCE)
+    expect(screen.queryByLabelText(/Budget/)).toBeNull()
   })
 })

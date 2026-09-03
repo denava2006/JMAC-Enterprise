@@ -25,7 +25,8 @@ import { formatMoney } from '@/lib/currency'
 import { useBranches } from '@/hooks/useBranches'
 import { usePosProducts } from '@/hooks/usePosCatalogue'
 import {
-  PO_STATUS_LABEL,
+  fulfillmentOf,
+  fulfillmentNote,
   usePurchaseOrderItems,
   usePurchaseOrderSources,
   usePurchaseOrders,
@@ -127,15 +128,17 @@ export function PurchaseOrderDetail({
   )
   const outstanding = Math.max(receivableOrdered - Number(order?.quantity_received ?? 0), 0)
 
+  // Where this order stands, as opposed to what its status column says.
+  const fulfillment = fulfillmentOf(order ?? {})
+  const note = fulfillmentNote(order ?? {})
+
   return (
     <Dialog open={!!orderId} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {order?.po_number}
-            <Badge variant={order?.status === 'approved' ? 'default' : 'secondary'}>
-              {PO_STATUS_LABEL[order?.status ?? ''] ?? order?.status}
-            </Badge>
+            <Badge variant={fulfillment.tone}>{fulfillment.label}</Badge>
           </DialogTitle>
           <DialogDescription>
             {order?.vendor_name ?? 'No vendor'} ·{' '}
@@ -160,6 +163,24 @@ export function PurchaseOrderDetail({
                         : 'Unknown source'}
                   </p>
                 ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* What pays for this. Read-only wherever it appears, the Finance
+              Manager included: the maker chooses the funding source and the
+              checker approves what was put in front of them. Somebody who can
+              change the budget while approving it is choosing and approving. */}
+          {order?.budget_name && (
+            <Card>
+              <CardContent className="flex items-baseline justify-between py-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Charged to</p>
+                  <p className="text-sm font-medium text-foreground">{order.budget_name}</p>
+                </div>
+                <p className="text-sm tabular-nums text-muted-foreground">
+                  {formatMoney(Number(order.committed_amount ?? 0))} committed
+                </p>
               </CardContent>
             </Card>
           )}
@@ -205,13 +226,13 @@ export function PurchaseOrderDetail({
 
           {editable && orderId && <AddLine orderId={orderId} />}
 
-          {order?.status === 'approved' && (
+          {/* Was unconditional for an approved order, so it claimed nothing had
+              been received while the line above it counted twenty receipts.
+              The sentence now comes from the same quantities. */}
+          {note && (
             <Card>
               <CardContent className="py-3">
-                <p className="text-xs text-muted-foreground">
-                  Approved. Nothing has been received and no stock has moved — the destination
-                  branch confirms the delivery, and that is what updates inventory.
-                </p>
+                <p className="text-xs text-muted-foreground">{note}</p>
               </CardContent>
             </Card>
           )}

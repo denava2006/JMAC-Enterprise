@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import {
   DEMAND_STATE_LABEL,
-  PO_STATUS_LABEL,
+  fulfillmentOf,
   useAcceptRestockDemand,
   useProcurementDemand,
   usePurchaseOrders,
@@ -93,19 +93,13 @@ export default function ProcurementPage() {
       {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => (
-          <Badge
-            variant={
-              row.original.status === 'approved'
-                ? 'default'
-                : ['rejected', 'cancelled'].includes(row.original.status ?? '')
-                  ? 'destructive'
-                  : 'secondary'
-            }
-          >
-            {PO_STATUS_LABEL[row.original.status ?? ''] ?? row.original.status}
-          </Badge>
-        ),
+        // Derived from the quantities, not from the status column alone. An
+        // order that is approved and fully received reads "Fully received --
+        // ready to close", not "awaiting delivery" beside "20 of 20 received".
+        cell: ({ row }) => {
+          const view = fulfillmentOf(row.original)
+          return <Badge variant={view.tone}>{view.label}</Badge>
+        },
       },
     ],
     [],

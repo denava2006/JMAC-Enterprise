@@ -282,13 +282,18 @@ function BudgetFigures({ budget }: { budget: BudgetStatus }) {
     {
       label: 'Reserved',
       value: formatMoney(Number(budget.reserved)),
-      hint: 'when requests exist',
+      hint: 'approved requests and orders',
     },
     { label: 'Spent', value: formatMoney(Number(budget.spent)), hint: 'when payments exist' },
+    {
+      label: 'Available',
+      value: formatMoney(Number(budget.remaining)),
+      hint: 'ceiling less reserved',
+    },
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {rows.map((row) => (
         <div key={row.label} className="rounded-lg border border-border p-3">
           <p className="text-xs text-muted-foreground">{row.label}</p>
@@ -505,7 +510,13 @@ export default function BudgetsPage() {
 
   const active = budgets.filter((b) => b.status === 'active')
   const ceiling = active.reduce((sum, b) => sum + Number(b.amount), 0)
-  const allocated = active.reduce((sum, b) => sum + Number(b.allocated), 0)
+  // Allocated answers "how has this been earmarked internally", which is a real
+  // question but not the one somebody opens this page asking. Reserved and
+  // available answer "how much can Finance still commit", so those lead now.
+  // Allocation is untouched and still has its column and its detail figures.
+  const reserved = active.reduce((sum, b) => sum + Number(b.reserved), 0)
+  const spent = active.reduce((sum, b) => sum + Number(b.spent), 0)
+  const availableTotal = active.reduce((sum, b) => sum + Number(b.remaining), 0)
 
   const columns = React.useMemo<ColumnDef<BudgetStatus>[]>(
     () => [
@@ -548,11 +559,32 @@ export default function BudgetsPage() {
           </div>
         ),
       },
+      // Unallocated moves to the detail panel, where the allocation figures
+      // belong together. What the list needs is what is committed and what is
+      // left, which is the question people open it with.
       {
-        id: 'unallocated',
-        header: 'Unallocated',
+        id: 'reserved',
+        header: 'Reserved',
         cell: ({ row }) => (
-          <span className="tabular-nums">{formatMoney(Number(row.original.unallocated))}</span>
+          <span className="tabular-nums">{formatMoney(Number(row.original.reserved))}</span>
+        ),
+      },
+      {
+        id: 'spent',
+        header: 'Spent',
+        cell: ({ row }) => (
+          <span className="tabular-nums text-muted-foreground">
+            {formatMoney(Number(row.original.spent))}
+          </span>
+        ),
+      },
+      {
+        id: 'available',
+        header: 'Available',
+        cell: ({ row }) => (
+          <span className="font-medium tabular-nums">
+            {formatMoney(Number(row.original.remaining))}
+          </span>
         ),
       },
       {
@@ -643,11 +675,22 @@ export default function BudgetsPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label="Active budgets" value={active.length} icon={PiggyBank} isLoading={isLoading} />
+      {/* Ceiling, reserved, spent, available -- the four that answer "how much
+          is left". The ceiling does not shrink when money is committed; what
+          moves is reserved, and available is what remains after it. Spent stays
+          zero until something can actually settle a payment, and is shown
+          rather than hidden so nobody reads reserved as spent. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Approved ceiling" value={formatMoney(ceiling)} icon={PiggyBank} isLoading={isLoading} />
-        <StatCard label="Allocated" value={formatMoney(allocated)} icon={PiggyBank} isLoading={isLoading} />
+        <StatCard label="Reserved" value={formatMoney(reserved)} icon={PiggyBank} isLoading={isLoading} />
+        <StatCard label="Spent" value={formatMoney(spent)} icon={PiggyBank} isLoading={isLoading} />
+        <StatCard label="Available" value={formatMoney(availableTotal)} icon={PiggyBank} isLoading={isLoading} />
       </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Across {active.length} active budget{active.length === 1 ? '' : 's'}. Reserved is money
+        committed by an approved request or purchase order; it becomes spent only when a payment
+        settles it, which no phase of JMAC can do yet.
+      </p>
 
       <DataTable
         columns={columns}

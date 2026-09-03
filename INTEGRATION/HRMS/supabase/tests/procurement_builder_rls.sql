@@ -67,7 +67,7 @@ declare
   admin_id uuid; staff uuid; manager uuid; acct uuid;
   mgr_a uuid; mgr_b uuid; cashier uuid;
   branch_a uuid; branch_b uuid; general_id uuid; product uuid; vendor uuid;
-  req uuid; po uuid; po2 uuid; line uuid;
+  req uuid; po uuid; po2 uuid; line uuid; budget uuid;
   n integer; qty integer; txt text;
   tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
@@ -107,6 +107,17 @@ begin
   reset role;
   perform pg_temp.acts_as(manager); set local role authenticated;
   perform public.review_vendor(vendor, true, 'fixture');
+  reset role;
+
+  -- A ceiling for the orders below to be charged to. Staff draft it, the
+  -- Manager puts it in force -- the F4.2 maker/checker path, unchanged.
+  perform pg_temp.acts_as(staff); set local role authenticated;
+  insert into public.budgets (name, amount, fiscal_year)
+  values ('ZZ Procurement Budget ' || tag, 50000, extract(year from current_date)::integer)
+  returning id into budget;
+  reset role;
+  perform pg_temp.acts_as(manager); set local role authenticated;
+  perform public.review_budget(budget, true, 'fixture');
   reset role;
 
   -- The demand: Cavite-style branch asks for twenty, Finance accepts it.
@@ -163,7 +174,7 @@ begin
   -- A failed build leaves nothing behind: no unit cost, no order.
   begin
     perform public.create_purchase_order_from_source(
-      'pos_restock', req, vendor, null, null, 20, null, null, false);
+      'pos_restock', req, vendor, null, null, 20, null, null, false, budget);
     raise exception 'FAIL 2b an order was built with no unit cost';
   exception when check_violation then null; end;
 
@@ -177,7 +188,7 @@ begin
   -- ======================================================================
   perform pg_temp.acts_as(staff); set local role authenticated;
   select public.create_purchase_order_from_source(
-    'pos_restock', req, vendor, current_date + 7, 'first tranche', 12, 55.00, null, false)
+    'pos_restock', req, vendor, current_date + 7, 'first tranche', 12, 55.00, null, false, budget)
   into po;
 
   select count(*) into n from public.purchase_order_items where purchase_order_id = po;
@@ -219,7 +230,7 @@ begin
 
   begin
     perform public.create_purchase_order_from_source(
-      'pos_restock', req, vendor, null, null, 9, 55.00, null, false);
+      'pos_restock', req, vendor, null, null, 9, 55.00, null, false, budget);
     raise exception 'FAIL 4b a second order exceeded the request';
   exception when check_violation then
     raise notice 'PASS  4b an order cannot exceed what the branch asked for';
@@ -227,7 +238,7 @@ begin
 
   -- With no quantity given, the builder defaults to what is left.
   select public.create_purchase_order_from_source(
-    'pos_restock', req, vendor, null, null, null, 55.00, null, false) into po2;
+    'pos_restock', req, vendor, null, null, null, 55.00, null, false, budget) into po2;
   select quantity_ordered into qty from public.purchase_order_items where purchase_order_id = po2;
   if qty <> 8 then raise exception 'FAIL 4c the second order defaulted to %, expected 8', qty; end if;
   raise notice 'PASS  4c a new order defaults to the outstanding quantity, not to 1';
@@ -369,7 +380,7 @@ begin
   perform pg_temp.acts_as(manager); set local role authenticated;
   begin
     perform public.create_purchase_order_from_source(
-      'pos_restock', req, vendor, null, null, 1, 10.00, null, false);
+      'pos_restock', req, vendor, null, null, 1, 10.00, null, false, budget);
     raise exception 'FAIL 9a the Finance Manager built a purchase order';
   exception when insufficient_privilege then
     raise notice 'PASS  9a building an order is the maker''s work';
@@ -379,7 +390,7 @@ begin
   perform pg_temp.acts_as(acct); set local role authenticated;
   begin
     perform public.create_purchase_order_from_source(
-      'pos_restock', req, vendor, null, null, 1, 10.00, null, false);
+      'pos_restock', req, vendor, null, null, 1, 10.00, null, false, budget);
     raise exception 'FAIL 9b the Accountant built a purchase order';
   exception when insufficient_privilege then null; end;
   reset role;
@@ -387,7 +398,7 @@ begin
   perform pg_temp.acts_as(admin_id); set local role authenticated;
   begin
     perform public.create_purchase_order_from_source(
-      'pos_restock', req, vendor, null, null, 1, 10.00, null, false);
+      'pos_restock', req, vendor, null, null, 1, 10.00, null, false, budget);
     raise exception 'FAIL 9c the Administrator built a purchase order';
   exception when insufficient_privilege then null; end;
   raise notice 'PASS  9b-c neither the Accountant nor the Administrator prepares procurement';

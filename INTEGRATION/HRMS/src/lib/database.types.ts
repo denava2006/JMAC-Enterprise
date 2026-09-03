@@ -3430,6 +3430,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          budget_id: string | null
           closed_at: string | null
           closed_reason: string | null
           created_at: string
@@ -3449,6 +3450,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          budget_id?: string | null
           closed_at?: string | null
           closed_reason?: string | null
           created_at?: string
@@ -3468,6 +3470,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          budget_id?: string | null
           closed_at?: string | null
           closed_reason?: string | null
           created_at?: string
@@ -3490,6 +3493,20 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budget_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
             referencedColumns: ["id"]
           },
           {
@@ -3878,6 +3895,9 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          budget_id: string | null
+          budget_name: string | null
+          committed_amount: number | null
           created_at: string | null
           created_by: string | null
           expected_delivery_date: string | null
@@ -3886,6 +3906,7 @@ export type Database = {
           notes: string | null
           order_date: string | null
           po_number: string | null
+          quantity_cancelled: number | null
           quantity_ordered: number | null
           quantity_outstanding: number | null
           quantity_received: number | null
@@ -3902,6 +3923,20 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budget_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
             referencedColumns: ["id"]
           },
           {
@@ -4094,6 +4129,7 @@ export type Database = {
       }
       create_purchase_order_from_source: {
         Args: {
+          _budget_id?: string
           _expected_delivery_date?: string
           _lines?: Json
           _notes?: string
@@ -4975,6 +5011,10 @@ export type Database = {
       price_pos_cart: {
         Args: { _branch_id: string; _items: Json }
         Returns: Json
+      }
+      purchase_order_commitment: {
+        Args: { _purchase_order_id: string }
+        Returns: number
       }
       receive_pos_stock: {
         Args: {

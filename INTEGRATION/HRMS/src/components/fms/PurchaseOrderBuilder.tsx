@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useVendors } from '@/hooks/useFinanceMasterData'
+import { useVendors, useBudgets } from '@/hooks/useFinanceMasterData'
 import { formatMoney } from '@/lib/currency'
 import {
   useProcurementSource,
@@ -62,10 +62,12 @@ export function PurchaseOrderBuilder({
   onCreated: (orderId: string) => void
 }) {
   const { data: vendors = [] } = useVendors()
+  const { data: budgets = [] } = useBudgets()
   const { data: detail, isLoading, error } = useProcurementSource(source)
   const build = useBuildPurchaseOrder()
 
   const [vendorId, setVendorId] = React.useState('')
+  const [budgetId, setBudgetId] = React.useState('')
   const [expected, setExpected] = React.useState('')
   const [notes, setNotes] = React.useState('')
   const [quantity, setQuantity] = React.useState('')
@@ -77,6 +79,7 @@ export function PurchaseOrderBuilder({
   React.useEffect(() => {
     if (!source) return
     setVendorId('')
+    setBudgetId('')
     setExpected('')
     setNotes('')
     setUnitCost('')
@@ -94,6 +97,14 @@ export function PurchaseOrderBuilder({
     (v) => v.is_active && v.approval_status === 'approved',
   )
 
+  // Only ceilings actually in force. A draft budget has not been approved by
+  // anybody, and the server refuses one -- offering it would just be a failed
+  // save. The remaining figure shown beside each is a preview: the authoritative
+  // check happens under a row lock at approval, so what is affordable now may
+  // not be by then.
+  const selectableBudgets = budgets.filter((b) => b.status === 'active')
+  const chosenBudget = selectableBudgets.find((b) => b.id === budgetId)
+
   const posTotal = Number(quantity || 0) * Number(unitCost || 0)
   const generalTotal = lines.reduce(
     (sum, l) => sum + Number(l.quantity || 0) * Number(l.unitCost || 0),
@@ -101,7 +112,12 @@ export function PurchaseOrderBuilder({
   )
 
   const posIncomplete =
-    !vendorId || !quantity || Number(quantity) <= 0 || unitCost === '' || Number(unitCost) < 0
+    !vendorId ||
+    !budgetId ||
+    !quantity ||
+    Number(quantity) <= 0 ||
+    unitCost === '' ||
+    Number(unitCost) < 0
   const generalIncomplete =
     !vendorId ||
     lines.length === 0 ||
@@ -117,6 +133,7 @@ export function PurchaseOrderBuilder({
       vendorId,
       expectedDelivery: expected || null,
       notes: notes.trim() || null,
+      budgetId: isPosStock ? budgetId : null,
       quantity: isPosStock ? Number(quantity) : null,
       unitCost: isPosStock ? Number(unitCost) : null,
       lines: isPosStock
@@ -247,6 +264,35 @@ export function PurchaseOrderBuilder({
                 )}
               </div>
 
+              {/* POS stock only. A general purchase reserved its money when the
+                  request was approved, so charging the order to a budget again
+                  would commit the same pesos twice -- the server refuses it. */}
+              {isPosStock && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="po-budget">
+                    Budget <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={budgetId} onValueChange={setBudgetId}>
+                    <SelectTrigger id="po-budget">
+                      <SelectValue placeholder="Charge this order to..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectableBudgets.map((b) => (
+                        <SelectItem key={b.id!} value={b.id!}>
+                          {b.name} — {formatMoney(Number(b.remaining ?? 0))} available
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectableBudgets.length === 0 && (
+                    <p className="text-xs text-warning">
+                      No active budget to charge this to. A Finance Manager approves a drafted
+                      budget before it can fund an order.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="po-expected">Expected delivery</Label>
                 <Input
@@ -291,6 +337,13 @@ export function PurchaseOrderBuilder({
                   <p className="text-xs text-muted-foreground">
                     Total {formatMoney(posTotal)}. The branch never sees this.
                   </p>
+                  {chosenBudget && posTotal > Number(chosenBudget.remaining ?? 0) && (
+                    <p className="text-xs text-destructive">
+                      That is more than {chosenBudget.name} has available (
+                      {formatMoney(Number(chosenBudget.remaining ?? 0))}). Approval will be
+                      refused.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
