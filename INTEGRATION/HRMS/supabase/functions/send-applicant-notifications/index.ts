@@ -347,9 +347,18 @@ Deno.serve(async (req: Request) => {
     let failed = 0
 
     for (const row of rows) {
+      // The claim is a compare-and-swap: the row only becomes ours if it was
+      // still pending or failed when the update landed. An immediate run and a
+      // scheduled run racing the same row means exactly one of them gets zero
+      // rows back and moves on -- which is what keeps a nudge from ever
+      // doubling a send.
+      //
+      // claimed_at is stamped here, in the same statement, so it records when
+      // the row was actually picked up rather than when this batch started.
+      // created_at -> claimed_at is queue wait; claimed_at -> sent_at is Brevo.
       const claimed = await admin
         .from('applicant_notification_outbox')
-        .update({ status: 'processing' })
+        .update({ status: 'processing', claimed_at: new Date().toISOString() })
         .eq('id', row.id)
         .in('status', ['pending', 'failed'])
         .select('id')
