@@ -34,6 +34,7 @@ export function waitingWork(
     requestsToValidate: number
     demandToAccept: number
     ordersReturned: number
+    draftsInProgress: number
     vendorsReturned: number
     categoriesReturned: number
   },
@@ -55,6 +56,7 @@ export function waitingWork(
       { label: 'Requests to validate', count: data.requestsToValidate, to: '/fms/requests' },
       { label: 'Branch demand to act on', count: data.demandToAccept, to: '/fms/procurement' },
       { label: 'Orders returned to you', count: data.ordersReturned, to: '/fms/procurement' },
+      { label: 'Drafts you have not submitted', count: data.draftsInProgress, to: '/fms/procurement' },
       { label: 'Vendors sent back', count: data.vendorsReturned, to: '/fms/vendors' },
       { label: 'Categories sent back', count: data.categoriesReturned, to: '/fms/categories' },
     ].filter((i) => i.count > 0)
@@ -89,6 +91,7 @@ export function WaitingOnYou() {
         d.demand_state === 'accepted_for_procurement',
     ).length,
     ordersReturned: orders.filter((o) => o.status === 'returned').length,
+    draftsInProgress: orders.filter((o) => o.status === 'draft').length,
     vendorsReturned: vendors.filter((v) => v.approval_status === 'rejected').length,
     categoriesReturned: categories.filter((c) => c.approval_status === 'rejected').length,
   })
