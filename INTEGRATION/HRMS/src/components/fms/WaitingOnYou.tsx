@@ -5,6 +5,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useBudgets, useFinanceCategories, useVendors } from '@/hooks/useFinanceMasterData'
 import { useFinanceRequests } from '@/hooks/useFinanceRequests'
 import { useProcurementDemand, usePurchaseOrders } from '@/hooks/useProcurement'
+import {
+  useSupplierInvoices,
+  useInvoiceablePurchaseOrders,
+} from '@/hooks/useSupplierInvoices'
 
 export interface WaitingItem {
   label: string
@@ -37,6 +41,10 @@ export function waitingWork(
     draftsInProgress: number
     vendorsReturned: number
     categoriesReturned: number
+    invoicesToReview: number
+    invoiceDrafts: number
+    invoicesReturned: number
+    ordersToInvoice: number
   },
 ): WaitingItem[] {
   if (role === 'finance_manager') {
@@ -45,6 +53,19 @@ export function waitingWork(
       { label: 'Budgets to approve', count: data.budgetsDraft, to: '/fms/budgets' },
       { label: 'Vendors to approve', count: data.vendorsPending, to: '/fms/vendors' },
       { label: 'Categories to approve', count: data.categoriesPending, to: '/fms/categories' },
+      { label: 'Supplier invoices to review', count: data.invoicesToReview, to: '/fms/invoices' },
+    ].filter((i) => i.count > 0)
+  }
+
+  // The Accountant's own desk. They own the chart of accounts and, from F5,
+  // the accounts payable side: recording what suppliers billed and putting it
+  // in front of the Manager. They approve nothing, so nothing here is an
+  // approval.
+  if (role === 'accountant') {
+    return [
+      { label: 'Invoices returned to you', count: data.invoicesReturned, to: '/fms/invoices' },
+      { label: 'Invoice drafts to submit', count: data.invoiceDrafts, to: '/fms/invoices' },
+      { label: 'Delivered orders to invoice', count: data.ordersToInvoice, to: '/fms/invoices' },
     ].filter((i) => i.count > 0)
   }
 
@@ -62,8 +83,7 @@ export function waitingWork(
     ].filter((i) => i.count > 0)
   }
 
-  // The Accountant owns the chart of accounts and approves nothing in F4.2, so
-  // an empty list here is the honest answer rather than a gap to fill.
+  // Everybody else -- an Administrator has oversight, not a work queue.
   return []
 }
 
@@ -75,6 +95,8 @@ export function WaitingOnYou() {
   const { data: orders = [] } = usePurchaseOrders()
   const { data: requests = [] } = useFinanceRequests()
   const { data: demand = [] } = useProcurementDemand()
+  const { data: invoices = [] } = useSupplierInvoices()
+  const { data: invoiceable = [] } = useInvoiceablePurchaseOrders()
 
   const items = waitingWork(profile?.role, {
     vendorsPending: vendors.filter((v) => v.approval_status === 'pending_approval').length,
@@ -94,6 +116,10 @@ export function WaitingOnYou() {
     draftsInProgress: orders.filter((o) => o.status === 'draft').length,
     vendorsReturned: vendors.filter((v) => v.approval_status === 'rejected').length,
     categoriesReturned: categories.filter((c) => c.approval_status === 'rejected').length,
+    invoicesToReview: invoices.filter((i) => i.status === 'for_review').length,
+    invoiceDrafts: invoices.filter((i) => i.status === 'draft').length,
+    invoicesReturned: invoices.filter((i) => i.status === 'returned').length,
+    ordersToInvoice: invoiceable.length,
   })
 
   if (items.length === 0) return null

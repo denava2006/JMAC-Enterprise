@@ -12,6 +12,10 @@ const NOTHING = {
   draftsInProgress: 0,
   vendorsReturned: 0,
   categoriesReturned: 0,
+  invoicesToReview: 0,
+  invoiceDrafts: 0,
+  invoicesReturned: 0,
+  ordersToInvoice: 0,
 }
 
 const EVERYTHING = {
@@ -25,6 +29,10 @@ const EVERYTHING = {
   draftsInProgress: 10,
   vendorsReturned: 8,
   categoriesReturned: 9,
+  invoicesToReview: 11,
+  invoiceDrafts: 12,
+  invoicesReturned: 13,
+  ordersToInvoice: 14,
 }
 
 describe('what is waiting on the checker', () => {
@@ -34,6 +42,7 @@ describe('what is waiting on the checker', () => {
       { label: 'Budgets to approve', count: 3, to: '/fms/budgets' },
       { label: 'Vendors to approve', count: 2, to: '/fms/vendors' },
       { label: 'Categories to approve', count: 1, to: '/fms/categories' },
+      { label: 'Supplier invoices to review', count: 11, to: '/fms/invoices' },
     ])
   })
 
@@ -63,10 +72,37 @@ describe('what is waiting on the maker', () => {
   })
 })
 
-describe('an empty desk', () => {
-  it.each(['finance_manager', 'finance_staff'])('says nothing to %s when nothing waits', (role) => {
-    expect(waitingWork(role, NOTHING)).toEqual([])
+describe('what is waiting on the Accountant', () => {
+  // F5 gave them a desk. Before supplier invoices existed this list was empty
+  // and the test said so; recording what suppliers billed is now their work.
+  it('lists the accounts payable work only they can clear', () => {
+    expect(waitingWork('accountant', EVERYTHING)).toEqual([
+      { label: 'Invoices returned to you', count: 13, to: '/fms/invoices' },
+      { label: 'Invoice drafts to submit', count: 12, to: '/fms/invoices' },
+      { label: 'Delivered orders to invoice', count: 14, to: '/fms/invoices' },
+    ])
   })
+
+  it('offers them no approval, because they approve nothing', () => {
+    const labels = waitingWork('accountant', EVERYTHING).map((i) => i.label)
+    expect(labels.some((l) => l.includes('to approve'))).toBe(false)
+    expect(labels.some((l) => l.includes('to review'))).toBe(false)
+  })
+
+  it('does not put the maker’s procurement work on their desk', () => {
+    const labels = waitingWork('accountant', EVERYTHING).map((i) => i.label)
+    expect(labels).not.toContain('Branch demand to act on')
+    expect(labels).not.toContain('Requests to validate')
+  })
+})
+
+describe('an empty desk', () => {
+  it.each(['finance_manager', 'finance_staff', 'accountant'])(
+    'says nothing to %s when nothing waits',
+    (role) => {
+      expect(waitingWork(role, NOTHING)).toEqual([])
+    },
+  )
 
   it('drops the rows that are at zero rather than listing them', () => {
     expect(waitingWork('finance_manager', { ...NOTHING, vendorsPending: 1 })).toEqual([
@@ -74,8 +110,8 @@ describe('an empty desk', () => {
     ])
   })
 
-  it.each(['accountant', 'admin', 'employee', null, undefined])(
-    'has nothing for %s, who approves nothing in this phase',
+  it.each(['admin', 'employee', null, undefined])(
+    'has nothing for %s, who has oversight rather than a work queue',
     (role) => {
       expect(waitingWork(role, EVERYTHING)).toEqual([])
     },

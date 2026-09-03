@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -3569,6 +3569,224 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_invoice_history: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          remarks: string | null
+          role_at_action: string | null
+          supplier_invoice_id: string
+          to_status: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          remarks?: string | null
+          role_at_action?: string | null
+          supplier_invoice_id: string
+          to_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          remarks?: string | null
+          role_at_action?: string | null
+          supplier_invoice_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_history_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_history_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoice_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_history_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_invoice_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          line_total: number | null
+          purchase_order_item_id: string
+          quantity: number
+          supplier_invoice_id: string
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          line_total?: number | null
+          purchase_order_item_id: string
+          quantity: number
+          supplier_invoice_id: string
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          line_total?: number | null
+          purchase_order_item_id?: string
+          quantity?: number
+          supplier_invoice_id?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_lines_purchase_order_item_id_fkey"
+            columns: ["purchase_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_lines_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoice_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_lines_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_invoices: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          decision_reason: string | null
+          due_date: string | null
+          id: string
+          invoice_date: string
+          invoice_no: string | null
+          notes: string | null
+          other_charges: number
+          other_charges_note: string | null
+          purchase_order_id: string
+          status: string
+          submitted_at: string | null
+          supplier_invoice_number: string
+          tax_amount: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          decision_reason?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date: string
+          invoice_no?: string | null
+          notes?: string | null
+          other_charges?: number
+          other_charges_note?: string | null
+          purchase_order_id: string
+          status?: string
+          submitted_at?: string | null
+          supplier_invoice_number: string
+          tax_amount?: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          decision_reason?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_no?: string | null
+          notes?: string | null
+          other_charges?: number
+          other_charges_note?: string | null
+          purchase_order_id?: string
+          status?: string
+          submitted_at?: string | null
+          supplier_invoice_number?: string
+          tax_amount?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoices_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_settings: {
         Row: {
           key: string
@@ -3955,6 +4173,76 @@ export type Database = {
           },
         ]
       }
+      supplier_invoice_status: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          balance_due: number | null
+          created_at: string | null
+          created_by: string | null
+          currency: string | null
+          days_until_due: number | null
+          decision_reason: string | null
+          due_date: string | null
+          id: string | null
+          invoice_date: string | null
+          invoice_no: string | null
+          line_count: number | null
+          notes: string | null
+          other_charges: number | null
+          other_charges_note: string | null
+          payment_state: string | null
+          po_number: string | null
+          purchase_order_id: string | null
+          purchase_order_status: string | null
+          status: string | null
+          submitted_at: string | null
+          subtotal: number | null
+          supplier_invoice_number: string | null
+          tax_amount: number | null
+          total_amount: number | null
+          updated_at: string | null
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoices_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       add_pos_product_to_branch: {
@@ -4139,6 +4427,20 @@ export type Database = {
           _submit?: boolean
           _unit_cost?: number
           _vendor_id: string
+        }
+        Returns: string
+      }
+      create_supplier_invoice: {
+        Args: {
+          _due_date?: string
+          _invoice_date: string
+          _lines?: Json
+          _notes?: string
+          _other_charges?: number
+          _other_charges_note?: string
+          _purchase_order_id: string
+          _supplier_invoice_number: string
+          _tax_amount?: number
         }
         Returns: string
       }
@@ -4509,6 +4811,19 @@ export type Database = {
           last_login_at: string
           position_title: string
           profile_id: string
+        }[]
+      }
+      get_invoiceable_purchase_orders: {
+        Args: never
+        Returns: {
+          invoiced_value: number
+          outstanding_value: number
+          po_number: string
+          purchase_order_id: string
+          received_value: number
+          status: string
+          vendor_id: string
+          vendor_name: string
         }[]
       }
       get_my_transactions: {
@@ -5167,6 +5482,28 @@ export type Database = {
           reference_code: string
         }[]
       }
+      supplier_invoice_match: {
+        Args: { _supplier_invoice_id: string }
+        Returns: {
+          billable_quantity: number
+          cancelled_quantity: number
+          description: string
+          effective_quantity: number
+          invoice_line_value: number
+          invoice_quantity: number
+          invoice_unit_cost: number
+          line_id: string
+          ordered_quantity: number
+          po_line_value: number
+          po_unit_cost: number
+          previously_invoiced: number
+          price_matched: boolean
+          purchase_order_item_id: string
+          quantity_matched: boolean
+          received_quantity: number
+          verdict: string
+        }[]
+      }
       sync_employment_statuses: { Args: never; Returns: undefined }
       transition_finance_request: {
         Args: {
@@ -5182,6 +5519,14 @@ export type Database = {
         Args: {
           _purchase_order_id: string
           _remarks?: string
+          _to_status: string
+        }
+        Returns: undefined
+      }
+      transition_supplier_invoice: {
+        Args: {
+          _remarks?: string
+          _supplier_invoice_id: string
           _to_status: string
         }
         Returns: undefined

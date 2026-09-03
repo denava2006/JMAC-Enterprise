@@ -87,6 +87,7 @@ const financeNav: NavItem[] = [
   { label: 'Requests', to: '/fms/requests', icon: ReceiptText },
   { label: 'Procurement', to: '/fms/procurement', icon: PackageCheck },
   { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
+  { label: 'Supplier Invoices', to: '/fms/invoices', icon: FileBarChart },
   { label: 'Vendors', to: '/fms/vendors', icon: Store },
   { label: 'Categories', to: '/fms/categories', icon: Tags },
   { label: 'Chart of Accounts', to: '/fms/accounts', icon: Landmark },

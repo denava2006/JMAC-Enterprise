@@ -368,15 +368,20 @@ begin
   -- ======================================================================
   -- 8. Nothing here settles anything
   -- ======================================================================
+  -- supplier_invoices left this list when F5 built it: recording what a
+  -- supplier charged is exactly what that phase is for, and it settles nothing.
+  -- The rest stay, and the line still holds what it was written to hold --
+  -- receiving is not payment, and there is never a second place a quantity
+  -- lives. Payment arrives in F6, and this assertion is what will notice it.
   select count(*) into n from information_schema.tables
    where table_schema = 'public'
-     and table_name in ('supplier_invoices', 'accounts_payable', 'supplier_payments',
-                        'journal_entries', 'fms_stock_balance', 'finance_inventory_quantity',
-                        'procurement_on_hand');
+     and table_name in ('supplier_payments', 'payments', 'journal_entries',
+                        'general_ledger', 'fms_stock_balance',
+                        'finance_inventory_quantity', 'procurement_on_hand');
   if n <> 0 then
-    raise exception 'FAIL 8a F4 introduced % table(s) it was not supposed to', n;
+    raise exception 'FAIL 8a % table(s) exist that no phase up to F5 should have built', n;
   end if;
-  raise notice 'PASS  8a no invoice, no payable, no payment, no journal, and no second stock balance';
+  raise notice 'PASS  8a no payment, no journal, no ledger, and no second stock balance';
 
   -- The reservation from F3 is untouched by any of this, and spent is still 0.
   perform pg_temp.acts_as(manager); set local role authenticated;

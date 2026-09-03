@@ -40,6 +40,7 @@ import PosStockPage from '@/pages/pos/PosStockPage'
 import PosBranchProductsPage from '@/pages/pos/PosProductsPage'
 import PosBranchSettingsPage from '@/pages/pos/PosSettingsPage'
 import FinanceHomePage from '@/pages/fms/FinanceHomePage'
+import SupplierInvoicesPage from '@/pages/fms/SupplierInvoicesPage'
 import BudgetsPage from '@/pages/fms/BudgetsPage'
 import FinanceRequestsPage from '@/pages/fms/FinanceRequestsPage'
 import ProcurementPage from '@/pages/fms/ProcurementPage'
@@ -148,6 +149,10 @@ export default function App() {
               <Route index element={<FinanceHomePage />} />
               <Route path="requests" element={<FinanceRequestsPage />} />
               <Route path="procurement" element={<ProcurementPage />} />
+              {/* Supplier invoices and what is owed on them. One route:
+                  an account payable is an approved invoice nobody has
+                  paid, not a separate document. */}
+              <Route path="invoices" element={<SupplierInvoicesPage />} />
               <Route path="budgets" element={<BudgetsPage />} />
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />
