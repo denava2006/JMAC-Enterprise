@@ -97,7 +97,8 @@ vi.mock('@/hooks/usePosRequests', () => ({
   useCreateStockRequest: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateCarryRequest: () => ({ mutate: vi.fn(), isPending: false }),
   useCancelRequest: () => ({
-    mutate: (id: string) => cancelled.push(id),
+    mutate: ({ requestId, reason }: { requestId: string; reason: string }) =>
+      cancelled.push(`${requestId}:${reason}`),
     isPending: false,
   }),
 }))
@@ -180,12 +181,24 @@ describe('what a manager sees', () => {
 })
 
 describe('withdrawing', () => {
-  it('offers Withdraw on their own pending request', () => {
+  it('asks why before withdrawing, and does not withdraw until told', () => {
+    // Finance may already be sourcing it, so a withdrawal that arrives with no
+    // explanation is a request that gets chased anyway.
     state.assignments = [{ branchId: CAVITE, role: 'manager' }]
     state.rows = [request({ requested_by: 'u1', status: 'pending' })]
     show()
     fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }))
-    expect(cancelled).toEqual(['r1'])
+    expect(cancelled).toEqual([])
+
+    const reason = screen.getByLabelText(/Reason/)
+    expect(screen.getByRole('button', { name: 'Withdraw request' })).toHaveProperty('disabled', true)
+
+    fireEvent.change(reason, { target: { value: '   ' } })
+    expect(screen.getByRole('button', { name: 'Withdraw request' })).toHaveProperty('disabled', true)
+
+    fireEvent.change(reason, { target: { value: 'ordered from Main instead' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw request' }))
+    expect(cancelled).toEqual(['r1:ordered from Main instead'])
   })
 
   it('offers nothing once a decision has been made', () => {

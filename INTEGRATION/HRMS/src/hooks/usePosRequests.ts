@@ -143,11 +143,21 @@ export function useCreateCarryRequest() {
   })
 }
 
+/**
+ * Withdraw a request the branch raised.
+ *
+ * Takes a reason, because somebody downstream may already be sourcing it: a
+ * withdrawal that arrives at Finance with no explanation is a request that gets
+ * chased anyway. The database refuses a blank one, so the dialog asks for it.
+ */
 export function useCancelRequest() {
   const invalidate = useInvalidateRequests()
   return useMutation({
-    mutationFn: async (requestId: string) => {
-      const { error } = await supabase.rpc('cancel_pos_request', { _request_id: requestId })
+    mutationFn: async ({ requestId, reason }: { requestId: string; reason: string }) => {
+      const { error } = await supabase.rpc('cancel_pos_request', {
+        _request_id: requestId,
+        _reason: reason,
+      })
       if (error) throw new Error(describeRequestError(error))
     },
     onSuccess: () => {

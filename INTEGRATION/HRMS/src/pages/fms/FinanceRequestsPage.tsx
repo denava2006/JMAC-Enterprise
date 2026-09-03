@@ -98,7 +98,7 @@ export default function FinanceRequestsPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Requests"
-        description="Purchases and reimbursements moving through validation, approval and payment."
+        description="Purchases and reimbursements moving through validation and approval, before procurement."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

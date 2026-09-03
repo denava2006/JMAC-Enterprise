@@ -35,6 +35,7 @@ import { ManagerBranchPicker, useManagerBranch } from '@/components/pos/ManagerB
 import { PosInventoryHeader } from '@/components/pos/PosInventoryHeader'
 import { useAuth } from '@/contexts/AuthContext'
 import { REQUEST_PROGRESS_LABEL, useBranchRequestProgress } from '@/hooks/useProcurement'
+import { ReasonDialog } from '@/components/fms/ReasonDialog'
 import { useBranchInventory } from '@/hooks/usePosInventory'
 import {
   useCancelRequest,
@@ -204,6 +205,9 @@ export default function PosRequestsPage() {
   const { data: progress = [] } = useBranchRequestProgress(branchId || undefined)
 
   const [status, setStatus] = React.useState<string>(ANY)
+  // Withdrawing is a business transition -- Finance may already be sourcing
+  // it -- so it asks why before it asks the server.
+  const [withdrawing, setWithdrawing] = React.useState<string | null>(null)
   const progressByRequest = React.useMemo(
     () => new Map(progress.map((row) => [row.request_id, row])),
     [progress],
@@ -390,7 +394,7 @@ export default function PosRequestsPage() {
                           variant="ghost"
                           size="sm"
                           disabled={cancel.isPending}
-                          onClick={() => cancel.mutate(row.request_id)}
+                          onClick={() => setWithdrawing(row.request_id)}
                         >
                           Withdraw
                         </Button>
@@ -424,6 +428,20 @@ export default function PosRequestsPage() {
           </div>
         </div>
       )}
+
+      <ReasonDialog
+        open={!!withdrawing}
+        title="Withdraw this request"
+        description="Finance may already be sourcing it, so say why it is no longer needed."
+        placeholder="Ordered from another branch instead."
+        confirmLabel="Withdraw request"
+        pending={cancel.isPending}
+        onOpenChange={(open) => !open && setWithdrawing(null)}
+        onConfirm={(reason) => {
+          if (withdrawing) cancel.mutate({ requestId: withdrawing, reason })
+          setWithdrawing(null)
+        }}
+      />
 
       {composing && branchId && (
         <NewRequestDialog branchId={branchId} onClose={() => setComposing(false)} />

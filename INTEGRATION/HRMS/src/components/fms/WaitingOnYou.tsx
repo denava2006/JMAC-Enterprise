@@ -34,6 +34,8 @@ export function waitingWork(
     requestsToValidate: number
     demandToAccept: number
     ordersReturned: number
+    vendorsReturned: number
+    categoriesReturned: number
   },
 ): WaitingItem[] {
   if (role === 'finance_manager') {
@@ -46,10 +48,15 @@ export function waitingWork(
   }
 
   if (role === 'finance_staff') {
+    // The maker's side of the conversation. A returned proposal is work coming
+    // back, and it is the half that is easiest to lose: the checker acts and
+    // then nothing tells the maker anything happened.
     return [
       { label: 'Requests to validate', count: data.requestsToValidate, to: '/fms/requests' },
       { label: 'Branch demand to act on', count: data.demandToAccept, to: '/fms/procurement' },
       { label: 'Orders returned to you', count: data.ordersReturned, to: '/fms/procurement' },
+      { label: 'Vendors sent back', count: data.vendorsReturned, to: '/fms/vendors' },
+      { label: 'Categories sent back', count: data.categoriesReturned, to: '/fms/categories' },
     ].filter((i) => i.count > 0)
   }
 
@@ -82,6 +89,8 @@ export function WaitingOnYou() {
         d.demand_state === 'accepted_for_procurement',
     ).length,
     ordersReturned: orders.filter((o) => o.status === 'returned').length,
+    vendorsReturned: vendors.filter((v) => v.approval_status === 'rejected').length,
+    categoriesReturned: categories.filter((c) => c.approval_status === 'rejected').length,
   })
 
   if (items.length === 0) return null

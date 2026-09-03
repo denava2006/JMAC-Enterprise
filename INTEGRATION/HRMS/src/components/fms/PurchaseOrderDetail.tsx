@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { ReasonDialog } from '@/components/fms/ReasonDialog'
 import { formatMoney } from '@/lib/currency'
 import { useBranches } from '@/hooks/useBranches'
 import { usePosProducts } from '@/hooks/usePosCatalogue'
@@ -31,9 +32,20 @@ import {
   useRemovePurchaseOrderItem,
   useSavePurchaseOrderItem,
   useTransitionPurchaseOrder,
+  useCancelRemainder,
+  useDiscardDraft,
 } from '@/hooks/useProcurement'
 
 const NONE = '__none__'
+
+/**
+ * The transitions that stop, return or refuse something.
+ *
+ * These take a reason -- the database refuses a blank one -- so the UI asks for
+ * it first rather than letting the call fail. Approving and submitting are
+ * absent on purpose: what an approval means is answered by the approval.
+ */
+const NEEDS_REASON = new Set(['returned', 'rejected', 'cancelled'])
 
 /** What this person may do to this order, mirroring transition_purchase_order. */
 function actionsFor(role: string | undefined, status: string | undefined) {
@@ -81,6 +93,11 @@ export function PurchaseOrderDetail({
   const { data: items = [] } = usePurchaseOrderItems(orderId ?? undefined)
   const { data: sources = [] } = usePurchaseOrderSources(orderId ?? undefined)
   const transition = useTransitionPurchaseOrder()
+  const discardDraft = useDiscardDraft()
+  const stopRemainder = useCancelRemainder()
+  const [asking, setAsking] = React.useState<
+    { kind: 'transition'; to: string; label: string } | { kind: 'discard' } | { kind: 'remainder' } | null
+  >(null)
 
   const order = orders.find((o) => o.id === orderId)
   // Editing an order is the maker's work, so it takes BOTH an editable status
@@ -90,8 +107,25 @@ export function PurchaseOrderDetail({
   // were reviewing. The database refuses those writes, but a control that is
   // visible and then fails is worse than one that was never offered.
   const isMaker = profile?.role === 'finance_staff'
+  const isChecker = profile?.role === 'finance_manager'
   const editable = isMaker && (order?.status === 'draft' || order?.status === 'returned')
   const actions = actionsFor(profile?.role, order?.status ?? undefined)
+
+  // What has not arrived and has not been stopped.
+  //
+  // Counted over receivable lines only: a line for services or rent has no
+  // delivery to wait for. Cancellation is per line and receipts are per order,
+  // which is why the two halves come from different places -- only a line with
+  // a POS product can be received at all, so the order's received count is
+  // already the receivable total.
+  const receivableOrdered = items.reduce(
+    (sum, item) =>
+      item.pos_product_id
+        ? sum + (item.quantity_ordered ?? 0) - (item.quantity_cancelled ?? 0)
+        : sum,
+    0,
+  )
+  const outstanding = Math.max(receivableOrdered - Number(order?.quantity_received ?? 0), 0)
 
   return (
     <Dialog open={!!orderId} onOpenChange={onOpenChange}>
@@ -182,6 +216,83 @@ export function PurchaseOrderDetail({
             </Card>
           )}
 
+          {/* A draft somebody deliberately saved is a record, so abandoning it is
+              a transition with a reason -- and the demand it was going to
+              satisfy goes back into the procurement queue. */}
+          {isMaker && (order?.status === 'draft' || order?.status === 'returned') && (
+            <div className="flex justify-end border-t border-border pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={discardDraft.isPending}
+                onClick={() => setAsking({ kind: 'discard' })}
+              >
+                Discard draft
+              </Button>
+            </div>
+          )}
+
+          {/* Ordered twenty, six arrived, the rest is not coming. Cancelling the
+              order outright would claim the six never did. */}
+          {isChecker && order?.status === 'approved' && outstanding > 0 && (
+            <div className="flex flex-col gap-2 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
+                {outstanding} unit(s) still outstanding. Stopping them leaves everything already
+                received on the branch's shelf.
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={stopRemainder.isPending}
+                  onClick={() => setAsking({ kind: 'remainder' })}
+                >
+                  Stop outstanding quantity
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <ReasonDialog
+            open={!!asking}
+            title={
+              asking?.kind === 'discard'
+                ? 'Discard this draft'
+                : asking?.kind === 'remainder'
+                  ? 'Stop the outstanding quantity'
+                  : (asking?.label ?? 'Confirm')
+            }
+            description={
+              asking?.kind === 'discard'
+                ? 'The demand behind it goes back into the procurement queue, and the order number is not reused.'
+                : asking?.kind === 'remainder'
+                  ? `${outstanding} unit(s) will be recorded as stopped. Everything already received stays on the branch's shelf.`
+                  : 'This is kept with the order and shown to whoever picks it up next.'
+            }
+            confirmLabel={
+              asking?.kind === 'discard'
+                ? 'Discard draft'
+                : asking?.kind === 'remainder'
+                  ? 'Stop outstanding'
+                  : (asking?.label ?? 'Confirm')
+            }
+            destructive={asking?.kind !== 'remainder'}
+            pending={transition.isPending || discardDraft.isPending || stopRemainder.isPending}
+            onOpenChange={(open) => !open && setAsking(null)}
+            onConfirm={async (reason) => {
+              if (!orderId || !asking) return
+              if (asking.kind === 'discard') {
+                await discardDraft.mutateAsync({ id: orderId, reason })
+              } else if (asking.kind === 'remainder') {
+                await stopRemainder.mutateAsync({ id: orderId, reason })
+              } else {
+                await transition.mutateAsync({ orderId, to: asking.to, remarks: reason })
+              }
+              setAsking(null)
+              onOpenChange(false)
+            }}
+          />
+
           {actions.length > 0 && (
             <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
               {actions.map((action) => (
@@ -191,6 +302,10 @@ export function PurchaseOrderDetail({
                   disabled={transition.isPending}
                   onClick={async () => {
                     if (!orderId) return
+                    if (NEEDS_REASON.has(action.to)) {
+                      setAsking({ kind: 'transition', to: action.to, label: action.label })
+                      return
+                    }
                     await transition.mutateAsync({ orderId, to: action.to })
                     if (['approved', 'rejected', 'cancelled', 'closed'].includes(action.to)) {
                       onOpenChange(false)

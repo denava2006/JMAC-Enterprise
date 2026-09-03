@@ -47,6 +47,8 @@ vi.mock('@/hooks/useProcurement', () => ({
         unit_of_measure: 'case',
         unit_cost: '55.00',
         line_total: '550.00',
+        quantity_cancelled: 0,
+        pos_product_id: null,
         pos_products: null,
         branches: null,
       },
@@ -56,6 +58,8 @@ vi.mock('@/hooks/useProcurement', () => ({
   useRemovePurchaseOrderItem: () => ({ mutate: vi.fn(), isPending: false }),
   useSavePurchaseOrderItem: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useTransitionPurchaseOrder: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDiscardDraft: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCancelRemainder: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 const { PurchaseOrderDetail } = await import('@/components/fms/PurchaseOrderDetail')

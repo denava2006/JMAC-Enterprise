@@ -9,6 +9,8 @@ const NOTHING = {
   requestsToValidate: 0,
   demandToAccept: 0,
   ordersReturned: 0,
+  vendorsReturned: 0,
+  categoriesReturned: 0,
 }
 
 const EVERYTHING = {
@@ -19,6 +21,8 @@ const EVERYTHING = {
   requestsToValidate: 5,
   demandToAccept: 6,
   ordersReturned: 7,
+  vendorsReturned: 8,
+  categoriesReturned: 9,
 }
 
 describe('what is waiting on the checker', () => {
@@ -45,6 +49,8 @@ describe('what is waiting on the maker', () => {
       { label: 'Requests to validate', count: 5, to: '/fms/requests' },
       { label: 'Branch demand to act on', count: 6, to: '/fms/procurement' },
       { label: 'Orders returned to you', count: 7, to: '/fms/procurement' },
+      { label: 'Vendors sent back', count: 8, to: '/fms/vendors' },
+      { label: 'Categories sent back', count: 9, to: '/fms/categories' },
     ])
   })
 

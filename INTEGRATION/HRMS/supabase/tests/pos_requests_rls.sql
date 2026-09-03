@@ -531,7 +531,7 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
     raise notice 'PASS  9a nobody may review a request they submitted themselves';
   end;
   -- Withdrawn so the later carry-request checks start from a clean product.
-  perform public.cancel_pos_request(req_own);
+  perform public.cancel_pos_request(req_own, 'withdrawn by the test');
   reset role;
 
   -- The Administrator is no longer a reviewer of restock at all, which is the
@@ -551,14 +551,14 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   perform set_config('request.jwt.claims', json_build_object('sub', manager_id, 'role', 'authenticated')::text, true);
   set local role authenticated;
   begin
-    perform public.cancel_pos_request(req_stock);   -- somebody else's request
+    perform public.cancel_pos_request(req_stock, 'not mine to withdraw');   -- somebody else's request
     raise exception 'FAIL 10a a manager cancelled somebody else''s request';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
     raise notice 'PASS 10a only the requester may cancel their own request';
   end;
   begin
-    perform public.cancel_pos_request(req_carry);   -- already approved
+    perform public.cancel_pos_request(req_carry, 'too late');   -- already approved
     raise exception 'FAIL 10b an approved request was cancelled';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
@@ -570,7 +570,7 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   -- uncarried_id is genuinely carried now, thanks to the approval in check 8 --
   -- so the cancel tests use a product the branch still does not stock.
   select public.create_pos_carry_request(branch_a, spare_id, 'second thoughts') into req_carry;
-  perform public.cancel_pos_request(req_carry);
+  perform public.cancel_pos_request(req_carry, 'no longer needed');
   -- Read the row as the owner: no API role may touch the table directly, which
   -- checks 2a/2b just proved.
   reset role;
@@ -580,7 +580,7 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   set local role authenticated;
   select public.create_pos_carry_request(branch_a, spare_id, 'replacement') into req_carry;
   raise notice 'PASS 10c a requester withdraws their own pending request, freeing the slot';
-  perform public.cancel_pos_request(req_carry);
+  perform public.cancel_pos_request(req_carry, 'no longer needed');
   reset role;
 
   ------------------------------------------------------------ 11. audit trail
@@ -620,7 +620,7 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
   for txt in select unnest(array[
     'public.create_pos_stock_request(uuid,uuid,integer,text)',
     'public.create_pos_carry_request(uuid,uuid,text)',
-    'public.cancel_pos_request(uuid)',
+    'public.cancel_pos_request(uuid,text)',
     'public.approve_pos_request(uuid,text)',
     'public.decline_pos_request(uuid,text)',
     'public.get_pos_manager_requests(uuid,public.pos_request_status,integer,integer)',

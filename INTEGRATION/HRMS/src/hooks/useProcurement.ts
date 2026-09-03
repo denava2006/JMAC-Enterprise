@@ -353,6 +353,7 @@ export const PO_STATUS_LABEL: Record<string, string> = {
  */
 export const REQUEST_PROGRESS_LABEL: Record<string, string> = {
   with_finance: 'With Finance',
+  procurement_reopened: 'Procurement reopened — previous order cancelled',
   accepted: 'Accepted — not yet ordered',
   being_ordered: 'Being ordered',
   ordered: 'Ordered — awaiting delivery',
@@ -391,5 +392,134 @@ export function useBranchRequestProgress(branchId: string | undefined) {
       if (error) throw error
       return (data ?? []) as BranchRequestProgress[]
     },
+  })
+}
+
+/* ------------------------------------------------- building an order */
+
+export interface ProcurementSourceRef {
+  kind: 'pos_restock' | 'finance_request'
+  id: string
+  label: string
+}
+
+export interface ProcurementSource {
+  source_kind: string
+  source_id: string
+  reference: string | null
+  title: string | null
+  product_id: string | null
+  product_name: string | null
+  branch_id: string | null
+  branch_name: string | null
+  requested_quantity: number | null
+  ordered_quantity: number | null
+  outstanding: number | null
+  requested_by_name: string | null
+  amount: number | null
+}
+
+/**
+ * What the request already knows, read once when the builder opens.
+ *
+ * A narrow answer on purpose. It gives Finance this product and this branch --
+ * not the catalogue they came from, which Finance has no business reading and
+ * which was never the point of fulfilling one restock request.
+ */
+export function useProcurementSource(ref: ProcurementSourceRef | null) {
+  return useQuery({
+    queryKey: ['procurement', 'source', ref?.kind ?? 'none', ref?.id ?? 'none'],
+    enabled: !!ref,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_procurement_source', {
+        _source_kind: ref!.kind,
+        _source_id: ref!.id,
+      })
+      if (error) throw error
+      return (data?.[0] ?? null) as ProcurementSource | null
+    },
+  })
+}
+
+/**
+ * The order, its link to the demand and its lines, in one server call.
+ *
+ * Deliberately not three requests: the previous flow created the order first
+ * and left it behind whenever anything after that did not happen.
+ */
+export function useBuildPurchaseOrder() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      source: ProcurementSourceRef
+      vendorId: string
+      expectedDelivery: string | null
+      notes: string | null
+      quantity: number | null
+      unitCost: number | null
+      lines: Array<{ description: string; quantity: number; unit_cost: number }> | null
+      submit: boolean
+    }) => {
+      const { data, error } = await supabase.rpc('create_purchase_order_from_source', {
+        _source_kind: input.source.kind,
+        _source_id: input.source.id,
+        _vendor_id: input.vendorId,
+        _expected_delivery_date: input.expectedDelivery ?? undefined,
+        _notes: input.notes ?? undefined,
+        _quantity: input.quantity ?? undefined,
+        _unit_cost: input.unitCost ?? undefined,
+        _lines: input.lines ?? undefined,
+        _submit: input.submit,
+      })
+      if (error) throw error
+      return { id: data as unknown as string, submitted: input.submit }
+    },
+    onSuccess: ({ submitted }) => {
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
+      toast.success(
+        submitted ? 'Purchase order submitted for approval.' : 'Purchase order saved as a draft.',
+      )
+    },
+    onError: (error) => toast.error(describeFinanceError(error)),
+  })
+}
+
+/** Abandoning a draft somebody deliberately saved. Takes a reason, and hands
+ *  the demand back to the procurement queue. */
+export function useDiscardDraft() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { error } = await supabase.rpc('discard_purchase_order_draft', {
+        _purchase_order_id: id,
+        _reason: reason,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
+      toast.success('Draft discarded. The demand is back in the procurement queue.')
+    },
+    onError: (error) => toast.error(describeFinanceError(error)),
+  })
+}
+
+/** Stop what has not arrived, without pretending what did arrive never did. */
+export function useCancelRemainder() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { error } = await supabase.rpc('cancel_purchase_order_remainder', {
+        _purchase_order_id: id,
+        _reason: reason,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
+      queryClient.invalidateQueries({ queryKey: ['pos'] })
+      toast.success('Outstanding quantity stopped. Everything already received stands.')
+    },
+    onError: (error) => toast.error(describeFinanceError(error)),
   })
 }

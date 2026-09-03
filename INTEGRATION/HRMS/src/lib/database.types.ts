@@ -1376,6 +1376,7 @@ export type Database = {
           amount: number
           budget_id: string | null
           created_at: string
+          delivery_branch_id: string | null
           department_id: string | null
           description: string | null
           expense_date: string | null
@@ -1399,6 +1400,7 @@ export type Database = {
           amount: number
           budget_id?: string | null
           created_at?: string
+          delivery_branch_id?: string | null
           department_id?: string | null
           description?: string | null
           expense_date?: string | null
@@ -1422,6 +1424,7 @@ export type Database = {
           amount?: number
           budget_id?: string | null
           created_at?: string
+          delivery_branch_id?: string | null
           department_id?: string | null
           description?: string | null
           expense_date?: string | null
@@ -1454,6 +1457,13 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_delivery_branch_id_fkey"
+            columns: ["delivery_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
           {
@@ -3212,6 +3222,7 @@ export type Database = {
           line_total: number | null
           pos_product_id: string | null
           purchase_order_id: string
+          quantity_cancelled: number
           quantity_ordered: number
           unit_cost: number
           unit_of_measure: string
@@ -3225,6 +3236,7 @@ export type Database = {
           line_total?: number | null
           pos_product_id?: string | null
           purchase_order_id: string
+          quantity_cancelled?: number
           quantity_ordered: number
           unit_cost: number
           unit_of_measure?: string
@@ -3238,6 +3250,7 @@ export type Database = {
           line_total?: number | null
           pos_product_id?: string | null
           purchase_order_id?: string
+          quantity_cancelled?: number
           quantity_ordered?: number
           unit_cost?: number
           unit_of_measure?: string
@@ -3346,6 +3359,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          delivery_branch_id: string | null
           expected_delivery_date: string | null
           id: string
           notes: string | null
@@ -3364,6 +3378,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_branch_id?: string | null
           expected_delivery_date?: string | null
           id?: string
           notes?: string | null
@@ -3382,6 +3397,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_branch_id?: string | null
           expected_delivery_date?: string | null
           id?: string
           notes?: string | null
@@ -3405,6 +3421,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_delivery_branch_id_fkey"
+            columns: ["delivery_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
           {
@@ -3885,7 +3908,14 @@ export type Database = {
         Args: { _checkout_key: string }
         Returns: undefined
       }
-      cancel_pos_request: { Args: { _request_id: string }; Returns: undefined }
+      cancel_pos_request: {
+        Args: { _reason: string; _request_id: string }
+        Returns: undefined
+      }
+      cancel_purchase_order_remainder: {
+        Args: { _purchase_order_id: string; _reason: string }
+        Returns: number
+      }
       checkout_pos_sale: {
         Args: {
           _amount_tendered?: number
@@ -3948,6 +3978,20 @@ export type Database = {
         }
         Returns: string
       }
+      create_purchase_order_from_source: {
+        Args: {
+          _expected_delivery_date?: string
+          _lines?: Json
+          _notes?: string
+          _quantity?: number
+          _source_id: string
+          _source_kind: string
+          _submit?: boolean
+          _unit_cost?: number
+          _vendor_id: string
+        }
+        Returns: string
+      }
       decline_pos_request: {
         Args: { _note: string; _request_id: string }
         Returns: undefined
@@ -3967,6 +4011,10 @@ export type Database = {
       describe_pos_ineligibility: {
         Args: { _profile_id: string; _role_code: string }
         Returns: string
+      }
+      discard_purchase_order_draft: {
+        Args: { _purchase_order_id: string; _reason: string }
+        Returns: undefined
       }
       employment_permits_operational_work: {
         Args: { _status: Database["public"]["Enums"]["employment_status"] }
@@ -4218,6 +4266,7 @@ export type Database = {
           product_id: string
           product_name: string
           progress: string
+          quantity_cancelled: number
           quantity_ordered: number
           quantity_outstanding: number
           quantity_received: number
@@ -4582,6 +4631,24 @@ export type Database = {
           title: string
         }[]
       }
+      get_procurement_source: {
+        Args: { _source_id: string; _source_kind: string }
+        Returns: {
+          amount: number
+          branch_id: string
+          branch_name: string
+          ordered_quantity: number
+          outstanding: number
+          product_id: string
+          product_name: string
+          reference: string
+          requested_by_name: string
+          requested_quantity: number
+          source_id: string
+          source_kind: string
+          title: string
+        }[]
+      }
       get_public_job_posting: {
         Args: { _id: string }
         Returns: {
@@ -4786,6 +4853,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      pos_request_ordered_quantity: {
+        Args: { _request_id: string }
+        Returns: number
+      }
       pos_sale_receipt: { Args: { _sale_id: string }; Returns: Json }
       price_pos_cart: {
         Args: { _branch_id: string; _items: Json }
@@ -4855,6 +4926,10 @@ export type Database = {
       reorder_pos_category: {
         Args: { _category_id: string; _direction: number }
         Returns: undefined
+      }
+      require_business_reason: {
+        Args: { _reason: string; _what: string }
+        Returns: string
       }
       respond_to_job_offer: {
         Args: {

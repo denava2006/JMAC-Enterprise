@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
-import { financeCan } from '@/lib/financeAuthority'
 import {
   DEMAND_STATE_LABEL,
   PO_STATUS_LABEL,
@@ -20,7 +19,8 @@ import {
   type PurchaseOrder,
 } from '@/hooks/useProcurement'
 import { PurchaseOrderDetail } from '@/components/fms/PurchaseOrderDetail'
-import { NewPurchaseOrderDialog } from '@/components/fms/NewPurchaseOrderDialog'
+import { PurchaseOrderBuilder } from '@/components/fms/PurchaseOrderBuilder'
+import type { ProcurementSourceRef } from '@/hooks/useProcurement'
 
 type Scope = 'demand' | 'orders'
 
@@ -41,12 +41,12 @@ export default function ProcurementPage() {
   const acceptDemand = useAcceptRestockDemand()
   const [scope, setScope] = React.useState<Scope>('demand')
   const [openOrder, setOpenOrder] = React.useState<string | null>(null)
-  const [newOrderFor, setNewOrderFor] = React.useState<
-    { financeRequestId?: string; posInventoryRequestId?: string; label: string } | null
-  >(null)
+  const [newOrderFor, setNewOrderFor] = React.useState<ProcurementSourceRef | null>(null)
 
-  const canPrepare = financeCan(profile?.role, 'budgets', 'read') &&
-    (profile?.role === 'finance_staff' || profile?.role === 'finance_manager')
+  // Preparation is the maker's, and the server agrees:
+  // create_purchase_order_from_source refuses anybody who is not Finance Staff.
+  // Offering the Manager a builder here would only mean a rejected call.
+  const canPrepare = profile?.role === 'finance_staff'
 
   // Demand that has not yet produced an order. Once one exists the row moves on
   // rather than inviting a second order for the same need.
@@ -183,14 +183,11 @@ export default function ProcurementPage() {
                 accepting={acceptDemand.isPending}
                 onAccept={() => acceptDemand.mutate({ requestId: d.source_id })}
                 onCreate={() =>
-                  setNewOrderFor(
-                    d.source_kind === 'finance_request'
-                      ? { financeRequestId: d.source_id, label: d.reference ?? d.title ?? 'Request' }
-                      : {
-                          posInventoryRequestId: d.source_id,
-                          label: d.title ?? 'Branch stock',
-                        },
-                  )
+                  setNewOrderFor({
+                    kind: d.source_kind === 'finance_request' ? 'finance_request' : 'pos_restock',
+                    id: d.source_id,
+                    label: d.reference ?? d.title ?? 'Request',
+                  })
                 }
               />
             ))
@@ -209,7 +206,7 @@ export default function ProcurementPage() {
         />
       )}
 
-      <NewPurchaseOrderDialog
+      <PurchaseOrderBuilder
         source={newOrderFor}
         onOpenChange={(open) => !open && setNewOrderFor(null)}
         onCreated={(id) => {
