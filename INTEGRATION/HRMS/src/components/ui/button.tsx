@@ -12,8 +12,10 @@ const buttonVariants = cva(
         default: 'bg-primary text-primary-foreground shadow-sm hover:bg-navy-2 active:scale-[0.98]',
         secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:opacity-90 active:scale-[0.98]',
         accent: 'bg-accent text-accent-foreground shadow-sm hover:bg-teal-2 active:scale-[0.98]',
-        outline: 'border border-input bg-card hover:bg-muted text-foreground',
-        ghost: 'hover:bg-muted text-foreground',
+        // The filled variants already gave way under the cursor; these two did
+        // not, so a secondary action felt dead next to a primary one.
+        outline: 'border border-input bg-card hover:bg-muted text-foreground active:scale-[0.98]',
+        ghost: 'hover:bg-muted text-foreground active:scale-[0.98]',
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:opacity-90',
         link: 'text-secondary underline-offset-4 hover:underline',
       },

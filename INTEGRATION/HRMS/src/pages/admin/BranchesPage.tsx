@@ -53,6 +53,35 @@ function BranchDialog({
   const [phone, setPhone] = React.useState('')
   const [latitude, setLatitude] = React.useState('')
   const [longitude, setLongitude] = React.useState('')
+
+  // What the map shows: the pair as typed, the moment it is a usable pair.
+  // Built here rather than read back from the saved record so the pin follows
+  // the form instead of lagging a save behind it.
+  const previewPin = React.useMemo<Branch[]>(() => {
+    const lat = Number(latitude.trim())
+    const lng = Number(longitude.trim())
+    const usable =
+      latitude.trim() !== '' &&
+      longitude.trim() !== '' &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180
+    if (!usable) return []
+    return [
+      {
+        id: branch?.id ?? 'preview',
+        name: name.trim() || 'This branch',
+        address: address.trim() || null,
+        phone: null,
+        latitude: lat,
+        longitude: lng,
+        is_active: true,
+        created_at: '',
+        updated_at: '',
+      },
+    ]
+  }, [latitude, longitude, name, address, branch?.id])
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -103,7 +132,7 @@ function BranchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[88vh] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{branch ? 'Edit branch' : 'New branch'}</DialogTitle>
           <DialogDescription>Branches are selectable when completing a deployment.</DialogDescription>
@@ -142,6 +171,22 @@ function BranchDialog({
           {/* Where the branch is, for the map. Optional: a branch with no
               coordinates still lists everywhere it listed before, it simply is
               not pinned. Nothing operational reads these. */}
+          <div className="flex flex-col gap-2">
+            <Label>Location</Label>
+            {/* A fixed, compact height -- 200px on a phone, 260px above sm --
+                so the coordinate fields and the footer buttons below stay on
+                screen. The map previews what has been typed rather than
+                accepting input: this dialog edits a branch, and clicking a map
+                to move a real location is a different decision that deserves
+                its own confirmation. */}
+            <BranchMap branches={previewPin} variant="compact" caption={false} />
+            <p className="text-xs text-muted-foreground">
+              {previewPin.length > 0
+                ? 'Previewing the coordinates below.'
+                : 'Enter coordinates to preview the location here.'}
+            </p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="branch_latitude">Latitude</Label>

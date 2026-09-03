@@ -17,6 +17,17 @@ import type { Branch } from '@/hooks/useBranches'
 const markers: Array<{ at: [number, number]; title: string; popup: string }> = []
 const views: Array<string> = []
 
+// jsdom has no ResizeObserver. The component uses one to call invalidateSize
+// when its container is measured -- which is what makes the map draw correctly
+// inside a dialog that animates open -- so the environment gets a stub rather
+// than the component getting a guard for a browser API every target has.
+class StubResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', StubResizeObserver)
+
 vi.mock('leaflet', () => {
   const marker = (at: [number, number], opts: { title: string }) => {
     const m = {
@@ -167,5 +178,49 @@ describe('framing', () => {
       />,
     )
     expect(views).toContain('fitBounds')
+  })
+})
+
+describe('staying inside its box', () => {
+  function container() {
+    return screen.getByRole('region', { name: 'Branch locations' })
+  }
+
+  it('creates its own stacking context so it cannot paint over a modal', () => {
+    // The bug this fixes: Leaflet gives its panes z-index 400-1000 while the
+    // dialog sits at z-50, so an open modal had the map drawn straight over the
+    // top of it. `isolate` resolves those numbers inside this element instead.
+    render(<BranchMap branches={[branch({ latitude: 1, longitude: 2 })]} />)
+    expect(container().className).toContain('isolate')
+    expect(container().className).toContain('z-0')
+  })
+
+  it('clips anything Leaflet draws past its edges', () => {
+    render(<BranchMap branches={[branch()]} />)
+    expect(container().className).toContain('overflow-hidden')
+    expect(container().className).toContain('w-full')
+    expect(container().className).toContain('rounded-lg')
+  })
+
+  it('takes a fixed height rather than growing to fit its content', () => {
+    render(<BranchMap branches={[branch()]} />)
+    // Page variant: tall, because the map is the point of that section.
+    expect(container().className).toMatch(/\bh-72\b/)
+    expect(container().className).toMatch(/sm:h-96/)
+  })
+
+  it('uses a compact height in a dialog, on both viewports', () => {
+    // 200px on a phone and 260px above sm — inside the 180-220 / 240-280
+    // targets, and short enough to leave the coordinate fields and the footer
+    // buttons on screen underneath.
+    render(<BranchMap branches={[branch()]} variant="compact" />)
+    expect(container().className).toContain('h-[200px]')
+    expect(container().className).toContain('sm:h-[260px]')
+    expect(container().className).not.toMatch(/\bh-72\b/)
+  })
+
+  it('drops the page caption where the dialog supplies its own', () => {
+    render(<BranchMap branches={[branch()]} variant="compact" caption={false} />)
+    expect(screen.queryByText(/No branch has coordinates yet/)).toBeNull()
   })
 })

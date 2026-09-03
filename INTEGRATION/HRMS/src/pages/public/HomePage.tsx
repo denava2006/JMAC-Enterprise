@@ -1,11 +1,62 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Building2, GraduationCap, Users, ShieldCheck } from 'lucide-react'
+import {
+  ArrowRight,
+  Building2,
+  GraduationCap,
+  Users,
+  ShieldCheck,
+  UserCog,
+  Store,
+  Wallet,
+  IdCard,
+  Network,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { JobPostingCard, JobPostingCardSkeleton, NoOpenPositions } from '@/components/public/JobPostingCard'
 import { usePublicOpenJobPostings } from '@/hooks/usePublicCareers'
-import { ModuleRail } from '@/components/Brand'
+import { JmacWordmark, ModuleRail } from '@/components/Brand'
+import { Reveal, RevealGroup, RevealItem, CARD_HOVER } from '@/components/public/Reveal'
+import { BranchShowcase } from '@/components/public/BranchShowcase'
+
+/**
+ * What the platform actually consists of.
+ *
+ * Four workspaces and the thing that ties them together. Multi-branch is listed
+ * alongside them but described differently on purpose: it is not a fifth module
+ * anybody logs into, it is the property the other four share.
+ */
+const PLATFORM = [
+  {
+    icon: UserCog,
+    code: 'HRMS',
+    title: 'Human Resources',
+    description:
+      'Recruitment through to deployment, then attendance, leave, schedules and payroll on one employee record.',
+  },
+  {
+    icon: Store,
+    code: 'POS',
+    title: 'Point of Sale',
+    description:
+      'Tills, payments and receipts at every branch, with stock and its movements held in one place.',
+  },
+  {
+    icon: Wallet,
+    code: 'FMS',
+    title: 'Finance',
+    description:
+      'Budgets, vendors and purchase requests, with procurement running from an approved request to a received delivery.',
+  },
+  {
+    icon: IdCard,
+    code: 'ESS',
+    title: 'My Workspace',
+    description:
+      'Every employee sees their own attendance, leave, payslips and requests — whatever else they do here.',
+  },
+]
 
 /**
  * The public landing page.
@@ -45,50 +96,55 @@ const WHY_JOIN = [
 ]
 
 function HeroSection() {
+  const still = useReducedMotion()
+
+  // One shared entrance so the stack arrives as a sequence rather than as five
+  // independent animations that happen to overlap.
+  const rise = (delay: number) => ({
+    initial: { opacity: 0, y: still ? 0 : 16 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: still ? 0.2 : 0.6, delay: still ? 0 : delay, ease: [0.22, 1, 0.36, 1] as const },
+  })
+
   return (
     <section className="relative overflow-hidden bg-primary text-primary-foreground">
-      {/* One soft wash for depth. A second blob on the opposite corner is the
-          reflexive choice here and adds nothing the first does not. */}
       <div
         className="pointer-events-none absolute -right-32 -top-40 h-[28rem] w-[28rem] rounded-full bg-secondary/25 blur-3xl"
         aria-hidden="true"
       />
-      <div className="relative mx-auto max-w-6xl px-4 pb-6 pt-24 sm:px-6 sm:pb-8 sm:pt-28">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <motion.span
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-primary-foreground/60"
-          >
-            JMAC Enterprise
-          </motion.span>
+      {/* Spacing was pt-24/pb-6: a lot of dead air above the mark and almost
+          none below the rail, which made the navy block look cut off where it
+          met the next section. The pad is closer to even now, and the rail sits
+          inside the block with room under it. */}
+      <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 sm:pb-24 sm:pt-20">
+        <div className="flex flex-col items-center gap-7 text-center">
+          {/* The mark, at the size of a mark. It was set as an 11px mono label
+              above the headline, which read as a caption on somebody else's
+              page rather than as the name of the company whose site this is. */}
+          <motion.div {...rise(0)}>
+            <JmacWordmark
+              layout="stacked"
+              className="text-[2.75rem] sm:text-[3.75rem] lg:text-[4.5rem]"
+            />
+          </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-            className="max-w-4xl font-display text-4xl font-extrabold leading-[1.1] tracking-[-0.02em] sm:text-5xl lg:text-6xl"
+            {...rise(0.08)}
+            className="max-w-4xl font-display text-2xl font-bold leading-[1.2] tracking-[-0.015em] text-primary-foreground/95 sm:text-3xl lg:text-[2.5rem]"
           >
-            Connecting people, operations, sales, and finance in one unified system.
+            One unified enterprise platform connecting workforce, branch operations, point of sale,
+            employee self-service, and finance.
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="max-w-2xl text-base text-primary-foreground/75 sm:text-lg"
+            {...rise(0.14)}
+            className="max-w-2xl text-base leading-relaxed text-primary-foreground/70 sm:text-lg"
           >
-            Manage your workforce, business operations, point of sale, and financial workflows through one secure
-            enterprise platform.
+            Every department works in its own secured workspace, on one enterprise identity and one set
+            of records.
           </motion.p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="flex flex-col gap-3 sm:flex-row"
-          >
+          <motion.div {...rise(0.2)} className="mt-1 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg" variant="accent">
               <Link to="/careers">
                 Explore Careers
@@ -107,12 +163,7 @@ function HeroSection() {
         </div>
 
         {/* The thesis, stated structurally rather than claimed in prose. */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.25 }}
-          className="mt-16 sm:mt-20"
-        >
+        <motion.div {...rise(0.3)} className="mt-16 sm:mt-20">
           <ModuleRail tone="dark" />
         </motion.div>
       </div>
@@ -120,61 +171,81 @@ function HeroSection() {
   )
 }
 
-function CompanyIntroSection() {
-  const facts = [
-    { concept: 'Integrated Systems', detail: 'HRMS · POS · FMS' },
-    { concept: 'Unified Identity', detail: 'One Account' },
-    { concept: 'Operations', detail: 'Multi-Branch' },
-    { concept: 'Access Control', detail: 'Role-Based' },
-  ]
-
+/**
+ * The platform, laid out plainly.
+ *
+ * The page previously asserted "one system, connected operations" and left the
+ * reader to take it on faith. This names the four workspaces and says what each
+ * one is for, which is the same claim with evidence attached.
+ */
+function PlatformSection() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-      <div className="grid gap-10 md:grid-cols-2 md:items-start">
-        <motion.div
-          initial={{ opacity: 0, x: -16 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.4 }}
-        >
-          <h2 className="font-display text-2xl font-bold tracking-[-0.01em] text-foreground sm:text-3xl">
-            One system. Connected operations.
-          </h2>
-          <p className="mt-4 text-muted-foreground">
-            JMAC Enterprise brings together the core functions of the organization into a single platform. Human
-            Resources manages the workforce, Point of Sale supports branch operations and sales, and Finance
-            connects purchasing, budgeting, and financial management.
-          </p>
-          <p className="mt-4 text-muted-foreground">
-            Each department works in its own secured workspace while sharing one enterprise identity and
-            organizational structure.
-          </p>
-        </motion.div>
+    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
+      <Reveal className="mx-auto max-w-2xl text-center">
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">The platform</p>
+        <h2 className="mt-3 font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
+          Four workspaces, one organisation
+        </h2>
+        <p className="mt-4 text-muted-foreground">
+          Each is a separate workspace with its own responsibilities and its own access. They share one
+          identity, one employee record and one organisational structure.
+        </p>
+      </Reveal>
 
-        <motion.div
-          initial={{ opacity: 0, x: 16 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="grid grid-cols-2 gap-4"
-        >
-          {facts.map((fact) => (
-            <Card key={fact.concept}>
-              <CardContent className="flex flex-col gap-1.5 p-5">
-                <p className="font-display text-base font-bold leading-tight text-foreground">{fact.concept}</p>
-                <p className="font-mono text-xs tracking-[0.08em] text-muted-foreground">{fact.detail}</p>
+      <RevealGroup className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {PLATFORM.map((module) => (
+          <RevealItem key={module.code} className="h-full">
+            <Card className={`h-full ${CARD_HOVER}`}>
+              <CardContent className="flex h-full flex-col gap-3 p-6">
+                <div className="flex items-center justify-between">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                    <module.icon className="h-5 w-5" />
+                  </span>
+                  <span className="font-mono text-xs tracking-[0.16em] text-muted-foreground">
+                    {module.code}
+                  </span>
+                </div>
+                <h3 className="font-display text-lg font-semibold text-foreground">{module.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{module.description}</p>
               </CardContent>
             </Card>
-          ))}
-        </motion.div>
-      </div>
+          </RevealItem>
+        ))}
+      </RevealGroup>
+
+      {/* Multi-branch, set apart because it is not a fifth module. */}
+      <Reveal delay={0.1} className="mt-6">
+        <Card className={CARD_HOVER}>
+          <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
+              <Network className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display text-lg font-semibold text-foreground">
+                Multi-branch operations
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Not a fifth module — the property the other four share. Staff are assigned to the branch
+                they work at, stock and takings belong to that branch, and what somebody may do follows
+                them from one to the next.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="shrink-0 active:scale-[0.98]">
+              <a href="#branches">
+                See our branches
+                <ArrowRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </Reveal>
     </section>
   )
 }
 
 function WhyJoinSection() {
   return (
-    <section className="bg-muted/40 py-20">
+    <section className="border-t border-border bg-muted/40 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -183,7 +254,7 @@ function WhyJoinSection() {
           transition={{ duration: 0.4 }}
           className="mx-auto max-w-2xl text-center"
         >
-          <h2 className="font-display text-2xl font-bold tracking-[-0.01em] text-foreground sm:text-3xl">
+          <h2 className="font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
             Why work with JMAC
           </h2>
           <p className="mt-3 text-muted-foreground">What the job actually looks like here.</p>
@@ -198,7 +269,7 @@ function WhyJoinSection() {
               viewport={{ once: true, margin: '-40px' }}
               transition={{ duration: 0.35, delay: index * 0.05 }}
             >
-              <Card className="h-full">
+              <Card className={`h-full ${CARD_HOVER}`}>
                 <CardContent className="flex flex-col gap-3 p-5">
                   <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent/10 text-accent">
                     <item.icon className="h-5 w-5" />
@@ -220,9 +291,9 @@ function FeaturedCareersSection() {
   const featured = data?.slice(0, 3) ?? []
 
   return (
-    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h2 className="font-display text-2xl font-bold tracking-[-0.01em] text-foreground sm:text-3xl">
+        <h2 className="font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
           Featured careers
         </h2>
         <p className="max-w-xl text-muted-foreground">
@@ -264,7 +335,7 @@ function FeaturedCareersSection() {
 
 function AboutSection() {
   return (
-    <section id="about" className="bg-muted/40 py-20">
+    <section id="about" className="border-t border-border bg-muted/40 py-20 sm:py-24">
       <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -272,7 +343,7 @@ function AboutSection() {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.4 }}
         >
-          <h2 className="font-display text-2xl font-bold tracking-[-0.01em] text-foreground sm:text-3xl">
+          <h2 className="font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
             About JMAC Enterprise
           </h2>
           <p className="mt-4 text-muted-foreground">
@@ -284,14 +355,16 @@ function AboutSection() {
             The platform gives employees, managers, administrators, cashiers, HR teams, and finance personnel
             access to the tools relevant to their work through one secure system.
           </p>
-          {/* Finance is in the platform's scope, not yet in its software. Saying
-              so here is cheaper than being caught claiming otherwise, and it
-              matches the "planned" marker on the module rail. */}
-          <div className="mx-auto mt-8 flex max-w-md items-start gap-2.5 rounded-lg border border-border bg-card px-4 py-3 text-left">
+          {/* This used to say Finance was "being brought in next". It is in, so
+              the note now says what is actually true of it -- procurement runs
+              end to end, and accounting does not exist yet. Being specific about
+              the edge is cheaper than being caught claiming the whole thing. */}
+          <div className="mx-auto mt-8 flex max-w-lg items-start gap-2.5 rounded-lg border border-border bg-card px-4 py-3 text-left">
             <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
             <p className="font-mono text-xs leading-relaxed text-muted-foreground">
-              Human Resources and Point of Sale are in service today. Finance is part of the platform's scope and
-              is being brought in next.
+              Human Resources, Point of Sale and Finance are all in service. Finance covers budgets,
+              vendors, requests and procurement through to receiving; supplier payment and accounting
+              are the next stage of its work.
             </p>
           </div>
         </motion.div>
@@ -310,7 +383,7 @@ function ContactSection() {
         transition={{ duration: 0.4 }}
         className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center"
       >
-        <h2 className="font-display text-2xl font-bold tracking-[-0.01em] text-foreground sm:text-3xl">
+        <h2 className="font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
           Looking for a role at JMAC?
         </h2>
         <p className="text-muted-foreground">
@@ -337,7 +410,8 @@ export default function HomePage() {
   return (
     <div>
       <HeroSection />
-      <CompanyIntroSection />
+      <PlatformSection />
+      <BranchShowcase />
       <WhyJoinSection />
       <FeaturedCareersSection />
       <AboutSection />

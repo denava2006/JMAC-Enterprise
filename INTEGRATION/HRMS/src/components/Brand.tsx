@@ -48,21 +48,42 @@ export function JmacWordmark({
   )
 }
 
+/**
+ * A module either runs or it is on the way. The union is declared rather than
+ * inferred so that the day everything is live — today — the 'planned' branches
+ * still typecheck and the marker stays available for whatever ships next.
+ */
+export type ModuleStatus = 'live' | 'planned'
+
+export interface EnterpriseModule {
+  code: string
+  name: string
+  status: ModuleStatus
+}
+
 /** The four enterprise modules, in the order work moves through them. */
-export const MODULES = [
+export const MODULES: readonly EnterpriseModule[] = [
   { code: 'HRMS', name: 'Human Resources', status: 'live' },
   { code: 'POS', name: 'Point of Sale', status: 'live' },
-  { code: 'FMS', name: 'Finance', status: 'planned' },
+  // Finance stopped being planned when F1–F4 shipped: authorization, master
+  // data, the request workflow and procurement through to receiving are all in
+  // service. The 'planned' branches below stay because the marker is worth
+  // keeping for whatever is genuinely next, not because anything uses it today.
+  { code: 'FMS', name: 'Finance', status: 'live' },
   { code: 'ESS', name: 'Employee Self-Service', status: 'live' },
-] as const
+]
 
 /**
  * The module rail — the page's one structural claim.
  *
  * It exists because the honest description of JMAC is not "four features" but
- * "four workspaces on one identity, one of which is not connected yet". A row
- * of identical marketing cards would flatten that distinction; a rail that
- * marks Finance as planned keeps it. The boundary is the information.
+ * "four workspaces on one identity". A row of identical marketing cards would
+ * flatten that into a feature list; a rail reads as one structure with four
+ * parts, which is what it is.
+ *
+ * All four are live as of F4. The planned treatment below is kept rather than
+ * deleted: it costs a class name, and the next thing to be announced before it
+ * ships will want it.
  */
 export function ModuleRail({ className, tone = 'dark' }: { className?: string; tone?: 'dark' | 'light' }) {
   const planned = tone === 'dark' ? 'text-white/45' : 'text-muted-foreground'
