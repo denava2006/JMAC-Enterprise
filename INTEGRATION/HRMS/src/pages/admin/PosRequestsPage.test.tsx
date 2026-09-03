@@ -15,8 +15,8 @@ import type { QueuedRequest } from '@/lib/posRequests'
 const CAVITE = 'cavite'
 
 const branches: Branch[] = [
-  { id: CAVITE, name: 'Cavite Branch', address: null, phone: null, is_active: true, created_at: '', updated_at: '' },
-  { id: 'main', name: 'Main Office', address: null, phone: null, is_active: true, created_at: '', updated_at: '' },
+  { id: CAVITE, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
+  { id: 'main', name: 'Main Office', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
 ]
 
 const state: { rows: QueuedRequest[] } = { rows: [] }

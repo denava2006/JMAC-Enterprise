@@ -16,8 +16,8 @@ const CAVITE = 'cavite'
 const MAIN = 'main'
 
 const branches: Branch[] = [
-  { id: CAVITE, name: 'Cavite Branch', address: null, phone: null, is_active: true, created_at: '', updated_at: '' },
-  { id: MAIN, name: 'Main Office', address: null, phone: null, is_active: true, created_at: '', updated_at: '' },
+  { id: CAVITE, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
+  { id: MAIN, name: 'Main Office', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
 ]
 
 const state: {

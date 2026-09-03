@@ -26,6 +26,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { BranchMap } from '@/components/admin/BranchMap'
 import {
   useBranches,
   useWorkLocations,
@@ -50,6 +51,8 @@ function BranchDialog({
   const [name, setName] = React.useState('')
   const [address, setAddress] = React.useState('')
   const [phone, setPhone] = React.useState('')
+  const [latitude, setLatitude] = React.useState('')
+  const [longitude, setLongitude] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -57,6 +60,8 @@ function BranchDialog({
       setName(branch?.name ?? '')
       setAddress(branch?.address ?? '')
       setPhone(branch?.phone ?? '')
+      setLatitude(branch?.latitude != null ? String(branch.latitude) : '')
+      setLongitude(branch?.longitude != null ? String(branch.longitude) : '')
       setError(null)
     }
   }, [open, branch])
@@ -66,12 +71,31 @@ function BranchDialog({
       setError('Branch name is required.')
       return
     }
+    // Both or neither. A half-set pair puts the pin in the sea off west Africa,
+    // which is where every (0, 0) ends up -- and the database refuses it too.
+    const lat = latitude.trim()
+    const lng = longitude.trim()
+    if ((lat === '') !== (lng === '')) {
+      setError('Give both a latitude and a longitude, or leave both empty.')
+      return
+    }
+    if (lat !== '' && (Number.isNaN(Number(lat)) || Number.isNaN(Number(lng)))) {
+      setError('Latitude and longitude must be numbers in decimal degrees.')
+      return
+    }
+    if (lat !== '' && (Math.abs(Number(lat)) > 90 || Math.abs(Number(lng)) > 180)) {
+      setError('Latitude is between -90 and 90, longitude between -180 and 180.')
+      return
+    }
+
     save.mutate(
       {
         id: branch?.id,
         name: name.trim(),
         address: address.trim() || undefined,
         phone: phone.trim() || undefined,
+        latitude: lat === '' ? null : Number(lat),
+        longitude: lng === '' ? null : Number(lng),
       },
       { onSuccess: () => onOpenChange(false) }
     )
@@ -114,6 +138,34 @@ function BranchDialog({
               onChange={(e) => setPhone(e.target.value)}
               placeholder="Optional — printed on POS receipts"
             />
+          </div>
+          {/* Where the branch is, for the map. Optional: a branch with no
+              coordinates still lists everywhere it listed before, it simply is
+              not pinned. Nothing operational reads these. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="branch_latitude">Latitude</Label>
+              <Input
+                id="branch_latitude"
+                inputMode="decimal"
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
+                placeholder="14.4791"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="branch_longitude">Longitude</Label>
+              <Input
+                id="branch_longitude"
+                inputMode="decimal"
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
+                placeholder="120.8970"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Decimal degrees, both or neither. Leave empty until somebody knows where it is.
+            </p>
           </div>
         </div>
         <DialogFooter>
@@ -302,6 +354,7 @@ export default function BranchesPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          <BranchMap branches={branches} />
           {branches.map((branch) => {
             const branchLocations = locationsByBranch.get(branch.id) ?? []
             return (

@@ -9,6 +9,12 @@ export interface Branch {
   /** Printed on POS receipts. An enterprise fact about the branch, which is why
    * it lives here rather than in branch_pos_settings. */
   phone: string | null
+  /** Decimal degrees, both or neither -- the database refuses a half-set pair.
+   *  Null means nobody has located this branch yet, which is a display state
+   *  and never an operational one: an unlocated branch trades exactly as it
+   *  did before. */
+  latitude: number | null
+  longitude: number | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -67,13 +73,23 @@ export function useSaveBranch() {
       name,
       address,
       phone,
+      latitude,
+      longitude,
     }: {
       id?: string
       name: string
       address?: string
       phone?: string
+      latitude?: number | null
+      longitude?: number | null
     }) => {
-      const payload = { name, address: address || null, phone: phone || null }
+      const payload = {
+        name,
+        address: address || null,
+        phone: phone || null,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+      }
       const { error } = id
         ? await supabase.from('branches').update(payload).eq('id', id)
         : await supabase.from('branches').insert(payload)

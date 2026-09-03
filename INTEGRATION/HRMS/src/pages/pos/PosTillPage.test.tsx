@@ -36,7 +36,7 @@ function renderTill(initialPath = '/pos/till') {
 const BRANCH_A = 'b1'
 
 const branches: Branch[] = [
-  { id: BRANCH_A, name: 'Cavite Branch', address: null, phone: null, is_active: true, created_at: '', updated_at: '' },
+  { id: BRANCH_A, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
 ]
 
 const state: {
