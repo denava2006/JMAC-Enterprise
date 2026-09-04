@@ -15,7 +15,7 @@ import { ReasonDialog } from '@/components/fms/ReasonDialog'
 import { InvoiceMatch, matchSummary } from '@/components/fms/InvoiceMatch'
 import { InvoicePayments } from '@/components/fms/InvoicePayments'
 import {
-  INVOICE_STATUS_LABEL,
+  invoiceStateLabel,
   useInvoiceHistory,
   useInvoiceMatch,
   useSupplierInvoices,
@@ -35,7 +35,19 @@ import {
  */
 
 /** Which transitions this person may make on an invoice in this state. */
-export function invoiceActionsFor(role: string | undefined, status: string | undefined) {
+/**
+ * What the signed-in role may do with an invoice in this state.
+ *
+ * `settled` carries whether any money is paid or promised. Voiding says "this
+ * bill was never valid", and F6 has no reversal — so once a payment exists,
+ * voiding would hide the bill while leaving the money gone. The server refuses
+ * it; this stops the button being offered in the first place.
+ */
+export function invoiceActionsFor(
+  role: string | undefined,
+  status: string | undefined,
+  settled: { amountPaid: number; pending: number } = { amountPaid: 0, pending: 0 }
+) {
   if (role === 'accountant') {
     if (status === 'draft' || status === 'returned') {
       return [{ to: 'for_review', label: 'Submit for review', tone: 'default' as const }]
@@ -51,6 +63,10 @@ export function invoiceActionsFor(role: string | undefined, status: string | und
       ]
     }
     if (status === 'approved') {
+      // Hidden rather than disabled. A greyed Void button on a paid invoice
+      // invites clicking to find out why, and the answer is that it will never
+      // be available again — the reason is said in the panel instead.
+      if (settled.amountPaid > 0 || settled.pending > 0) return []
       return [{ to: 'voided', label: 'Void invoice', tone: 'destructive' as const }]
     }
     return []
@@ -76,7 +92,10 @@ export function SupplierInvoiceDetail({
 
   const invoice = invoices.find((i) => i.id === invoiceId)
   const summary = matchSummary(match)
-  const actions = invoiceActionsFor(profile?.role, invoice?.status ?? undefined)
+  const actions = invoiceActionsFor(profile?.role, invoice?.status ?? undefined, {
+    amountPaid: Number(invoice?.amount_paid ?? 0),
+    pending: Number(invoice?.pending_payment_amount ?? 0),
+  })
     // Approve disappears while the three disagree. The database refuses it as
     // well; this stops somebody pressing it to find that out.
     .filter((a) => a.to !== 'approved' || summary.matched)
@@ -98,7 +117,7 @@ export function SupplierInvoiceDetail({
                       : 'secondary'
               }
             >
-              {INVOICE_STATUS_LABEL[invoice?.status ?? ''] ?? invoice?.status}
+              {invoice ? invoiceStateLabel(invoice) : ''}
             </Badge>
           </DialogTitle>
           <DialogDescription>
@@ -131,6 +150,21 @@ export function SupplierInvoiceDetail({
               The balance is derived from completed payments, so this panel and
               the treasury cannot drift apart. */}
           {invoice?.status === 'approved' && <InvoicePayments invoice={invoice} />}
+
+          {/* Where Void would otherwise sit. Said once, plainly, rather than
+              leaving a Finance Manager to wonder where the control went. */}
+          {profile?.role === 'finance_manager' &&
+            invoice?.status === 'approved' &&
+            (Number(invoice.amount_paid ?? 0) > 0 ||
+              Number(invoice.pending_payment_amount ?? 0) > 0) && (
+              <Card>
+                <CardContent className="py-3 text-sm text-muted-foreground">
+                  {Number(invoice.amount_paid ?? 0) > 0
+                    ? 'Paid invoices cannot be voided. Voiding is not a reversal, and reversing a payment is not something this phase can do.'
+                    : 'Resolve the pending payment instruction first — return or reject it, and this invoice can then be voided.'}
+                </CardContent>
+              </Card>
+            )}
 
           {invoice?.decision_reason && (
             <Card>

@@ -256,12 +256,23 @@ export function isPaymentEditable(p: SupplierPayment): boolean {
 export function paymentActionsFor(
   payment: SupplierPayment,
   role: string | undefined,
-  userId: string | undefined
+  userId: string | undefined,
+  /**
+   * What the invoice can still take, excluding this payment.
+   *
+   * A returned payment is not automatically resubmittable: the balance may
+   * have been paid by something else in the meantime, and submitting it again
+   * would claim money that is no longer there. Undefined means "not known
+   * here", and the button stays as it was — the server refuses it either way.
+   */
+  availableForThis?: number
 ): { canSubmit: boolean; canDecide: boolean; canRecord: boolean } {
   const isAccountant = role === 'accountant'
   const isManager = role === 'finance_manager'
+  const fits = availableForThis === undefined || Number(payment.amount) <= availableForThis
   return {
-    canSubmit: isAccountant && (payment.status === 'draft' || payment.status === 'returned'),
+    canSubmit:
+      isAccountant && (payment.status === 'draft' || payment.status === 'returned') && fits,
     // The preparer never decides their own, checked on identity exactly as the
     // database checks it -- so the button and the answer agree rather than the
     // user discovering the rule from an error.

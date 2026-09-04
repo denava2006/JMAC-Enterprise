@@ -79,7 +79,13 @@ describe('what is waiting on the Accountant', () => {
     expect(waitingWork('accountant', EVERYTHING)).toEqual([
       { label: 'Invoices returned to you', count: 13, to: '/fms/invoices' },
       { label: 'Invoice drafts to submit', count: 12, to: '/fms/invoices' },
-      { label: 'Delivered orders to invoice', count: 14, to: '/fms/invoices' },
+      // A count of purchase orders, not of invoice records — and it now lands
+      // on Record invoice, which is the thing it is counting.
+      {
+        label: 'Delivered orders awaiting invoice',
+        count: 14,
+        to: '/fms/invoices?record=1',
+      },
     ])
   })
 

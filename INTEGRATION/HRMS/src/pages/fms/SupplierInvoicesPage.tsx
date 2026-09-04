@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
 import { FileText, Clock, AlertTriangle } from 'lucide-react'
 import { DataTable } from '@/components/data-table'
@@ -10,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import {
-  INVOICE_STATUS_LABEL,
+  invoiceStateLabel,
   useSupplierInvoices,
   type SupplierInvoice,
 } from '@/hooks/useSupplierInvoices'
@@ -35,13 +36,26 @@ export default function SupplierInvoicesPage() {
   const { profile } = useAuth()
   const { data: invoices = [], isLoading, isError, error } = useSupplierInvoices()
   const [scope, setScope] = React.useState<Scope>('invoices')
-  const [creating, setCreating] = React.useState(false)
+  // ?record=1 arrives from the Overview's "Delivered orders awaiting invoice",
+  // so that count lands on the thing it is counting rather than on a list of
+  // invoices, which is a different figure entirely.
+  const [search, setSearch] = useSearchParams()
+  const [creating, setCreating] = React.useState(search.get('record') === '1')
   const [openInvoice, setOpenInvoice] = React.useState<string | null>(null)
 
   // Recording an invoice is the Accountant's. The Finance Manager reviews what
   // was recorded, so they get no New invoice button -- a checker who can author
   // the document is approving their own work under another name.
   const canRecord = profile?.role === 'accountant'
+
+  // The parameter has done its job once the dialog is open; leaving it in the
+  // URL would reopen the builder on every back-navigation.
+  React.useEffect(() => {
+    if (search.get('record') !== '1') return
+    const next = new URLSearchParams(search)
+    next.delete('record')
+    setSearch(next, { replace: true })
+  }, [search, setSearch])
 
   const payables = invoices.filter((i) => i.status === 'approved')
   const owed = payables.reduce((sum, i) => sum + Number(i.balance_due ?? 0), 0)
@@ -141,7 +155,7 @@ export default function SupplierInvoicesPage() {
                     : 'secondary'
             }
           >
-            {INVOICE_STATUS_LABEL[row.original.status ?? ''] ?? row.original.status}
+            {invoiceStateLabel(row.original)}
           </Badge>
         ),
       },

@@ -127,7 +127,23 @@ export function InvoicePayments({ invoice }: { invoice: SupplierInvoice }) {
           <p className="text-sm font-semibold text-foreground">Payments</p>
           <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
             {payments.map((p) => {
-              const can = paymentActionsFor(p, profile?.role, profile?.id)
+              // What this invoice could still take for THIS payment: the
+              // balance less every other live instruction. Its own amount is
+              // excluded, exactly as the server excludes it — counting a
+              // payment against itself would refuse every resubmission.
+              const siblings = payments
+                .filter(
+                  (o) =>
+                    o.id !== p.id &&
+                    ['draft', 'for_approval', 'approved'].includes(o.status)
+                )
+                .reduce((sum, o) => sum + Number(o.amount ?? 0), 0)
+              const roomForThis = Math.max(balance - siblings, 0)
+              const can = paymentActionsFor(p, profile?.role, profile?.id, roomForThis)
+              const strandedReturn =
+                p.status === 'returned' &&
+                profile?.role === 'accountant' &&
+                Number(p.amount) > roomForThis
               return (
                 <li key={p.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
@@ -147,6 +163,14 @@ export function InvoicePayments({ invoice }: { invoice: SupplierInvoice }) {
                     </p>
                     {p.decision_reason && (
                       <p className="text-xs text-muted-foreground">{p.decision_reason}</p>
+                    )}
+                    {/* Kept on the record, but there is nothing left for it to
+                        pay. Saying so beats a Submit button that fails. */}
+                    {strandedReturn && (
+                      <p className="text-xs text-muted-foreground">
+                        This payment can no longer be resubmitted because the remaining invoice
+                        balance is already paid or covered.
+                      </p>
                     )}
                   </div>
                   <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">

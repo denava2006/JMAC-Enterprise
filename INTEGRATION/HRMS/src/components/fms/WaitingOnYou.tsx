@@ -65,7 +65,15 @@ export function waitingWork(
     return [
       { label: 'Invoices returned to you', count: data.invoicesReturned, to: '/fms/invoices' },
       { label: 'Invoice drafts to submit', count: data.invoiceDrafts, to: '/fms/invoices' },
-      { label: 'Delivered orders to invoice', count: data.ordersToInvoice, to: '/fms/invoices' },
+      // A count of PURCHASE ORDERS, not of invoices: delivered orders with no
+      // live supplier invoice against them. "to invoice" read like a number of
+      // invoice records, which is a different figure on a different page.
+      // Clicking it opens Record invoice with those orders listed.
+      {
+        label: 'Delivered orders awaiting invoice',
+        count: data.ordersToInvoice,
+        to: '/fms/invoices?record=1',
+      },
     ].filter((i) => i.count > 0)
   }
 

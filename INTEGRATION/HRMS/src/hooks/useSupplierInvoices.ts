@@ -36,6 +36,36 @@ export const INVOICE_STATUS_LABEL: Record<string, string> = {
   voided: 'Voided',
 }
 
+/**
+ * What to call an invoice, once payments exist.
+ *
+ * The workflow status and the payment state are different facts, and the
+ * database keeps them apart deliberately — an invoice stays `approved` for
+ * ever, because approval is what the Finance Manager decided, and paying it
+ * does not un-decide that. But "Approved — awaiting payment" on an invoice
+ * that has been paid in full is simply wrong on the screen.
+ *
+ * So the workflow state stays as it is underneath, and this decides the words.
+ * No second mutable status column: another one to keep in step is another one
+ * to disagree.
+ */
+export function invoiceStateLabel(invoice: {
+  status?: string | null
+  amount_paid?: number | string | null
+  balance_due?: number | string | null
+}): string {
+  const paid = Number(invoice.amount_paid ?? 0)
+  const balance = Number(invoice.balance_due ?? 0)
+
+  if (invoice.status === 'voided') return 'Voided'
+  if (invoice.status !== 'approved') {
+    return INVOICE_STATUS_LABEL[invoice.status ?? ''] ?? (invoice.status ?? '')
+  }
+  if (paid > 0 && balance <= 0) return 'Paid'
+  if (paid > 0) return 'Partially paid'
+  return 'Approved — awaiting payment'
+}
+
 /** One row of the three-way match, as the database computes it. */
 export interface InvoiceMatchRow {
   line_id: string

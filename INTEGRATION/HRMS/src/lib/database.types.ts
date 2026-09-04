@@ -6135,6 +6135,10 @@ export type Database = {
       }
       my_pos_branches: { Args: never; Returns: string[] }
       payment_budget_id: { Args: { _payment_id: string }; Returns: string }
+      payment_can_be_submitted: {
+        Args: { _payment_id: string }
+        Returns: boolean
+      }
       pos_audit_fee_summary: { Args: { _fees: Json }; Returns: string }
       pos_audit_is_manager_visible: {
         Args: {

@@ -107,6 +107,78 @@ describe('whether another instruction may be prepared', () => {
   })
 })
 
+describe('a returned payment', () => {
+  function returned(amount: number) {
+    return {
+      id: 'p1',
+      payment_no: 'PV-2026-0001',
+      supplier_invoice_id: 'inv1',
+      supplier_invoice_number: 'SI-93842',
+      invoice_no: 'AP-1',
+      vendor_name: 'Sahara Inc.',
+      treasury_account_id: 'acc1',
+      account_name: 'Main Bank Account',
+      amount,
+      method: 'bank_transfer',
+      payment_date: null,
+      reference: null,
+      notes: null,
+      status: 'returned',
+      prepared_by: 'acc-1',
+      prepared_by_name: 'Ana Cruz',
+      approved_by_name: null,
+      approved_at: null,
+      paid_by_name: null,
+      paid_at: null,
+      decision_reason: 'duplicate acceptance-test instruction',
+      created_at: '2026-09-04T13:19:40Z',
+    }
+  }
+
+  // The hosted defect: PV-2026-0001 sat returned against a settled invoice and
+  // still offered Submit.
+  it('offers no Submit once the invoice has nothing left to pay', () => {
+    state.invoice = invoice({ amount_paid: 1300, balance_due: 0, available_to_prepare: 0 })
+    state.payments = [returned(1300)]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+
+    expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull()
+    expect(
+      screen.getByText(
+        /can no longer be resubmitted because the remaining invoice balance is already paid or covered/i
+      )
+    ).toBeTruthy()
+  })
+
+  it('keeps the returned payment on the record rather than hiding it', () => {
+    state.invoice = invoice({ amount_paid: 1300, balance_due: 0, available_to_prepare: 0 })
+    state.payments = [returned(1300)]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+    expect(screen.getByText('PV-2026-0001')).toBeTruthy()
+    expect(screen.getByText(/duplicate acceptance-test instruction/)).toBeTruthy()
+  })
+
+  // Its own amount must not count against it, or nothing could ever be
+  // resubmitted.
+  it('still offers Submit when the balance is free, excluding its own amount', () => {
+    state.invoice = invoice({ amount_paid: 0, balance_due: 1300, available_to_prepare: 1300 })
+    state.payments = [returned(1300)]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
+  })
+
+  it('withdraws Submit when a sibling instruction has taken the room', () => {
+    state.invoice = invoice({ amount_paid: 0, balance_due: 1300, available_to_prepare: 500 })
+    state.payments = [
+      returned(1300),
+      { ...returned(800), id: 'p2', payment_no: 'PV-2026-0003', status: 'for_approval' },
+    ]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+    // 1,300 − 800 sibling = 500 available, and the returned one is for 1,300.
+    expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull()
+  })
+})
+
 describe('the builder ceiling', () => {
   function openBuilder(over: Record<string, unknown> = {}) {
     state.invoice = invoice(over)
