@@ -115,11 +115,26 @@ export function SettlementBuilder({
   // meantime would be describing a settlement that cannot exist.
   React.useEffect(() => setPicked(new Set()), [kind, branchId, method])
 
-  // Switching to a cash remittance leaves All branches selected, which a
-  // remittance cannot use: one drawer, one branch.
-  React.useEffect(() => {
-    if (kind === 'branch_cash' && branchId === ALL_BRANCHES) setBranchId('')
-  }, [kind, branchId])
+  /**
+   * Changing what is being settled sets the branch to match it.
+   *
+   * A provider payout starts at All branches and says so. The server has
+   * always treated a null branch as every branch, but the control showed the
+   * "Choose a branch" placeholder while the list below it already spanned
+   * branches — so the filter looked unapplied when it had been applied, and
+   * the answer on screen was right for a reason the screen denied.
+   *
+   * A cash remittance starts unchosen, because physical cash belongs to one
+   * branch and there is no sensible default for whose drawer this was.
+   *
+   * Done here rather than in an effect: an effect keyed on `kind` would have
+   * to distinguish the transition from every later render, or it would undo
+   * the user's own choice a moment after they made it.
+   */
+  function changeKind(next: SettlementKind) {
+    setKind(next)
+    setBranchId(next === 'provider' ? ALL_BRANCHES : '')
+  }
 
   // The function already returns only active branches, so there is nothing to
   // filter here — and nothing that could quietly stop filtering.
@@ -180,7 +195,7 @@ export function SettlementBuilder({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="st-kind">What is being settled</Label>
-              <Select value={kind} onValueChange={(v) => setKind(v as SettlementKind)}>
+              <Select value={kind} onValueChange={(v) => changeKind(v as SettlementKind)}>
                 <SelectTrigger id="st-kind">
                   <SelectValue />
                 </SelectTrigger>
@@ -201,10 +216,17 @@ export function SettlementBuilder({
                   "still loading", "the request failed" or "there are none" is
                   how the earlier defect stayed invisible: it looked like a
                   branch list with nothing in it. */}
+              {/* A provider payout can always be recorded across all branches,
+                  so a failed branch list only costs the ability to narrow --
+                  it must not lock the control. A cash remittance genuinely
+                  cannot proceed without one. */}
               <Select
                 value={branchId}
                 onValueChange={setBranchId}
-                disabled={branches.isLoading || branches.isError || branchOptions.length === 0}
+                disabled={
+                  branches.isLoading ||
+                  (kind === 'branch_cash' && (branches.isError || branchOptions.length === 0))
+                }
               >
                 <SelectTrigger id="st-branch">
                   {/* Short in the control, and the full sentence below it —
@@ -236,9 +258,14 @@ export function SettlementBuilder({
               {branches.isError && (
                 <p className="text-xs text-destructive">Branches could not be loaded.</p>
               )}
-              {!branches.isLoading && !branches.isError && branchOptions.length === 0 && (
-                <p className="text-xs text-muted-foreground">No active branches are available.</p>
-              )}
+              {kind === 'branch_cash' &&
+                !branches.isLoading &&
+                !branches.isError &&
+                branchOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No active branches are available.
+                  </p>
+                )}
             </div>
           </div>
 
