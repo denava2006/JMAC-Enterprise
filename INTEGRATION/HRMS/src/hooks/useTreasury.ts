@@ -31,6 +31,31 @@ import { FINANCE_KEYS } from '@/hooks/useFinanceMasterData'
  * at would leave the other two showing yesterday's numbers.
  */
 
+/**
+ * The branches a Finance user may name on a settlement.
+ *
+ * Deliberately not useBranches(). That hook reads public.branches directly,
+ * whose policies cover Admin, HR staff and assigned POS staff — none of which
+ * an Accountant is, so it returned nothing and the Branch dropdown came up
+ * empty in hosted acceptance. RLS was right; the question was wrong.
+ *
+ * This asks a Finance-authorised function that returns an id and a name and
+ * nothing else. The generic hook is left exactly as it is: HR and Admin still
+ * need the whole branch record, and widening their query to suit Finance would
+ * hand Finance every address and coordinate on the way past.
+ */
+export function useSettlementBranches() {
+  return useQuery({
+    queryKey: [...TREASURY_KEY, 'settlement-branches'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
+      const { data, error } = await supabase.rpc('get_settlement_branches')
+      if (error) throw error
+      return (data ?? []) as Array<{ id: string; name: string }>
+    },
+  })
+}
+
 export function useTreasuryAccounts() {
   return useQuery({
     queryKey: [...TREASURY_KEY, 'accounts'],

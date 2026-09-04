@@ -19,8 +19,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useBranches } from '@/hooks/useBranches'
-import { useCreateSettlement, useTreasuryAccounts, useUnsettledCollections } from '@/hooks/useTreasury'
+import {
+  useCreateSettlement,
+  useSettlementBranches,
+  useTreasuryAccounts,
+  useUnsettledCollections,
+} from '@/hooks/useTreasury'
 import { sanitizeMoneyInput } from '@/lib/currency'
 import { saleMethodLabel } from '@/lib/posTill'
 import { formatSaleTimestamp } from '@/lib/financeSales'
@@ -52,7 +56,8 @@ export function SettlementBuilder({
 }) {
   const create = useCreateSettlement()
   const { data: accounts = [] } = useTreasuryAccounts()
-  const { data: branches = [] } = useBranches()
+  // Finance's own branch surface, not the HR/Admin one — see useSettlementBranches.
+  const branches = useSettlementBranches()
 
   const [kind, setKind] = React.useState<SettlementKind>('branch_cash')
   const [branchId, setBranchId] = React.useState<string>('')
@@ -86,6 +91,9 @@ export function SettlementBuilder({
   // has no business on a GCash payout.
   React.useEffect(() => setPicked(new Set()), [kind, branchId, method])
 
+  // The function already returns only active branches, so there is nothing to
+  // filter here — and nothing that could quietly stop filtering.
+  const branchOptions = branches.data ?? []
   const rows = unsettled.data ?? []
   const gross = rows
     .filter((r) => picked.has(r.sale_id))
@@ -153,20 +161,47 @@ export function SettlementBuilder({
             {kind === 'branch_cash' ? (
               <div className="space-y-1.5">
                 <Label htmlFor="st-branch">Branch</Label>
-                <Select value={branchId} onValueChange={setBranchId}>
+                {/* Each state said out loud. An empty dropdown that could mean
+                    "still loading", "the request failed" or "there are none"
+                    is how the original defect stayed invisible: it looked like
+                    a branch list with nothing in it. */}
+                <Select
+                  value={branchId}
+                  onValueChange={setBranchId}
+                  disabled={branches.isLoading || branches.isError || branchOptions.length === 0}
+                >
                   <SelectTrigger id="st-branch">
-                    <SelectValue placeholder="Choose a branch" />
+                    {/* Short in the control, and the full sentence below it —
+                        the same words twice would be two things to read and
+                        two places to keep in step. */}
+                    <SelectValue
+                      placeholder={
+                        branches.isLoading
+                          ? 'Loading branches…'
+                          : branches.isError
+                            ? 'Unavailable'
+                            : branchOptions.length === 0
+                              ? 'None available'
+                              : 'Choose a branch'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {branches
-                      .filter((b) => b.is_active)
-                      .map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
+                    {branchOptions.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {branches.isError && (
+                  <p className="text-xs text-destructive">Branches could not be loaded.</p>
+                )}
+                {!branches.isLoading && !branches.isError && branchOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No active branches are available.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-1.5">

@@ -17,8 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useBranches } from '@/hooks/useBranches'
-import { useCreateTreasuryAccount } from '@/hooks/useTreasury'
+import { useCreateTreasuryAccount, useSettlementBranches } from '@/hooks/useTreasury'
 import { sanitizeMoneyInput } from '@/lib/currency'
 
 const NONE = '__none__'
@@ -39,7 +38,11 @@ export function TreasuryAccountDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const create = useCreateTreasuryAccount()
-  const { data: branches = [] } = useBranches()
+  // The same Finance branch surface the settlement builder uses. This dialog is
+  // Accountant-only too, so it had the identical empty-dropdown defect: it read
+  // public.branches through the HR/Admin hook and got nothing back.
+  const branches = useSettlementBranches()
+  const branchOptions = branches.data ?? []
 
   const [name, setName] = React.useState('')
   const [accountType, setAccountType] = React.useState<'cash' | 'bank'>('bank')
@@ -120,27 +123,33 @@ export function TreasuryAccountDialog({
               <Select
                 value={branchId}
                 onValueChange={setBranchId}
-                disabled={accountType === 'bank'}
+                disabled={accountType === 'bank' || branches.isLoading}
               >
                 <SelectTrigger id="ta-branch">
-                  <SelectValue placeholder="Company-wide" />
+                  <SelectValue
+                    placeholder={branches.isLoading ? 'Loading branches…' : 'Company-wide'}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Company-wide</SelectItem>
-                  {branches
-                    .filter((b) => b.is_active)
-                    .map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
+                  {branchOptions.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              {accountType === 'bank' && (
+              {accountType === 'bank' ? (
                 <p className="text-xs text-muted-foreground">
                   Bank accounts belong to the company, not to a branch.
                 </p>
-              )}
+              ) : branches.isError ? (
+                <p className="text-xs text-destructive">Branches could not be loaded.</p>
+              ) : !branches.isLoading && branchOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No active branches are available.
+                </p>
+              ) : null}
             </div>
           </div>
 

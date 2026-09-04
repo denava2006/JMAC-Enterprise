@@ -5907,6 +5907,13 @@ export type Database = {
         }[]
       }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
+      get_settlement_branches: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
       get_supplier_payments: {
         Args: { _invoice_id?: string }
         Returns: {
