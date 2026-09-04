@@ -26,7 +26,7 @@ import {
   useUnsettledCollections,
 } from '@/hooks/useTreasury'
 import { sanitizeMoneyInput } from '@/lib/currency'
-import { saleMethodLabel } from '@/lib/posTill'
+import { ONLINE_METHODS, saleMethodLabel } from '@/lib/posTill'
 import { formatSaleTimestamp } from '@/lib/financeSales'
 import {
   RECORDED_SETTLEMENT_NOTE,
@@ -34,7 +34,21 @@ import {
   type SettlementKind,
 } from '@/lib/treasury'
 
-const ONLINE_METHODS = ['gcash', 'paymaya', 'maya', 'card', 'qrph'] as const
+/**
+ * The providers a settlement may be recorded against.
+ *
+ * ONLINE_METHODS from posTill, not a second list here. The list I wrote by
+ * hand included both 'paymaya' and legacy 'maya', and SALE_METHOD_LABEL maps
+ * both to "Maya" — so the menu read GCash / Maya / Maya / Card / QR Ph.
+ *
+ * Removing the legacy entry from the menu is safe only because the server
+ * treats the two as one provider family: choosing Maya finds historical 'maya'
+ * rows as well as current 'paymaya' ones. Without that, dropping it from the
+ * list would have made those rows permanently unsettleable.
+ */
+export const PROVIDER_METHODS = ONLINE_METHODS
+
+const ALL_BRANCHES = '__all__'
 
 /**
  * Building a settlement out of the collections it actually covers.
@@ -68,10 +82,18 @@ export function SettlementBuilder({
   const [reference, setReference] = React.useState('')
   const [picked, setPicked] = React.useState<Set<string>>(new Set())
 
-  const ready = kind === 'branch_cash' ? !!branchId : !!method
+  // A cash remittance is always one branch emptying its own drawer, so a
+  // branch is required. A provider payout may genuinely span branches, so
+  // there it is optional -- but an Accountant reconciling one branch can still
+  // ask for one, which they could not before.
+  const ready = kind === 'branch_cash' ? !!branchId && branchId !== ALL_BRANCHES : !!method
+  const scopedBranch = branchId === ALL_BRANCHES ? null : branchId || null
   const unsettled = useUnsettledCollections(
     kind,
-    { branchId: kind === 'branch_cash' ? branchId : null, paymentMethod: kind === 'provider' ? method : null },
+    {
+      branchId: scopedBranch,
+      paymentMethod: kind === 'provider' ? method : null,
+    },
     open && ready
   )
 
@@ -87,14 +109,23 @@ export function SettlementBuilder({
     setPicked(new Set())
   }, [open])
 
-  // Changing what is being settled invalidates what was picked: a cash sale
-  // has no business on a GCash payout.
+  // Changing what is being settled invalidates what was picked. A sale chosen
+  // under Cavite + GCash must not still be ticked after switching to Main
+  // Office + Maya -- the server would refuse it, and the total shown in the
+  // meantime would be describing a settlement that cannot exist.
   React.useEffect(() => setPicked(new Set()), [kind, branchId, method])
+
+  // Switching to a cash remittance leaves All branches selected, which a
+  // remittance cannot use: one drawer, one branch.
+  React.useEffect(() => {
+    if (kind === 'branch_cash' && branchId === ALL_BRANCHES) setBranchId('')
+  }, [kind, branchId])
 
   // The function already returns only active branches, so there is nothing to
   // filter here — and nothing that could quietly stop filtering.
   const branchOptions = branches.data ?? []
   const rows = unsettled.data ?? []
+  const allPicked = rows.length > 0 && rows.every((r) => picked.has(r.sale_id))
   const gross = rows
     .filter((r) => picked.has(r.sale_id))
     .reduce((sum, r) => sum + Number(r.amount ?? 0), 0)
@@ -123,7 +154,9 @@ export function SettlementBuilder({
       destinationAccountId: accountId,
       settlementDate: date,
       saleIds: [...picked],
-      branchId: kind === 'branch_cash' ? branchId : null,
+      // A provider settlement carries its branch when one was chosen, and the
+      // server then holds every line to it.
+      branchId: scopedBranch,
       paymentMethod: kind === 'provider' ? method : null,
       feeAmount: feeValue,
       reference: reference.trim() || null,
@@ -158,72 +191,104 @@ export function SettlementBuilder({
               </Select>
             </div>
 
-            {kind === 'branch_cash' ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="st-branch">Branch</Label>
-                {/* Each state said out loud. An empty dropdown that could mean
-                    "still loading", "the request failed" or "there are none"
-                    is how the original defect stayed invisible: it looked like
-                    a branch list with nothing in it. */}
-                <Select
-                  value={branchId}
-                  onValueChange={setBranchId}
-                  disabled={branches.isLoading || branches.isError || branchOptions.length === 0}
-                >
-                  <SelectTrigger id="st-branch">
-                    {/* Short in the control, and the full sentence below it —
-                        the same words twice would be two things to read and
-                        two places to keep in step. */}
-                    <SelectValue
-                      placeholder={
-                        branches.isLoading
-                          ? 'Loading branches…'
-                          : branches.isError
-                            ? 'Unavailable'
-                            : branchOptions.length === 0
-                              ? 'None available'
-                              : 'Choose a branch'
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branchOptions.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {branches.isError && (
-                  <p className="text-xs text-destructive">Branches could not be loaded.</p>
-                )}
-                {!branches.isLoading && !branches.isError && branchOptions.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    No active branches are available.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="st-method">Payment method</Label>
-                <Select value={method} onValueChange={setMethod}>
-                  <SelectTrigger id="st-method">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ONLINE_METHODS.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {saleMethodLabel(m)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {/* Branch is asked for either way now. A cash remittance must name
+                one; a provider payout may span branches, so there it also
+                offers All branches -- but an Accountant reconciling a single
+                branch's payout can finally say so. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="st-branch">Branch</Label>
+              {/* Each state said out loud. An empty dropdown that could mean
+                  "still loading", "the request failed" or "there are none" is
+                  how the earlier defect stayed invisible: it looked like a
+                  branch list with nothing in it. */}
+              <Select
+                value={branchId}
+                onValueChange={setBranchId}
+                disabled={branches.isLoading || branches.isError || branchOptions.length === 0}
+              >
+                <SelectTrigger id="st-branch">
+                  {/* Short in the control, and the full sentence below it —
+                      the same words twice would be two things to read and two
+                      places to keep in step. */}
+                  <SelectValue
+                    placeholder={
+                      branches.isLoading
+                        ? 'Loading branches…'
+                        : branches.isError
+                          ? 'Unavailable'
+                          : branchOptions.length === 0
+                            ? 'None available'
+                            : 'Choose a branch'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {kind === 'provider' && (
+                    <SelectItem value={ALL_BRANCHES}>All branches</SelectItem>
+                  )}
+                  {branchOptions.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {branches.isError && (
+                <p className="text-xs text-destructive">Branches could not be loaded.</p>
+              )}
+              {!branches.isLoading && !branches.isError && branchOptions.length === 0 && (
+                <p className="text-xs text-muted-foreground">No active branches are available.</p>
+              )}
+            </div>
           </div>
 
+          {kind === 'provider' && (
+            <div className="space-y-1.5 sm:max-w-[calc(50%-0.5rem)]">
+              <Label htmlFor="st-method">Payment method</Label>
+              <Select value={method} onValueChange={setMethod}>
+                <SelectTrigger id="st-method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDER_METHODS.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {saleMethodLabel(m)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
-            <Label>Collections to settle</Label>
+            {/* Named for what it actually lists, so it is obvious why a branch
+                cash remittance shows no GCash: it is a cash list. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>
+                {kind === 'branch_cash'
+                  ? 'Unremitted cash sales'
+                  : 'Unsettled provider collections'}
+              </Label>
+              {rows.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {picked.size} of {rows.length} selected
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setPicked(
+                        allPicked ? new Set() : new Set(rows.map((r) => r.sale_id))
+                      )
+                    }
+                  >
+                    {allPicked ? 'Clear all' : 'Select all'}
+                  </Button>
+                </div>
+              )}
+            </div>
             {!ready ? (
               <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
                 {kind === 'branch_cash'

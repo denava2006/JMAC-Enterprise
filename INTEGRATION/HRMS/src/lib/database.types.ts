@@ -6167,6 +6167,7 @@ export type Database = {
       pos_page_size: { Args: { _requested: number }; Returns: number }
       pos_payment_is_cash: { Args: { _method: string }; Returns: boolean }
       pos_payment_ttl_minutes: { Args: never; Returns: number }
+      pos_provider_family: { Args: { _method: string }; Returns: string }
       pos_qr_branch_id: { Args: { _object_name: string }; Returns: string }
       pos_report_bounds: {
         Args: { _from_date?: string; _to_date?: string }

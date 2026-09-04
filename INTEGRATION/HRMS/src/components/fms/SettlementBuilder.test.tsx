@@ -79,7 +79,22 @@ vi.mock('@/hooks/useTreasury', () => ({
   useCreateSettlement: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
-import { SettlementBuilder } from '@/components/fms/SettlementBuilder'
+import { PROVIDER_METHODS, SettlementBuilder } from '@/components/fms/SettlementBuilder'
+import { ONLINE_METHODS, saleMethodLabel } from '@/lib/posTill'
+
+// Radix Select drives its menu with pointer capture and scrolls the active
+// option into view; jsdom implements neither, and without them the listbox
+// never opens.
+beforeEach(() => {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false
+    Element.prototype.setPointerCapture = () => {}
+    Element.prototype.releasePointerCapture = () => {}
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {}
+  }
+})
 
 beforeEach(() => {
   state.branches = {
@@ -151,14 +166,75 @@ describe('the branch choice drives the collections list', () => {
     expect(screen.getByText(/Choose a branch to see its unremitted cash/i)).toBeTruthy()
   })
 
-  it('loads that branch, and only that branch', () => {
+  it('sends the chosen branch through to the collections query', () => {
     render(<SettlementBuilder open onOpenChange={() => {}} />)
-    // The builder passes the chosen branch straight through to the collections
-    // query; the mock answers per branch, so the rows prove the wiring.
-    state.unsettledCalls = []
-    fireEvent.click(screen.getByLabelText('Branch'))
     // Radix needs a pointer environment jsdom does not provide, so the wiring
-    // is asserted through the query the component makes on render instead.
+    // is asserted through the query the component makes on render.
     expect(state.unsettledCalls.every((c) => c.kind === 'branch_cash')).toBe(true)
+  })
+})
+
+describe('the provider menu', () => {
+  // The defect: the builder kept its own list including both 'paymaya' and
+  // legacy 'maya', and both label as "Maya" -- so the menu read
+  // GCash / Maya / Maya / Card / QR Ph.
+  it('names each provider exactly once', () => {
+    const labels = PROVIDER_METHODS.map((m) => saleMethodLabel(m))
+    expect(labels).toEqual(['GCash', 'Maya', 'Card', 'QR Ph'])
+    expect(new Set(labels).size).toBe(labels.length)
+  })
+
+  it('is the canonical POS list, not a copy that can drift from it', () => {
+    expect(PROVIDER_METHODS).toBe(ONLINE_METHODS)
+  })
+
+  // Dropping legacy 'maya' from the menu is only safe because the server
+  // treats the two as one family. If that ever stops being true, those rows
+  // become unsettleable with no way to reach them.
+  it('does not offer the legacy spelling as a separate choice', () => {
+    expect(PROVIDER_METHODS).not.toContain('maya')
+  })
+})
+
+describe('picking the collections', () => {
+  // Radix menus need pointer APIs jsdom does not implement, so the branch is
+  // chosen through the listbox once those are stubbed. Without this the rows
+  // never render and none of the selection behaviour is reachable.
+  async function chooseCavite() {
+    render(<SettlementBuilder open onOpenChange={() => {}} />)
+    // Keyboard rather than pointer: Radix opens a Select on ArrowDown, and
+    // that path does not need the pointer-capture APIs jsdom lacks.
+    fireEvent.keyDown(screen.getByLabelText('Branch'), { key: 'ArrowDown' })
+    const option = await screen.findByRole('option', { name: 'Cavite Branch' })
+    fireEvent.click(option)
+    return screen.findAllByRole('checkbox')
+  }
+
+  it('ticks every row at once, and says how many', async () => {
+    const boxes = await chooseCavite()
+    expect(boxes.length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    for (const box of screen.getAllByRole('checkbox')) {
+      expect((box as HTMLInputElement).checked).toBe(true)
+    }
+    expect(screen.getByText(/^1 of 1 selected$/)).toBeTruthy()
+  })
+
+  it('turns into Clear all once everything is ticked', async () => {
+    await chooseCavite()
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+    for (const box of screen.getAllByRole('checkbox')) {
+      expect((box as HTMLInputElement).checked).toBe(false)
+    }
+    expect(screen.getByText(/^0 of 1 selected$/)).toBeTruthy()
+  })
+
+  it('names the list for what it actually holds', async () => {
+    await chooseCavite()
+    // Branch cash shows cash. Saying so is why nobody has to wonder where the
+    // GCash went.
+    expect(screen.getByText('Unremitted cash sales')).toBeTruthy()
   })
 })
