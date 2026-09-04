@@ -243,10 +243,24 @@ begin
   if amt <> 400 then raise exception 'FAIL 4a branch B GCash totals %, expected 400', amt; end if;
   raise notice 'PASS  4a a provider list can be narrowed to one branch';
 
-  select coalesce(sum(amount), 0) into amt
+  -- A settlement is one branch's money, so no branch is not a question the
+  -- query can answer. It returns nothing rather than everything: "none chosen"
+  -- and "all of them" look identical in a result set, and answering the second
+  -- when the user asked neither is how collections appeared before anyone had
+  -- said whose they were.
+  select count(*)::integer into n
     from public.get_unsettled_collections('provider', null, 'gcash', null, null);
-  if amt <> 1000 then raise exception 'FAIL 4b all-branch GCash totals %, expected 1000', amt; end if;
-  raise notice 'PASS  4b and left across all branches, as a real payout may be';
+  if n <> 0 then
+    raise exception 'FAIL 4b no branch gave % rows -- it must give none', n;
+  end if;
+  raise notice 'PASS  4b naming no branch offers nothing, not everything';
+
+  select count(*)::integer into n
+    from public.get_unsettled_collections('branch_cash', null, null, null, null);
+  if n <> 0 then
+    raise exception 'FAIL 4c branch cash with no branch gave % rows', n;
+  end if;
+  raise notice 'PASS  4c and the same for cash, which was always one branch anyway';
 
   -- ======================================================================
   -- 5. Cash is still cash
@@ -331,15 +345,29 @@ begin
     raise notice 'PASS  7a a branch-scoped provider settlement refuses another branch''s sale';
   end;
 
-  -- With no branch, a payout may span branches -- which is why branch is
-  -- optional rather than required.
-  select public.create_collection_settlement(
-    'provider', bank, current_date, array[gc_today, gc_b], null, 'gcash', 0,
-    'PM4-' || tag, null, false) into settle;
-  select count(*)::integer into n
-    from public.collection_settlement_items where settlement_id = settle;
-  if n <> 2 then raise exception 'FAIL 7b an all-branch payout could not span branches'; end if;
-  raise notice 'PASS  7b an unscoped payout may still cover several branches';
+  -- A settlement without a branch cannot be created at all, and says which
+  -- field is missing rather than naming a check constraint.
+  begin
+    perform public.create_collection_settlement(
+      'provider', bank, current_date, array[gc_today], null, 'gcash', 0,
+      'PM4-' || tag, null, false);
+    raise exception 'FAIL 7b a provider settlement was created with no branch';
+  exception when check_violation then
+    if sqlerrm <> 'Choose a branch for this settlement.' then
+      raise exception 'FAIL 7b wrong message: %', sqlerrm;
+    end if;
+    raise notice 'PASS  7b a settlement cannot be created without naming a branch';
+  end;
+
+  -- And the table refuses it too, so bypassing the function changes nothing.
+  begin
+    insert into public.collection_settlements
+      (kind, branch_id, payment_method, destination_account_id, settlement_date)
+    values ('provider', null, 'gcash', bank, current_date);
+    raise exception 'FAIL 7c a branchless settlement was inserted directly';
+  exception when check_violation or insufficient_privilege then
+    raise notice 'PASS  7c and the table refuses one written around the function';
+  end;
 
   -- And the family is stored canonically, so history reads one way.
   select public.create_collection_settlement(
@@ -347,9 +375,22 @@ begin
     'PM5-' || tag, null, false) into settle;
   select payment_method into tz from public.collection_settlements where id = settle;
   if tz <> 'paymaya' then
-    raise exception 'FAIL 7c a settlement stored the method as %, expected the canonical paymaya', tz;
+    raise exception 'FAIL 7d a settlement stored the method as %, expected the canonical paymaya', tz;
   end if;
-  raise notice 'PASS  7c a settlement records the provider once, canonically';
+  raise notice 'PASS  7d a settlement records the provider once, canonically';
+
+  -- The guard holds every line to the settlement's branch, for both kinds and
+  -- however the line arrives. This is the frontend being bypassed on purpose.
+  begin
+    insert into public.collection_settlement_items (settlement_id, pos_sale_id, amount)
+    values (settle, gc_b, 1);
+    raise exception 'FAIL 7e a Main Office sale was injected into a Cavite settlement';
+  exception when check_violation then
+    if sqlerrm <> 'That sale belongs to another branch.' then
+      raise exception 'FAIL 7e wrong refusal: %', sqlerrm;
+    end if;
+    raise notice 'PASS  7e a line from another branch is refused even when injected directly';
+  end;
   reset role;
 
   raise notice '--------------------------------------------------';

@@ -184,8 +184,10 @@ begin
   if n <> 3 then raise exception 'FAIL 2a branch A has % unsettled cash sales, expected 3', n; end if;
   raise notice 'PASS  2a completed cash sales show as cash waiting to be remitted';
 
+  -- Named, because a settlement is one branch's money and an unnamed branch
+  -- now offers nothing rather than everything.
   select count(*)::integer into n
-    from public.get_unsettled_collections('provider', null, 'gcash', today, today);
+    from public.get_unsettled_collections('provider', branch_a, 'gcash', today, today);
   if n <> 2 then raise exception 'FAIL 2b there are % unsettled gcash collections, expected 2', n; end if;
   raise notice 'PASS  2b provider-held collections are listed separately from cash';
 
@@ -208,7 +210,7 @@ begin
 
   perform pg_temp.acts_as(accountant); set local role authenticated;
   select coalesce(sum(amount), 0) into bal
-    from public.get_unsettled_collections('provider', null, null, today, today);
+    from public.get_unsettled_collections('provider', branch_a, null, today, today);
   if bal <> 300 then
     raise exception 'FAIL 2c provider-held total is %, expected 300 -- an attempt leaked in', bal;
   end if;
@@ -302,7 +304,7 @@ begin
   -- And cash is not a provider settlement.
   begin
     perform public.create_collection_settlement(
-      'provider', bank, current_date, array[s_b], null, 'gcash', 0,
+      'provider', bank, current_date, array[s_b], branch_b, 'gcash', 0,
       'DEP4-' || tag, null, false);
     raise exception 'FAIL 5c a cash sale was settled as a gcash payout';
   exception when check_violation then
@@ -319,7 +321,7 @@ begin
   -- customer paid 300, JMAC received 280, and the difference has a name.
   perform pg_temp.acts_as(accountant); set local role authenticated;
   select public.create_collection_settlement(
-    'provider', bank, current_date, array[s_gcash1, s_gcash2], null, 'gcash', 20,
+    'provider', bank, current_date, array[s_gcash1, s_gcash2], branch_a, 'gcash', 20,
     'PM-' || tag, 'ZZ gcash payout', true) into settle2;
   reset role;
 
@@ -348,7 +350,7 @@ begin
   perform pg_temp.acts_as(accountant); set local role authenticated;
   begin
     perform public.create_collection_settlement(
-      'provider', bank, current_date, array[s_gcash1], null, 'gcash', 5000,
+      'provider', bank, current_date, array[s_gcash1], branch_a, 'gcash', 5000,
       'PM2-' || tag, null, false);
     raise exception 'FAIL 6c a fee larger than the collection was accepted';
   exception when check_violation then

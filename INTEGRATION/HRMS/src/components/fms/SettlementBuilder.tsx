@@ -48,8 +48,6 @@ import {
  */
 export const PROVIDER_METHODS = ONLINE_METHODS
 
-const ALL_BRANCHES = '__all__'
-
 /**
  * Building a settlement out of the collections it actually covers.
  *
@@ -82,16 +80,15 @@ export function SettlementBuilder({
   const [reference, setReference] = React.useState('')
   const [picked, setPicked] = React.useState<Set<string>>(new Set())
 
-  // A cash remittance is always one branch emptying its own drawer, so a
-  // branch is required. A provider payout may genuinely span branches, so
-  // there it is optional -- but an Accountant reconciling one branch can still
-  // ask for one, which they could not before.
-  const ready = kind === 'branch_cash' ? !!branchId && branchId !== ALL_BRANCHES : !!method
-  const scopedBranch = branchId === ALL_BRANCHES ? null : branchId || null
+  // A settlement is one branch's money, whichever kind. Nothing is asked for
+  // until the Accountant says whose -- an earlier version defaulted a provider
+  // payout to every branch, and collections appeared before anyone had said
+  // whose they were.
+  const ready = !!branchId && (kind === 'branch_cash' || !!method)
   const unsettled = useUnsettledCollections(
     kind,
     {
-      branchId: scopedBranch,
+      branchId: branchId || null,
       paymentMethod: kind === 'provider' ? method : null,
     },
     open && ready
@@ -116,16 +113,13 @@ export function SettlementBuilder({
   React.useEffect(() => setPicked(new Set()), [kind, branchId, method])
 
   /**
-   * Changing what is being settled sets the branch to match it.
+   * Changing what is being settled starts the branch over.
    *
-   * A provider payout starts at All branches and says so. The server has
-   * always treated a null branch as every branch, but the control showed the
-   * "Choose a branch" placeholder while the list below it already spanned
-   * branches — so the filter looked unapplied when it had been applied, and
-   * the answer on screen was right for a reason the screen denied.
-   *
-   * A cash remittance starts unchosen, because physical cash belongs to one
-   * branch and there is no sensible default for whose drawer this was.
+   * Both kinds need one, and neither has a sensible default: cash belongs to
+   * the branch that took it, and a provider settlement is scoped to a branch
+   * so it can be reconciled against that branch's own records. Carrying a
+   * branch across a mode change would also carry the selected sales with it,
+   * into a list they may not belong to.
    *
    * Done here rather than in an effect: an effect keyed on `kind` would have
    * to distinguish the transition from every later render, or it would undo
@@ -133,7 +127,7 @@ export function SettlementBuilder({
    */
   function changeKind(next: SettlementKind) {
     setKind(next)
-    setBranchId(next === 'provider' ? ALL_BRANCHES : '')
+    setBranchId('')
   }
 
   // The function already returns only active branches, so there is nothing to
@@ -169,9 +163,8 @@ export function SettlementBuilder({
       destinationAccountId: accountId,
       settlementDate: date,
       saleIds: [...picked],
-      // A provider settlement carries its branch when one was chosen, and the
-      // server then holds every line to it.
-      branchId: scopedBranch,
+      // Both kinds carry their branch, and the server holds every line to it.
+      branchId: branchId || null,
       paymentMethod: kind === 'provider' ? method : null,
       feeAmount: feeValue,
       reference: reference.trim() || null,
@@ -216,17 +209,12 @@ export function SettlementBuilder({
                   "still loading", "the request failed" or "there are none" is
                   how the earlier defect stayed invisible: it looked like a
                   branch list with nothing in it. */}
-              {/* A provider payout can always be recorded across all branches,
-                  so a failed branch list only costs the ability to narrow --
-                  it must not lock the control. A cash remittance genuinely
-                  cannot proceed without one. */}
+              {/* Neither kind can proceed without a branch, so a failed or
+                  empty list disables the control either way. */}
               <Select
                 value={branchId}
                 onValueChange={setBranchId}
-                disabled={
-                  branches.isLoading ||
-                  (kind === 'branch_cash' && (branches.isError || branchOptions.length === 0))
-                }
+                disabled={branches.isLoading || branches.isError || branchOptions.length === 0}
               >
                 <SelectTrigger id="st-branch">
                   {/* Short in the control, and the full sentence below it —
@@ -245,9 +233,6 @@ export function SettlementBuilder({
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {kind === 'provider' && (
-                    <SelectItem value={ALL_BRANCHES}>All branches</SelectItem>
-                  )}
                   {branchOptions.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {b.name}
@@ -258,14 +243,9 @@ export function SettlementBuilder({
               {branches.isError && (
                 <p className="text-xs text-destructive">Branches could not be loaded.</p>
               )}
-              {kind === 'branch_cash' &&
-                !branches.isLoading &&
-                !branches.isError &&
-                branchOptions.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    No active branches are available.
-                  </p>
-                )}
+              {!branches.isLoading && !branches.isError && branchOptions.length === 0 && (
+                <p className="text-xs text-muted-foreground">No active branches are available.</p>
+              )}
             </div>
           </div>
 
@@ -320,7 +300,7 @@ export function SettlementBuilder({
               <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
                 {kind === 'branch_cash'
                   ? 'Choose a branch to see its unremitted cash.'
-                  : 'Choose a payment method to see its unsettled collections.'}
+                  : 'Choose a branch to see its unsettled provider collections.'}
               </p>
             ) : unsettled.isLoading ? (
               <div className="space-y-2">

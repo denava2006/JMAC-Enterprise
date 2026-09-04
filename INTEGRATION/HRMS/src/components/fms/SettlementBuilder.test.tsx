@@ -68,14 +68,10 @@ vi.mock('@/hooks/useTreasury', () => ({
       payment_reference: null,
       amount: 250,
     }
+    // No branch, nothing offered -- the server behaves the same way, and a
+    // mock that answered across branches would hide the rule under test.
     const rows =
-      opts.branchId === 'b1'
-        ? [cavite]
-        : opts.branchId === 'b2'
-          ? [mainOffice]
-          : kind === 'provider'
-            ? [cavite, mainOffice]
-            : []
+      opts.branchId === 'b1' ? [cavite] : opts.branchId === 'b2' ? [mainOffice] : []
     return { data: rows, isLoading: false }
   },
   useCreateSettlement: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -211,13 +207,23 @@ describe('what the Branch control says in provider mode', () => {
     await pick('What is being settled', 'Payment provider settlement')
   }
 
-  // The defect: the server had always read a null branch as every branch, but
-  // the control showed "Choose a branch" while the list below it already
-  // spanned branches. The filter looked unapplied when it had been applied.
-  it('shows All branches as a chosen value, not as a placeholder', async () => {
+  // A settlement is one branch's money. Nothing is offered until the
+  // Accountant says whose: an earlier version defaulted a provider payout to
+  // every branch, so collections appeared before anyone had chosen.
+  it('opens with no branch chosen', async () => {
     await inProviderMode()
-    expect(screen.getByLabelText('Branch').textContent).toContain('All branches')
-    expect(screen.getByLabelText('Branch').textContent).not.toContain('Choose a branch')
+    expect(screen.getByLabelText('Branch').textContent).toContain('Choose a branch')
+    expect(screen.getByLabelText('Branch').textContent).not.toContain('All branches')
+  })
+
+  it('shows nothing, and no way to select it, until a branch is chosen', async () => {
+    await inProviderMode()
+    expect(
+      screen.getByText(/Choose a branch to see its unsettled provider collections/i)
+    ).toBeTruthy()
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
+    expect(screen.queryByText(/of \d+ selected/)).toBeNull()
   })
 
   // Scoped to the collections list, because once a branch is chosen the Select
@@ -226,14 +232,6 @@ describe('what the Branch control says in provider mode', () => {
   function collectionsList() {
     return screen.getAllByRole('checkbox')[0].closest('ul') as HTMLElement
   }
-
-  it('lists collections from every branch under All branches', async () => {
-    await inProviderMode()
-    const list = collectionsList()
-    expect(within(list).getByText(/Cavite Branch/)).toBeTruthy()
-    expect(within(list).getByText(/Main Office/)).toBeTruthy()
-    expect(state.unsettledCalls.at(-1)?.branchId).toBeNull()
-  })
 
   it('narrows to one branch when one is chosen', async () => {
     await inProviderMode()
@@ -258,21 +256,40 @@ describe('what the Branch control says in provider mode', () => {
     expect(screen.getByText('Unsettled provider collections')).toBeTruthy()
   })
 
-  // Physical cash belongs to one branch, so there is no sensible default for
-  // whose drawer it was — and All branches would be meaningless.
-  it('drops back to unchosen, and required, on returning to branch cash', async () => {
+  it('starts the branch over when the kind changes', async () => {
     await inProviderMode()
     await pick('Branch', 'Cavite Branch')
     await pick('What is being settled', 'Branch cash remittance')
 
     expect(screen.getByLabelText('Branch').textContent).toContain('Choose a branch')
-    expect(screen.getByLabelText('Branch').textContent).not.toContain('All branches')
     expect(screen.getByText(/Choose a branch to see its unremitted cash/i)).toBeTruthy()
   })
 
-  it('offers All branches only where it means something', async () => {
+  // Changing the branch must clear what was ticked under the old one: those
+  // sales are not on this list, and the server would refuse them.
+  it('clears the selected sales when the branch changes', async () => {
+    await inProviderMode()
+    await pick('Branch', 'Cavite Branch')
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(screen.getByText(/^1 of 1 selected$/)).toBeTruthy()
+
+    await pick('Branch', 'Main Office')
+    expect(screen.getByText(/^0 of 1 selected$/)).toBeTruthy()
+    for (const box of screen.getAllByRole('checkbox')) {
+      expect((box as HTMLInputElement).checked).toBe(false)
+    }
+  })
+
+  it('never offers All branches, in either mode', async () => {
+    // Branch cash first, then provider: the option exists nowhere, because a
+    // settlement that spans branches cannot be reconciled by any one of them.
     render(<SettlementBuilder open onOpenChange={() => {}} />)
-    // Branch cash starts selected, and its menu has no All branches entry.
+    fireEvent.keyDown(screen.getByLabelText('Branch'), { key: 'ArrowDown' })
+    expect(await screen.findByRole('option', { name: 'Cavite Branch' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'All branches' })).toBeNull()
+    cleanup()
+
+    await inProviderMode()
     fireEvent.keyDown(screen.getByLabelText('Branch'), { key: 'ArrowDown' })
     expect(await screen.findByRole('option', { name: 'Cavite Branch' })).toBeTruthy()
     expect(screen.queryByRole('option', { name: 'All branches' })).toBeNull()
