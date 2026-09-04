@@ -29,7 +29,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranches } from '@/hooks/useBranches'
@@ -69,6 +68,17 @@ import {
  * charging again. It changes the moment anything about the sale changes.
  */
 
+/**
+ * The receipt for a sale that has already happened.
+ *
+ * There is no confirm button here, and that is the point. By the time this
+ * renders, checkout_pos_sale has committed: the sale exists, stock has moved,
+ * and Finance can already see it. A button reading "New sale" sat in the footer
+ * and did exactly what the X does -- close the dialog -- but a footer button on
+ * a dialog is where a cashier expects the action that finishes the job, and
+ * this one finished nothing. Dismissing the receipt is housekeeping, so the X
+ * is the whole control.
+ */
 function ReceiptDialog({ receipt, onClose }: { receipt: Receipt | null; onClose: () => void }) {
   if (!receipt) return null
   return (
@@ -143,9 +153,6 @@ function ReceiptDialog({ receipt, onClose }: { receipt: Receipt | null; onClose:
           </div>
         </div>
 
-        <DialogFooter>
-          <Button onClick={onClose}>New sale</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

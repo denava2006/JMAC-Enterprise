@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import { ReasonDialog } from '@/components/fms/ReasonDialog'
 import { InvoiceMatch, matchSummary } from '@/components/fms/InvoiceMatch'
+import { InvoicePayments } from '@/components/fms/InvoicePayments'
 import {
   INVOICE_STATUS_LABEL,
   useInvoiceHistory,
@@ -126,22 +127,10 @@ export function SupplierInvoiceDetail({
             </CardContent>
           </Card>
 
-          {invoice?.status === 'approved' && (
-            <Card>
-              <CardContent className="flex items-baseline justify-between py-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Balance due</p>
-                  <p className="font-display text-lg font-bold tabular-nums text-foreground">
-                    {formatMoney(Number(invoice.balance_due ?? 0))}
-                  </p>
-                </div>
-                <p className="max-w-xs text-right text-xs text-muted-foreground">
-                  Awaiting payment. The company acknowledges this debt; nothing has been paid, and
-                  no budget or stock figure moved when it was approved.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          {/* What is owed, what has been paid, and the payments themselves.
+              The balance is derived from completed payments, so this panel and
+              the treasury cannot drift apart. */}
+          {invoice?.status === 'approved' && <InvoicePayments invoice={invoice} />}
 
           {invoice?.decision_reason && (
             <Card>

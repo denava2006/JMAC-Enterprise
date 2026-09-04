@@ -29,6 +29,7 @@ import {
   ReceiptText,
   PackageCheck,
   TrendingUp,
+  ArrowDownLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
@@ -89,7 +90,9 @@ const financeNav: NavItem[] = [
   { label: 'Sales & Collections', to: '/fms/sales', icon: TrendingUp },
   { label: 'Procurement', to: '/fms/procurement', icon: PackageCheck },
   { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
+  { label: 'Settlements', to: '/fms/settlements', icon: ArrowDownLeft },
   { label: 'Supplier Invoices', to: '/fms/invoices', icon: FileBarChart },
+  { label: 'Cash & Bank', to: '/fms/treasury', icon: Wallet },
   { label: 'Vendors', to: '/fms/vendors', icon: Store },
   { label: 'Categories', to: '/fms/categories', icon: Tags },
   { label: 'Chart of Accounts', to: '/fms/accounts', icon: Landmark },

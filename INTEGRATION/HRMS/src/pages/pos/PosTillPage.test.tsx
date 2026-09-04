@@ -777,6 +777,50 @@ describe('coming back from the payment page', () => {
     expect(screen.getByText('Sale complete')).toBeTruthy()
   })
 
+  it('offers no action on the receipt that could imply the sale is not yet recorded', () => {
+    // By the time this dialog renders, checkout_pos_sale has committed: the
+    // sale exists, stock has moved, and Finance can already see it. A footer
+    // button is where a cashier looks for the action that finishes the job, so
+    // "New sale" sitting there suggested the recording waited on the click. It
+    // did not, and the button is gone; dismissing is the whole interaction.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid', sale_id: 'S1', method: 'gcash' }
+    state.saleDetail = RECEIPT
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(screen.getByText('Sale complete')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /new sale/i })).toBeNull()
+    for (const button of screen.getAllByRole('button')) {
+      expect(button.textContent ?? '').not.toMatch(/record|confirm|finish|save sale|submit/i)
+    }
+  })
+
+  it('keeps a way to dismiss the receipt', () => {
+    // Removing the footer button must not leave the cashier trapped: the
+    // dialog's own close control is the one that stays.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid', sale_id: 'S1', method: 'gcash' }
+    state.saleDetail = RECEIPT
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(screen.getByRole('button', { name: /close/i })).toBeTruthy()
+  })
+
+  it('dismissing the receipt sends nothing to the server', () => {
+    // The observable form of "the modal has no effect on whether the sale
+    // exists": closing it calls no checkout, no mutation, nothing.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid', sale_id: 'S1', method: 'gcash' }
+    state.saleDetail = RECEIPT
+    renderTill('/pos/till?attempt=key-1')
+
+    checkoutMutate.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+
+    expect(checkoutMutate).not.toHaveBeenCalled()
+    expect(onlineMutate).not.toHaveBeenCalled()
+  })
+
   it('shows no receipt while paid but not yet finalised', () => {
     // Paid with no sale_id is a webhook that has not landed. There is nothing
     // to show yet, and inventing something would be inventing a sale.

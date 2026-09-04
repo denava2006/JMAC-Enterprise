@@ -715,6 +715,158 @@ export type Database = {
           },
         ]
       }
+      collection_settlement_items: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          pos_sale_id: string
+          settlement_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          pos_sale_id: string
+          settlement_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          pos_sale_id?: string
+          settlement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_settlement_items_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlement_items_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "collection_settlement_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlement_items_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "collection_settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collection_settlements: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          decision_reason: string | null
+          destination_account_id: string
+          fee_amount: number
+          id: string
+          kind: string
+          notes: string | null
+          payment_method: string | null
+          prepared_by: string | null
+          reference: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          settlement_date: string
+          settlement_no: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          decision_reason?: string | null
+          destination_account_id: string
+          fee_amount?: number
+          id?: string
+          kind: string
+          notes?: string | null
+          payment_method?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          settlement_date: string
+          settlement_no?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          decision_reason?: string | null
+          destination_account_id?: string
+          fee_amount?: number
+          id?: string
+          kind?: string
+          notes?: string | null
+          payment_method?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          settlement_date?: string
+          settlement_no?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_settlements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_destination_account_id_fkey"
+            columns: ["destination_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_account_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_destination_account_id_fkey"
+            columns: ["destination_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           created_at: string
@@ -3790,6 +3942,122 @@ export type Database = {
           },
         ]
       }
+      supplier_payments: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          decision_reason: string | null
+          id: string
+          method: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          payment_date: string | null
+          payment_no: string | null
+          prepared_by: string | null
+          reference: string | null
+          status: string
+          submitted_at: string | null
+          supplier_invoice_id: string
+          treasury_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          decision_reason?: string | null
+          id?: string
+          method: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_date?: string | null
+          payment_no?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          status?: string
+          submitted_at?: string | null
+          supplier_invoice_id: string
+          treasury_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          decision_reason?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_date?: string | null
+          payment_no?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          status?: string
+          submitted_at?: string | null
+          supplier_invoice_id?: string
+          treasury_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoice_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_account_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_settings: {
         Row: {
           key: string
@@ -3815,6 +4083,144 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_accounts: {
+        Row: {
+          account_type: string
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          finance_account_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          opening_balance: number
+          opening_balance_as_of: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_type: string
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          finance_account_id?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          opening_balance?: number
+          opening_balance_as_of?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          finance_account_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          opening_balance?: number
+          opening_balance_as_of?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_finance_account_id_fkey"
+            columns: ["finance_account_id"]
+            isOneToOne: false
+            referencedRelation: "finance_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_movements: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          direction: string
+          id: string
+          occurred_on: string
+          reference: string | null
+          source_id: string
+          source_type: string
+          treasury_account_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          direction: string
+          id?: string
+          occurred_on: string
+          reference?: string | null
+          source_id: string
+          source_type: string
+          treasury_account_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          id?: string
+          occurred_on?: string
+          reference?: string | null
+          source_id?: string
+          source_type?: string
+          treasury_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_movements_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_account_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_movements_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -4142,6 +4548,80 @@ export type Database = {
           },
         ]
       }
+      collection_settlement_status: {
+        Row: {
+          branch_id: string | null
+          branch_name: string | null
+          created_at: string | null
+          decision_reason: string | null
+          destination_account_id: string | null
+          destination_account_name: string | null
+          destination_account_type: string | null
+          fee_amount: number | null
+          gross_amount: number | null
+          id: string | null
+          item_count: number | null
+          kind: string | null
+          net_amount: number | null
+          notes: string | null
+          payment_method: string | null
+          prepared_by: string | null
+          prepared_by_name: string | null
+          reference: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          settlement_date: string | null
+          settlement_no: string | null
+          status: string | null
+          submitted_at: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_settlements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_destination_account_id_fkey"
+            columns: ["destination_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_account_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_destination_account_id_fkey"
+            columns: ["destination_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_settlements_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_branch_locations: {
         Row: {
           address: string | null
@@ -4232,6 +4712,7 @@ export type Database = {
       }
       supplier_invoice_status: {
         Row: {
+          amount_paid: number | null
           approved_at: string | null
           approved_by: string | null
           balance_due: number | null
@@ -4252,6 +4733,7 @@ export type Database = {
           po_number: string | null
           purchase_order_id: string | null
           purchase_order_status: string | null
+          settlement_state: string | null
           status: string | null
           submitted_at: string | null
           subtotal: number | null
@@ -4296,6 +4778,60 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_account_status: {
+        Row: {
+          account_type: string | null
+          balance: number | null
+          branch_id: string | null
+          branch_name: string | null
+          created_at: string | null
+          created_by: string | null
+          currency: string | null
+          finance_account_id: string | null
+          finance_account_name: string | null
+          id: string | null
+          is_active: boolean | null
+          last_movement_on: string | null
+          movement_count: number | null
+          name: string | null
+          notes: string | null
+          opening_balance: number | null
+          opening_balance_as_of: string | null
+          total_in: number | null
+          total_out: number | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "public_branch_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_finance_account_id_fkey"
+            columns: ["finance_account_id"]
+            isOneToOne: false
+            referencedRelation: "finance_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -4429,6 +4965,21 @@ export type Database = {
         Args: { _profile_id: string; _reason: string }
         Returns: undefined
       }
+      create_collection_settlement: {
+        Args: {
+          _branch_id?: string
+          _destination_account_id: string
+          _fee_amount?: number
+          _kind: string
+          _notes?: string
+          _payment_method?: string
+          _reference?: string
+          _sale_ids: string[]
+          _settlement_date: string
+          _submit?: boolean
+        }
+        Returns: string
+      }
       create_pos_carry_request: {
         Args: { _branch_id: string; _product_id: string; _reason: string }
         Returns: string
@@ -4501,6 +5052,17 @@ export type Database = {
         }
         Returns: string
       }
+      create_supplier_payment: {
+        Args: {
+          _amount: number
+          _method?: string
+          _notes?: string
+          _submit?: boolean
+          _supplier_invoice_id: string
+          _treasury_account_id: string
+        }
+        Returns: string
+      }
       decline_pos_request: {
         Args: { _note: string; _request_id: string }
         Returns: undefined
@@ -4545,6 +5107,10 @@ export type Database = {
           _provider_payment_id?: string
         }
         Returns: Json
+      }
+      finance_request_paid: {
+        Args: { _finance_request_id: string }
+        Returns: number
       }
       finance_request_participants: {
         Args: never
@@ -4811,6 +5377,56 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_collection_settlement_items: {
+        Args: { _settlement_id: string }
+        Returns: {
+          amount: number
+          branch_name: string
+          cashier_name: string
+          id: string
+          payment_method: string
+          payment_reference: string
+          pos_sale_id: string
+          sold_at: string
+        }[]
+      }
+      get_collection_settlements: {
+        Args: never
+        Returns: {
+          branch_id: string | null
+          branch_name: string | null
+          created_at: string | null
+          decision_reason: string | null
+          destination_account_id: string | null
+          destination_account_name: string | null
+          destination_account_type: string | null
+          fee_amount: number | null
+          gross_amount: number | null
+          id: string | null
+          item_count: number | null
+          kind: string | null
+          net_amount: number | null
+          notes: string | null
+          payment_method: string | null
+          prepared_by: string | null
+          prepared_by_name: string | null
+          reference: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          settlement_date: string | null
+          settlement_no: string | null
+          status: string | null
+          submitted_at: string | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "collection_settlement_status"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_eligible_pos_employees: {
         Args: { _branch_id: string; _role_code: string }
         Returns: {
@@ -4993,6 +5609,22 @@ export type Database = {
           position_title: string
           profile_id: string
           reason: string
+        }[]
+      }
+      get_payable_invoices: {
+        Args: never
+        Returns: {
+          amount_paid: number
+          balance_due: number
+          due_date: string
+          id: string
+          invoice_no: string
+          payment_state: string
+          settlement_state: string
+          supplier_invoice_number: string
+          total_amount: number
+          vendor_id: string
+          vendor_name: string
         }[]
       }
       get_pos_carryable_products: {
@@ -5275,6 +5907,105 @@ export type Database = {
         }[]
       }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
+      get_supplier_payments: {
+        Args: { _invoice_id?: string }
+        Returns: {
+          account_name: string
+          amount: number
+          approved_at: string
+          approved_by: string
+          approved_by_name: string
+          created_at: string
+          decision_reason: string
+          id: string
+          invoice_no: string
+          method: string
+          notes: string
+          paid_at: string
+          paid_by: string
+          paid_by_name: string
+          payment_date: string
+          payment_no: string
+          prepared_by: string
+          prepared_by_name: string
+          reference: string
+          status: string
+          submitted_at: string
+          supplier_invoice_id: string
+          supplier_invoice_number: string
+          treasury_account_id: string
+          vendor_name: string
+        }[]
+      }
+      get_treasury_accounts: {
+        Args: never
+        Returns: {
+          account_type: string | null
+          balance: number | null
+          branch_id: string | null
+          branch_name: string | null
+          created_at: string | null
+          created_by: string | null
+          currency: string | null
+          finance_account_id: string | null
+          finance_account_name: string | null
+          id: string | null
+          is_active: boolean | null
+          last_movement_on: string | null
+          movement_count: number | null
+          name: string | null
+          notes: string | null
+          opening_balance: number | null
+          opening_balance_as_of: string | null
+          total_in: number | null
+          total_out: number | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "treasury_account_status"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_treasury_movements: {
+        Args: { _account_id?: string; _limit?: number; _offset?: number }
+        Returns: {
+          account_name: string
+          actor_name: string
+          amount: number
+          created_at: string
+          created_by: string
+          direction: string
+          id: string
+          occurred_on: string
+          reference: string
+          source_id: string
+          source_no: string
+          source_type: string
+          total_rows: number
+          treasury_account_id: string
+        }[]
+      }
+      get_unsettled_collections: {
+        Args: {
+          _branch_id?: string
+          _from_date?: string
+          _kind: string
+          _payment_method?: string
+          _to_date?: string
+        }
+        Returns: {
+          amount: number
+          branch_id: string
+          branch_name: string
+          cashier_name: string
+          payment_method: string
+          payment_reference: string
+          sale_id: string
+          sold_at: string
+        }[]
+      }
       grant_finance_privilege: {
         Args: { _finance_role: string; _profile_id: string }
         Returns: string
@@ -5388,6 +6119,7 @@ export type Database = {
         }[]
       }
       my_pos_branches: { Args: never; Returns: string[] }
+      payment_budget_id: { Args: { _payment_id: string }; Returns: string }
       pos_audit_fee_summary: { Args: { _fees: Json }; Returns: string }
       pos_audit_is_manager_visible: {
         Args: {
@@ -5458,6 +6190,10 @@ export type Database = {
         Returns: Json
       }
       purchase_order_commitment: {
+        Args: { _purchase_order_id: string }
+        Returns: number
+      }
+      purchase_order_paid: {
         Args: { _purchase_order_id: string }
         Returns: number
       }
@@ -5588,6 +6324,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      settlement_gross: { Args: { _settlement_id: string }; Returns: number }
       submit_job_application: {
         Args: {
           p_address: string
@@ -5636,6 +6373,10 @@ export type Database = {
         }[]
       }
       sync_employment_statuses: { Args: never; Returns: undefined }
+      transition_collection_settlement: {
+        Args: { _reason?: string; _settlement_id: string; _to_status: string }
+        Returns: undefined
+      }
       transition_finance_request: {
         Args: {
           _paid_from_account_id?: string
@@ -5661,6 +6402,20 @@ export type Database = {
           _to_status: string
         }
         Returns: undefined
+      }
+      transition_supplier_payment: {
+        Args: {
+          _payment_date?: string
+          _payment_id: string
+          _reason?: string
+          _reference?: string
+          _to_status: string
+        }
+        Returns: undefined
+      }
+      treasury_account_balance: {
+        Args: { _account_id: string }
+        Returns: number
       }
       update_pos_product_details: {
         Args: { _category_id: string; _name: string; _product_id: string }

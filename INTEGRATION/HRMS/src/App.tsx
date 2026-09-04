@@ -45,6 +45,8 @@ import BudgetsPage from '@/pages/fms/BudgetsPage'
 import FinanceRequestsPage from '@/pages/fms/FinanceRequestsPage'
 import ProcurementPage from '@/pages/fms/ProcurementPage'
 import FinanceSalesPage from '@/pages/fms/FinanceSalesPage'
+import SettlementsPage from '@/pages/fms/SettlementsPage'
+import TreasuryPage from '@/pages/fms/TreasuryPage'
 import PosDeliveriesPage from '@/pages/pos/PosDeliveriesPage'
 import MyRequestsPage from '@/pages/employee-portal/MyRequestsPage'
 import VendorsPage from '@/pages/fms/VendorsPage'
@@ -157,6 +159,11 @@ export default function App() {
               {/* Read-only. POS owns every sale behind this page, and a
                   correction has to start where the transaction did. */}
               <Route path="sales" element={<FinanceSalesPage />} />
+              {/* Collections arriving in a company account, and the accounts
+                  themselves. Supplier payments live on the invoice they settle
+                  rather than on a page of their own. */}
+              <Route path="settlements" element={<SettlementsPage />} />
+              <Route path="treasury" element={<TreasuryPage />} />
               <Route path="budgets" element={<BudgetsPage />} />
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />
