@@ -199,10 +199,9 @@ export function SettlementBuilder({
               </Select>
             </div>
 
-            {/* Branch is asked for either way now. A cash remittance must name
-                one; a provider payout may span branches, so there it also
-                offers All branches -- but an Accountant reconciling a single
-                branch's payout can finally say so. */}
+            {/* Required for both kinds, and offered as the branches themselves
+                with no all-branches entry: a settlement that spanned branches
+                could not be reconciled by any one of them. */}
             <div className="space-y-1.5">
               <Label htmlFor="st-branch">Branch</Label>
               {/* Each state said out loud. An empty dropdown that could mean
