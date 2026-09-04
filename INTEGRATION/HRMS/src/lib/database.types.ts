@@ -4715,6 +4715,7 @@ export type Database = {
           amount_paid: number | null
           approved_at: string | null
           approved_by: string | null
+          available_to_prepare: number | null
           balance_due: number | null
           created_at: string | null
           created_by: string | null
@@ -4730,6 +4731,7 @@ export type Database = {
           other_charges: number | null
           other_charges_note: string | null
           payment_state: string | null
+          pending_payment_amount: number | null
           po_number: string | null
           purchase_order_id: string | null
           purchase_order_status: string | null
@@ -5615,11 +5617,13 @@ export type Database = {
         Args: never
         Returns: {
           amount_paid: number
+          available_to_prepare: number
           balance_due: number
           due_date: string
           id: string
           invoice_no: string
           payment_state: string
+          pending_payment_amount: number
           settlement_state: string
           supplier_invoice_number: string
           total_amount: number
@@ -6030,6 +6034,10 @@ export type Database = {
           _roles: Database["public"]["Enums"]["pos_role"][]
         }
         Returns: boolean
+      }
+      invoice_pending_payment: {
+        Args: { _invoice_id: string }
+        Returns: number
       }
       is_active_employee: { Args: never; Returns: boolean }
       is_active_finance: { Args: never; Returns: boolean }

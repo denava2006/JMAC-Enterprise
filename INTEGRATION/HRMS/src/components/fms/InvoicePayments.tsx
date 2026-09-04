@@ -63,7 +63,14 @@ export function InvoicePayments({ invoice }: { invoice: SupplierInvoice }) {
 
   const balance = Number(invoice.balance_due ?? 0)
   const paid = Number(invoice.amount_paid ?? 0)
-  const canPrepare = profile?.role === 'accountant' && balance > 0
+  // Owed and claimed are different questions. balance_due subtracts only
+  // completed payments, deliberately -- an instruction nobody has sent has not
+  // paid the supplier. What may still be asked for is what is left after the
+  // instructions already in flight.
+  const pending = Number(invoice.pending_payment_amount ?? 0)
+  const available = Number(invoice.available_to_prepare ?? 0)
+  const canPrepare = profile?.role === 'accountant' && available > 0
+  const fullyInstructed = profile?.role === 'accountant' && balance > 0 && available <= 0
 
   // The generated types make every view column nullable. An invoice without an
   // id is not a thing this panel can act on, so it is narrowed once here rather
@@ -73,12 +80,18 @@ export function InvoicePayments({ invoice }: { invoice: SupplierInvoice }) {
   return (
     <div className="flex flex-col gap-3">
       <Card>
-        <CardContent className="flex flex-wrap items-baseline justify-between gap-4 py-3">
-          <div className="flex flex-wrap gap-6">
+        <CardContent className="flex flex-wrap items-end justify-between gap-4 py-3">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             <div>
               <p className="text-xs text-muted-foreground">Paid so far</p>
               <p className="text-base font-semibold tabular-nums text-foreground">
                 {formatMoney(paid)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Pending for payment</p>
+              <p className="text-base font-semibold tabular-nums text-foreground">
+                {formatMoney(pending)}
               </p>
             </div>
             <div>
@@ -87,11 +100,24 @@ export function InvoicePayments({ invoice }: { invoice: SupplierInvoice }) {
                 {formatMoney(balance)}
               </p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Available to prepare</p>
+              <p className="text-base font-semibold tabular-nums text-foreground">
+                {formatMoney(available)}
+              </p>
+            </div>
           </div>
           {canPrepare && (
             <Button size="sm" onClick={() => setPreparing(true)}>
               Prepare payment
             </Button>
+          )}
+          {/* Not a disabled button: there is nothing to enable it, and a
+              greyed control invites clicking to find out why. */}
+          {fullyInstructed && (
+            <p className="max-w-xs text-right text-xs text-muted-foreground">
+              The remaining balance is already covered by payment instructions.
+            </p>
           )}
         </CardContent>
       </Card>
@@ -218,6 +244,10 @@ function PreparePaymentDialog({
   const create = useCreatePayment()
   const { data: accounts = [] } = useTreasuryAccounts()
   const balance = Number(invoice.balance_due ?? 0)
+  // The ceiling is what is still unclaimed, not what is owed. Using the
+  // balance let two instructions for the whole amount onto one invoice.
+  const available = Number(invoice.available_to_prepare ?? 0)
+  const pending = Number(invoice.pending_payment_amount ?? 0)
 
   const [accountId, setAccountId] = React.useState('')
   const [amount, setAmount] = React.useState('')
@@ -226,13 +256,13 @@ function PreparePaymentDialog({
   React.useEffect(() => {
     if (!open) return
     setAccountId('')
-    setAmount(balance.toFixed(2))
+    setAmount(available.toFixed(2))
     setMethod('bank_transfer')
-  }, [open, balance])
+  }, [open, available])
 
   const value = Number(amount || 0)
   const funded = accounts.find((a) => a.id === accountId)
-  const overBalance = value > balance
+  const overBalance = value > available
   // A warning, not a block: the funds are re-checked at the moment of
   // completion, which is the only moment that matters.
   const short = !!funded && value > Number(funded.balance ?? 0)
@@ -257,6 +287,7 @@ function PreparePaymentDialog({
           <DialogDescription>
             {invoice.vendor_name} · {invoice.supplier_invoice_number} · {formatMoney(balance)}{' '}
             outstanding
+            {pending > 0 && `, ${formatMoney(pending)} already instructed`}
           </DialogDescription>
         </DialogHeader>
 
@@ -290,7 +321,7 @@ function PreparePaymentDialog({
               />
               {overBalance && (
                 <p className="text-xs text-destructive">
-                  More than the {formatMoney(balance)} outstanding.
+                  Available to prepare: {formatMoney(available)}.
                 </p>
               )}
               {short && !overBalance && (
@@ -318,7 +349,8 @@ function PreparePaymentDialog({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Part payment is fine — the balance follows what is actually paid.
+            Part payment is fine — the balance follows what is actually paid. Instructions already
+            waiting are counted, so the same money cannot be instructed twice.
           </p>
         </div>
 

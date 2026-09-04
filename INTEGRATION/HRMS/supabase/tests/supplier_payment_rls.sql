@@ -391,6 +391,131 @@ begin
   reset role;
 
   -- ======================================================================
+  -- 4b. An invoice cannot be instructed twice for the same money
+  -- ======================================================================
+  --
+  -- The hosted defect: preparing 1,300 against a 1,300 balance left the
+  -- balance at 1,300 -- correctly, since nothing had been paid -- so a second
+  -- 1,300 was accepted. Two identical instructions, and no way for a Manager
+  -- to tell which was real.
+  --
+  -- The state section 4c left behind is exactly the production situation: this
+  -- 650 invoice carries one APPROVED instruction for its whole balance, which
+  -- could not complete for want of funds. Nothing has been paid, so the
+  -- balance is still 650 -- and that is precisely the number the old code
+  -- offered as the ceiling for the next instruction.
+  select v.balance_due, v.pending_payment_amount, v.available_to_prepare
+    into balance, paid, total from public.supplier_invoice_status v where v.id = invoice;
+  if balance <> 650 then
+    raise exception 'FAIL 4d an unpaid instruction changed the balance to %', balance;
+  end if;
+  if paid <> 650 or total <> 0 then
+    raise exception 'FAIL 4d pending % available %, expected 650/0', paid, total;
+  end if;
+  raise notice 'PASS  4d an approved instruction claims the balance without paying it';
+
+  perform pg_temp.acts_as(accountant); set local role authenticated;
+  begin
+    perform public.create_supplier_payment(invoice, bank, 650, 'bank_transfer', null, false);
+    raise exception 'FAIL 4f a second instruction for the whole balance was accepted';
+  exception when check_violation then
+    if sqlerrm <> 'This invoice already has payment instructions covering its remaining balance.'
+    then raise exception 'FAIL 4f wrong message: %', sqlerrm; end if;
+    raise notice 'PASS  4f a second instruction for the same money is refused';
+  end;
+
+  -- Even a single peso more than is available.
+  begin
+    perform public.create_supplier_payment(invoice, bank, 1, 'bank_transfer', null, false);
+    raise exception 'FAIL 4g an instruction was accepted with nothing available';
+  exception when check_violation then
+    raise notice 'PASS  4g nothing at all can be prepared once the balance is claimed';
+  end;
+  reset role;
+
+  -- pay3 is APPROVED here, and withdrawing an approval is newly reachable.
+  -- Before, returned and rejected were only valid from for_approval, which was
+  -- harmless while an approved instruction claimed nothing. Now it holds part
+  -- of the payable, so an approved payment that cannot be completed would
+  -- block the invoice for ever with no way back.
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+  perform public.transition_supplier_payment(pay3, 'returned', 'wrong account');
+  reset role;
+
+  select v.pending_payment_amount, v.available_to_prepare into paid, total
+    from public.supplier_invoice_status v where v.id = invoice;
+  if paid <> 0 or total <> 650 then
+    raise exception 'FAIL 4h after returning: pending % available %, expected 0/650', paid, total;
+  end if;
+  raise notice 'PASS  4h an approval can be withdrawn, releasing what it held';
+
+  -- Partial preparation still works, which is why the rule is a cumulative sum
+  -- rather than one-instruction-at-a-time.
+  perform pg_temp.acts_as(accountant); set local role authenticated;
+  select public.create_supplier_payment(invoice, bank, 400, 'bank_transfer', 'ZZ part 1', false)
+    into pay3;
+  reset role;
+  select v.pending_payment_amount, v.available_to_prepare into paid, total
+    from public.supplier_invoice_status v where v.id = invoice;
+  if paid <> 400 or total <> 250 then
+    raise exception 'FAIL 4i pending % available %, expected 400/250', paid, total;
+  end if;
+  raise notice 'PASS  4i preparing 400 of 650 leaves 250 available';
+
+  perform pg_temp.acts_as(accountant); set local role authenticated;
+  begin
+    perform public.create_supplier_payment(invoice, bank, 300, 'bank_transfer', null, false);
+    raise exception 'FAIL 4j 300 was accepted against 250 available';
+  exception when check_violation then
+    if sqlerrm not like '%250.00 still available%' then
+      raise exception 'FAIL 4j wrong message: %', sqlerrm;
+    end if;
+    raise notice 'PASS  4j and says exactly how much is left when some remains';
+  end;
+
+  -- The rest of it, exactly.
+  perform public.create_supplier_payment(invoice, bank, 250, 'bank_transfer', 'ZZ part 2', false);
+  reset role;
+  select v.pending_payment_amount, v.available_to_prepare into paid, total
+    from public.supplier_invoice_status v where v.id = invoice;
+  if paid <> 650 or total <> 0 then
+    raise exception 'FAIL 4k two partials give pending % available %, expected 650/0', paid, total;
+  end if;
+  raise notice 'PASS  4k two partial instructions may together cover the balance';
+
+  -- Preparing all of that moved nothing: not the payable, not the budget, not
+  -- the bank.
+  select v.balance_due into balance from public.supplier_invoice_status v where v.id = invoice;
+  select t.balance into bal from public.treasury_account_status t where t.id = bank;
+  if balance <> 650 or bal <> 23700 then
+    raise exception 'FAIL 4l instructions moved money: balance % bank %', balance, bal;
+  end if;
+  raise notice 'PASS  4l preparing instructions still moves no money at all';
+
+  -- The lock is on the invoice, and it is taken before the available figure is
+  -- read. Two sessions racing therefore serialise: the second reads the first
+  -- one's instruction rather than the state before it. Holding the row here
+  -- and observing that the value is already claimed is the structural form of
+  -- that claim -- a genuinely concurrent session cannot be opened from inside
+  -- one transaction, so this asserts the ordering the lock depends on.
+  perform id from public.supplier_invoices where id = invoice for update;
+  select v.available_to_prepare into total
+    from public.supplier_invoice_status v where v.id = invoice;
+  if total <> 0 then
+    raise exception 'FAIL 4m under the invoice lock, available reads %, expected 0', total;
+  end if;
+  raise notice 'PASS  4m the amount is read under the invoice lock, not before it';
+
+  -- Fixture housekeeping, not a claim: release everything still holding this
+  -- invoice so the sections below start from a payable with room in it.
+  -- Written directly because a draft has no workflow route to rejected, which
+  -- is correct -- a draft is simply deleted or edited by its author.
+  reset role;
+  update public.supplier_payments set status = 'rejected',
+         decision_reason = 'ZZ clearing the fixture'
+   where supplier_invoice_id = invoice and status in ('draft', 'for_approval', 'approved');
+
+  -- ======================================================================
   -- 5. Maker, checker, and the gap between them
   -- ======================================================================
   --
