@@ -33,6 +33,19 @@ vi.stubGlobal('ResizeObserver', StubObserver)
 // like a real one.
 vi.stubGlobal('scrollTo', () => {})
 
+// Framer Motion reads prefers-reduced-motion once, when it is first imported,
+// so stubbing matchMedia from inside a test arrives too late to change it.
+// Mocking the hook instead tests the thing that is actually ours: what the hero
+// renders when the answer comes back true.
+const motion = { reduced: false }
+vi.mock('framer-motion', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('framer-motion')>()),
+  useReducedMotion: () => motion.reduced,
+}))
+function reduceMotion(on: boolean) {
+  motion.reduced = on
+}
+
 vi.mock('@/hooks/usePublicCareers', () => ({
   usePublicOpenJobPostings: () => ({ data: [], isLoading: false, isError: false }),
 }))
@@ -64,7 +77,10 @@ function styleAttributes(root: ParentNode) {
   )
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  reduceMotion(false)
+})
 
 describe('the hero', () => {
   it('keeps the two links the public needs, pointing where they should', () => {
@@ -149,71 +165,124 @@ describe('the hero fills the first screen', () => {
   })
 })
 
-describe('the building image', () => {
-  it('is a background, not content — nothing announces it', () => {
+function sceneLayers(container: HTMLElement) {
+  return Array.from(hero(container).querySelectorAll('img'))
+}
+
+describe('the building scene', () => {
+  it('is two cut-out layers rather than one flat photograph', () => {
     const { container } = show()
-    // No <img> was added for it, and every decorative layer is hidden from
-    // the accessibility tree.
-    for (const img of container.querySelectorAll('img')) {
-      expect(img.getAttribute('src') ?? '').not.toMatch(/jmac-enterprise-building/)
-    }
-    const layers = hero(container).querySelectorAll('[aria-hidden="true"]')
-    expect(layers.length).toBeGreaterThanOrEqual(3)
+    const srcs = sceneLayers(container).map((el) => el.getAttribute('src') ?? '')
+    expect(srcs.length).toBe(2)
+    // Spelled as the file is spelled on disk, missing "r" and all.
+    expect(srcs[0]).toMatch(/backgound-buildings/)
+    expect(srcs[1]).toMatch(/main-building-base/)
   })
 
-  it('sits behind an overlay rather than under bare text', () => {
+  it('has retired the flat hero image entirely', () => {
+    const { container } = show()
+    const everything = [
+      ...styleAttributes(container),
+      ...Array.from(container.querySelectorAll('img')).map((el) => el.getAttribute('src') ?? ''),
+    ].join(' ')
+    expect(everything).not.toContain('jmac-enterprise-building')
+    expect(everything).not.toContain('jmac-footer-building')
+    // main-building-logo is the unbranded facade. It is deliberately unused:
+    // it is a different render of the building rather than the same one
+    // without its sign, so crossfading to it would swap the architecture.
+    expect(everything).not.toContain('main-building-logo')
+  })
+
+  it('announces nothing and intercepts nothing', () => {
+    const { container } = show()
+    for (const el of sceneLayers(container)) {
+      expect(el.getAttribute('alt')).toBe('')
+      expect(el.getAttribute('aria-hidden')).toBe('true')
+      expect(el.className).toContain('pointer-events-none')
+      expect(el.className).toContain('select-none')
+    }
+  })
+
+  it('crops both layers identically, so they stay registered', () => {
+    const { container } = show()
+    // The three assets share one 1672x941 canvas, so an identical cover crop is
+    // the whole coordinate system — no per-breakpoint pixel values anywhere.
+    const [back, main] = sceneLayers(container)
+    expect(back.className).toBe(main.className.replace('z-20', 'z-10'))
+    for (const el of [back, main]) {
+      expect(el.className).toContain('object-cover')
+      expect(el.className).toContain('object-[80%_center]')
+      expect(el.className).toContain('lg:object-[72%_center]')
+      expect(el.className).toContain('absolute inset-0')
+    }
+  })
+
+  it('stacks sky under buildings under overlay under text', () => {
+    const { container } = show()
+    const section = hero(container)
+    const zOf = (selector: string) => {
+      const el = section.querySelector(selector)
+      return el ? /(?:^|\s)z-(\d+)/.exec(el.className)?.[1] : undefined
+    }
+    const [back, main] = sceneLayers(container)
+    expect(zOf('[style*="to top right"]')).toBe('0')
+    expect(/(?:^|\s)z-(\d+)/.exec(back.className)?.[1]).toBe('10')
+    expect(/(?:^|\s)z-(\d+)/.exec(main.className)?.[1]).toBe('20')
+    expect(zOf('[style*="linear-gradient(90deg"]')).toBe('30')
+    expect(zOf('[class*="justify-between"]')).toBe('40')
+  })
+
+  it('keeps the navy readability gradient above the architecture', () => {
     const { container } = show()
     const styles = styleAttributes(hero(container))
-    // One layer carries the photograph, and at least one more carries a
-    // gradient over it.
-    expect(styles.some((s) => s.includes('url('))).toBe(true)
-    expect(styles.some((s) => s.includes('linear-gradient'))).toBe(true)
-  })
-
-  it('is anchored to keep the building signage in frame', () => {
-    const { container } = show()
-    // The JMAC ENTERPRISE sign sits at roughly 68-78% across the photograph,
-    // which is the whole reason this asset replaced the last one. These two
-    // anchors are what keep it inside the crop: 72% once the viewport is wide
-    // enough to show nearly the whole image, 80% below that, where the crop
-    // eats the left and the sign has to stay near the middle of what is left.
-    const layer = hero(container).querySelector('[class*="background-position"]') as HTMLElement
-    expect(layer).toBeTruthy()
-    expect(layer.className).toContain('[background-position:80%_center]')
-    expect(layer.className).toContain('lg:[background-position:72%_center]')
-    expect(layer.className).toContain('bg-cover')
-    expect(layer.className).toContain('bg-no-repeat')
-  })
-
-  it('appears exactly once on the page', () => {
-    const { container } = show()
-    const carriers = styleAttributes(container).filter((s) => s.includes('jmac-enterprise-building'))
-    expect(carriers.length).toBe(1)
-    // And it is the hero that carries it.
-    expect(styleAttributes(hero(container)).some((s) => s.includes('jmac-enterprise-building'))).toBe(
-      true
-    )
-  })
-
-  it('is the branded building, with the old one gone rather than alongside it', () => {
-    const { container } = show()
-    const everything = styleAttributes(container).join(' ')
-    expect(everything).not.toContain('jmac-footer-building')
-  })
-
-  it('leaves the right side light enough for the signage to read', () => {
-    const { container } = show()
-    const desktop = styleAttributes(hero(container)).find(
-      (s) => s.includes('linear-gradient(90deg') || s.includes('linear-gradient(90deg,')
-    )
-    expect(desktop).toBeTruthy()
-    // The photograph is a night shot whose own sky is darker than --navy, so
-    // the overlay exists to settle the left rather than to darken the right.
-    // Anything approaching the old 78%/42% pair over the signage would put the
-    // lettering back under a wash it does not need.
-    const overSignage = /--navy\) (\d+)%, transparent\) 72%/.exec(desktop!)
+    expect(styles.some((s) => s.includes('linear-gradient(90deg'))).toBe(true)
+    // The overlay still gets out of the way where the signage is.
+    const desktop = styles.find((s) => s.includes('linear-gradient(90deg'))!
+    const overSignage = /--navy\) (\d+)%, transparent\) 72%/.exec(desktop)
     expect(overSignage).toBeTruthy()
     expect(Number(overSignage![1])).toBeLessThanOrEqual(35)
+  })
+
+  it('paints a sky, because the layers no longer carry one', () => {
+    const { container } = show()
+    // Sampled from the photograph where the cut-outs are transparent. If this
+    // ever became a --navy token the rooflines would show a seam.
+    // jsdom reports the parsed colours, which is the more legible assertion
+    // anyway: these are the pixels the photograph actually has at those points.
+    const sky = styleAttributes(hero(container)).find((s) => s.includes('to top right'))
+    expect(sky).toBeTruthy()
+    expect(sky).toContain('rgb(2, 23, 50)')
+    expect(sky).toContain('rgb(11, 69, 132)')
+  })
+})
+
+/**
+ * The entrance, read from the styles Framer Motion renders on the first pass.
+ * These pin the two things that matter: the buildings start below and arrive,
+ * and a visitor who asked for less motion gets the finished scene instead of a
+ * blank one waiting on a timer.
+ */
+describe('the entrance', () => {
+  it('starts both layers below their resting position and faded', () => {
+    const { container } = show()
+    const [back, main] = sceneLayers(container).map((el) => el.getAttribute('style') ?? '')
+    expect(back).toMatch(/translateY\(40px\)/)
+    expect(main).toMatch(/translateY\(64px\)/)
+    // Faded, not invisible — the scene reveals rather than pops.
+    expect(back).toMatch(/opacity:\s*0\.3/)
+    expect(main).toMatch(/opacity:\s*0\.15/)
+  })
+
+  it('renders the finished scene immediately under reduced motion', () => {
+    reduceMotion(true)
+    const { container } = show()
+    for (const el of sceneLayers(container)) {
+      const style = el.getAttribute('style') ?? ''
+      expect(style).not.toMatch(/translateY\((?!0px\))/)
+      expect(style).toMatch(/opacity:\s*1/)
+    }
+    // And the copy is there too, rather than waiting on its own delay.
+    expect(screen.getByText(/One unified enterprise platform/i)).toBeTruthy()
   })
 })
 
