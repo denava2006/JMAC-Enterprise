@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import footerBuilding from '@/assets/jmac-footer-building.webp'
+import heroBuilding from '@/assets/jmac-footer-building.webp'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -108,30 +108,68 @@ function HeroSection() {
   })
 
   return (
-    <section className="relative overflow-hidden bg-primary text-primary-foreground">
+    <section className="relative isolate overflow-hidden bg-primary text-primary-foreground">
+      {/* The photograph, held to the right so the architecture sits in the
+          space the overlay leaves clear. Decorative: a CSS background rather
+          than an <img>, because there is nothing here a screen reader should
+          be told about. */}
       <div
-        className="pointer-events-none absolute -right-32 -top-40 h-[28rem] w-[28rem] rounded-full bg-secondary/25 blur-3xl"
         aria-hidden="true"
+        className="absolute inset-0 bg-cover bg-no-repeat [background-position:80%_center] lg:[background-position:72%_center]"
+        style={{ backgroundImage: `url(${heroBuilding})` }}
       />
-      {/* Spacing was pt-24/pb-6: a lot of dead air above the mark and almost
-          none below the rail, which made the navy block look cut off where it
-          met the next section. The pad is closer to even now, and the rail sits
-          inside the block with room under it. */}
+
+      {/* Desktop: nearly solid navy where the words are, thinning across so
+          the glass survives. Built from the palette tokens rather than a
+          second set of hand-picked blues that would drift from them. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 hidden sm:block"
+        style={{
+          backgroundImage:
+            'linear-gradient(90deg,' +
+            ' color-mix(in srgb, var(--navy) 98%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 95%, transparent) 38%,' +
+            ' color-mix(in srgb, var(--navy) 78%, transparent) 62%,' +
+            ' color-mix(in srgb, var(--navy-2) 42%, transparent) 100%)',
+        }}
+      />
+
+      {/* Mobile: the text takes the full width, so a left-to-right gradient
+          would have nothing to fade into. A heavier vertical wash instead, and
+          the building becomes texture rather than subject -- the right trade
+          at this size. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 sm:hidden"
+        style={{
+          backgroundImage:
+            'linear-gradient(180deg,' +
+            ' color-mix(in srgb, var(--navy) 95%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 90%, transparent) 55%,' +
+            ' color-mix(in srgb, var(--navy) 86%, transparent) 100%)',
+        }}
+      />
+
       <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 sm:pb-24 sm:pt-20">
-        <div className="flex flex-col items-center gap-7 text-center">
-          {/* The mark, at the size of a mark. It was set as an 11px mono label
-              above the headline, which read as a caption on somebody else's
-              page rather than as the name of the company whose site this is. */}
+        {/* Left-aligned rather than centred. A centred stack over a
+            right-weighted photograph fights it: the text lands on the glass and
+            neither reads. Held to ~640px so the lines stay comfortable and the
+            building keeps the right of the frame. */}
+        <div className="flex max-w-[40rem] flex-col items-start gap-6 text-left">
+          {/* The mark, at the size of a mark -- but a step down from the
+              centred version, where it had the full width to itself. Here it
+              introduces the headline rather than competing with it. */}
           <motion.div {...rise(0)}>
             <JmacWordmark
               layout="stacked"
-              className="text-[2.75rem] sm:text-[3.75rem] lg:text-[4.5rem]"
+              className="text-[2.25rem] sm:text-[2.75rem] lg:text-[3.25rem]"
             />
           </motion.div>
 
           <motion.h1
             {...rise(0.08)}
-            className="max-w-4xl font-display text-2xl font-bold leading-[1.2] tracking-[-0.015em] text-primary-foreground/95 sm:text-3xl lg:text-[2.5rem]"
+            className="font-display text-2xl font-bold leading-[1.2] tracking-[-0.015em] text-primary-foreground/95 sm:text-3xl lg:text-[2.25rem]"
           >
             One unified enterprise platform connecting workforce, branch operations, point of sale,
             employee self-service, and finance.
@@ -139,7 +177,7 @@ function HeroSection() {
 
           <motion.p
             {...rise(0.14)}
-            className="max-w-2xl text-base leading-relaxed text-primary-foreground/70 sm:text-lg"
+            className="text-base leading-relaxed text-primary-foreground/75 sm:text-lg"
           >
             Every department works in its own secured workspace, on one enterprise identity and one set
             of records.
@@ -156,15 +194,18 @@ function HeroSection() {
               asChild
               size="lg"
               variant="outline"
-              className="border-white/30 bg-transparent text-white hover:bg-white/10"
+              className="border-white/40 bg-transparent text-white hover:bg-white/10"
             >
               <Link to="/login">Employee Login</Link>
             </Button>
           </motion.div>
         </div>
 
-        {/* The thesis, stated structurally rather than claimed in prose. */}
-        <motion.div {...rise(0.3)} className="mt-16 sm:mt-20">
+        {/* The thesis, stated structurally rather than claimed in prose. It
+            keeps the full width -- it is the base of the section, and pinning
+            it to the text column would leave the right half empty below the
+            building. */}
+        <motion.div {...rise(0.3)} className="mt-14 sm:mt-20">
           <ModuleRail tone="dark" />
         </motion.div>
       </div>
@@ -375,92 +416,47 @@ function AboutSection() {
 }
 
 /**
- * The closing section, and the first piece of real imagery on the page.
+ * The closing section: navy, plain, and deliberately quiet.
  *
- * It replaces a centred text CTA rather than sitting after one: two stacked
- * closing calls to action would be one more than the page needs, and the
- * footer below already carries Track an application for applicants who want
- * it.
+ * The building briefly lived here before moving to the hero, where it belongs
+ * — an image that introduces the page does more work than one that ends it,
+ * and using it twice would have made it decoration rather than a statement.
+ * What is left is the navy bookend to the hero, carrying only the thing a
+ * reader who has got this far actually needs.
  *
- * The building is decorative, so it is a CSS background rather than an <img>
- * — there is nothing here a screen reader should be told about. The overlay
- * is what makes the text readable, and it is asymmetric on purpose: nearly
- * solid navy on the left where the words are, thinning to the right so the
- * architecture survives. Centring the image would put the glass behind the
- * heading and lose both.
+ * Which is not the hero's pair again. Explore Careers and Employee Login are
+ * the first thing on the page; repeating them at the bottom says nothing new.
+ * Following an application that has already been sent is the half the hero
+ * does not offer.
  */
 function ClosingSection() {
   const still = useReducedMotion()
 
   return (
-    <section
-      id="contact"
-      className="relative isolate overflow-hidden bg-primary text-primary-foreground"
-    >
-      {/* The photograph. Held to the right so the building stays in the space
-          the overlay leaves clear. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-cover bg-no-repeat [background-position:78%_center] sm:[background-position:70%_center]"
-        style={{ backgroundImage: `url(${footerBuilding})` }}
-      />
-
-      {/* Desktop: navy at the left edge, thinning across so the glass reads.
-          The stops come from the palette tokens, not from a second set of
-          hand-picked blues. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 hidden sm:block"
-        style={{
-          backgroundImage:
-            'linear-gradient(90deg,' +
-            ' color-mix(in srgb, var(--navy) 97%, transparent) 0%,' +
-            ' color-mix(in srgb, var(--navy) 92%, transparent) 34%,' +
-            ' color-mix(in srgb, var(--navy) 66%, transparent) 64%,' +
-            ' color-mix(in srgb, var(--navy-2) 28%, transparent) 100%)',
-        }}
-      />
-
-      {/* Mobile: the text occupies most of the width, so the overlay is
-          heavier and vertical. The building becomes texture rather than
-          subject, which is the right trade at this size. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 sm:hidden"
-        style={{
-          backgroundImage:
-            'linear-gradient(180deg,' +
-            ' color-mix(in srgb, var(--navy) 94%, transparent) 0%,' +
-            ' color-mix(in srgb, var(--navy) 88%, transparent) 60%,' +
-            ' color-mix(in srgb, var(--navy) 80%, transparent) 100%)',
-        }}
-      />
-
-      <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
+    <section id="contact" className="bg-primary text-primary-foreground">
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
         <motion.div
           initial={{ opacity: 0, y: still ? 0 : 14 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: still ? 0.2 : 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="max-w-xl"
+          className="flex max-w-2xl flex-col items-start gap-4"
         >
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary-foreground/60">
-            People build progress
-          </p>
-          <h2 className="mt-4 font-display text-3xl font-bold tracking-[-0.02em] sm:text-[2.75rem] sm:leading-[1.1]">
-            Let&rsquo;s build a stronger tomorrow
+          <h2 className="font-display text-2xl font-bold tracking-[-0.015em] sm:text-3xl">
+            Looking for a role at JMAC?
           </h2>
-          <p className="mt-5 text-primary-foreground/75 sm:text-lg">
-            Join a connected organisation where store teams, HR and finance work from the same
-            records. Explore open positions across our branches, or sign in if you already work
-            here.
+          <p className="text-primary-foreground/75">
+            Applications are handled through this site. Apply from any open position, then use your
+            reference number to follow where it stands.
           </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            {/* The same treatment the hero gives its primary action, so the
-                page opens and closes on one visual idea rather than two. */}
+          {/* Not the hero's pair again. Explore Careers and Employee Login are
+              already the first thing on the page; what is useful this far down
+              is the half the hero does not offer -- following an application
+              that has already been sent. */}
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg" variant="accent">
               <Link to="/careers">
-                Explore Careers
+                See open positions
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -468,9 +464,9 @@ function ClosingSection() {
               asChild
               size="lg"
               variant="outline"
-              className="border-white/30 bg-transparent text-white hover:bg-white/10"
+              className="border-white/40 bg-transparent text-white hover:bg-white/10"
             >
-              <Link to="/login">Employee Login</Link>
+              <Link to="/track">Track an application</Link>
             </Button>
           </div>
         </motion.div>

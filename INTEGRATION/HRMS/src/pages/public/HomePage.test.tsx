@@ -3,12 +3,12 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 /**
- * The public landing page, and its closing section in particular.
+ * The public landing page, and where its one photograph lives.
  *
- * The building image is the first real photograph on this page, and the two
- * things worth pinning about it are that it stays decorative — a CSS
- * background, invisible to a screen reader — and that the section still
- * carries the two links the public actually needs.
+ * The building opens the page now rather than closing it. Three things are
+ * worth pinning: it is in the hero, it stays decorative — a CSS background,
+ * invisible to a screen reader — and it appears exactly once, because an image
+ * used twice is decoration rather than a statement.
  *
  * The copy claim matters too: JMAC runs branches and employs people. It does
  * not sell software, and nothing on this page should read as though it does.
@@ -46,25 +46,31 @@ function show() {
   )
 }
 
+// The hero is the first section on the page, and the only one the building
+// belongs to.
+function hero(container: HTMLElement) {
+  return container.querySelector('section') as HTMLElement
+}
+
+function styleAttributes(root: ParentNode) {
+  return Array.from(root.querySelectorAll<HTMLElement>('[style]')).map(
+    (el) => el.getAttribute('style') ?? ''
+  )
+}
+
 afterEach(cleanup)
 
-describe('the closing section', () => {
-  it('closes on the building CTA rather than the old centred one', () => {
-    show()
-    expect(screen.getByText(/Let.s build a stronger tomorrow/i)).toBeTruthy()
-    // Replaced, not stacked: two closing calls to action would be one more
-    // than the page needs.
-    expect(screen.queryByText('Looking for a role at JMAC?')).toBeNull()
-  })
-
+describe('the hero', () => {
   it('keeps the two links the public needs, pointing where they should', () => {
-    show()
+    const { container } = show()
     const careers = screen.getAllByRole('link', { name: /Explore Careers/i })
     const login = screen.getAllByRole('link', { name: /Employee Login/i })
     expect(careers.length).toBeGreaterThan(0)
     expect(login.length).toBeGreaterThan(0)
     for (const link of careers) expect(link.getAttribute('href')).toBe('/careers')
     for (const link of login) expect(link.getAttribute('href')).toBe('/login')
+    // Both of them open the page rather than closing it.
+    for (const link of [...careers, ...login]) expect(hero(container).contains(link)).toBe(true)
   })
 
   it('renders both actions as real links, so the keyboard reaches them', () => {
@@ -77,6 +83,12 @@ describe('the closing section', () => {
       }
     }
   })
+
+  it('sets the text to the left of the frame, not centred over the glass', () => {
+    const { container } = show()
+    const column = hero(container).querySelector('[class*="items-start"][class*="text-left"]')
+    expect(column).toBeTruthy()
+  })
 })
 
 describe('the building image', () => {
@@ -84,22 +96,16 @@ describe('the building image', () => {
     const { container } = show()
     // No <img> was added for it, and every decorative layer is hidden from
     // the accessibility tree.
-    const images = container.querySelectorAll('img')
-    for (const img of images) {
+    for (const img of container.querySelectorAll('img')) {
       expect(img.getAttribute('src') ?? '').not.toMatch(/jmac-footer-building/)
     }
-    const section = container.querySelector('#contact')
-    expect(section).toBeTruthy()
-    const layers = section!.querySelectorAll('[aria-hidden="true"], [aria-hidden]')
+    const layers = hero(container).querySelectorAll('[aria-hidden="true"]')
     expect(layers.length).toBeGreaterThanOrEqual(3)
   })
 
   it('sits behind an overlay rather than under bare text', () => {
     const { container } = show()
-    const section = container.querySelector('#contact') as HTMLElement
-    const styles = Array.from(section.querySelectorAll<HTMLElement>('[style]')).map(
-      (el) => el.getAttribute('style') ?? ''
-    )
+    const styles = styleAttributes(hero(container))
     // One layer carries the photograph, and at least one more carries a
     // gradient over it.
     expect(styles.some((s) => s.includes('url('))).toBe(true)
@@ -108,9 +114,39 @@ describe('the building image', () => {
 
   it('is held to the right, so the words are not set over the glass', () => {
     const { container } = show()
-    const section = container.querySelector('#contact') as HTMLElement
-    const positioned = section.querySelector('[class*="background-position"]')
+    const positioned = hero(container).querySelector('[class*="background-position"]')
     expect(positioned).toBeTruthy()
+  })
+
+  it('appears exactly once on the page', () => {
+    const { container } = show()
+    const carriers = styleAttributes(container).filter((s) => s.includes('jmac-footer-building'))
+    expect(carriers.length).toBe(1)
+    // And specifically not in the close, where it used to be.
+    const contact = container.querySelector('#contact') as HTMLElement
+    expect(styleAttributes(contact).some((s) => s.includes('jmac-footer-building'))).toBe(false)
+  })
+})
+
+describe('the closing section', () => {
+  it('does not repeat the hero pair', () => {
+    const { container } = show()
+    const contact = container.querySelector('#contact') as HTMLElement
+    expect(contact).toBeTruthy()
+    for (const name of [/Explore Careers/i, /Employee Login/i]) {
+      const repeated = screen
+        .getAllByRole('link', { name })
+        .filter((el) => contact.contains(el))
+      expect(repeated.length).toBe(0)
+    }
+  })
+
+  it('offers the half the hero does not — following an application already sent', () => {
+    const { container } = show()
+    const contact = container.querySelector('#contact') as HTMLElement
+    const track = screen.getByRole('link', { name: /Track an application/i })
+    expect(contact.contains(track)).toBe(true)
+    expect(track.getAttribute('href')).toBe('/track')
   })
 })
 
