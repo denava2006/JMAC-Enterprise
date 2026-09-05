@@ -5,10 +5,11 @@ import { MemoryRouter } from 'react-router-dom'
 /**
  * The public landing page, and where its one photograph lives.
  *
- * The building opens the page now rather than closing it. Three things are
- * worth pinning: it is in the hero, it stays decorative — a CSS background,
- * invisible to a screen reader — and it appears exactly once, because an image
- * used twice is decoration rather than a statement.
+ * The building opens the page rather than closing it, and it is now the branded
+ * shot: JMAC ENTERPRISE is mounted on the facade, which is the reason the asset
+ * changed. Four things are worth pinning: it is in the hero, it stays decorative
+ * — a CSS background, invisible to a screen reader — it appears exactly once,
+ * and it is cropped and lit so the signage survives.
  *
  * The copy claim matters too: JMAC runs branches and employs people. It does
  * not sell software, and nothing on this page should read as though it does.
@@ -154,7 +155,7 @@ describe('the building image', () => {
     // No <img> was added for it, and every decorative layer is hidden from
     // the accessibility tree.
     for (const img of container.querySelectorAll('img')) {
-      expect(img.getAttribute('src') ?? '').not.toMatch(/jmac-footer-building/)
+      expect(img.getAttribute('src') ?? '').not.toMatch(/jmac-enterprise-building/)
     }
     const layers = hero(container).querySelectorAll('[aria-hidden="true"]')
     expect(layers.length).toBeGreaterThanOrEqual(3)
@@ -169,20 +170,50 @@ describe('the building image', () => {
     expect(styles.some((s) => s.includes('linear-gradient'))).toBe(true)
   })
 
-  it('is held to the right, so the words are not set over the glass', () => {
+  it('is anchored to keep the building signage in frame', () => {
     const { container } = show()
-    const positioned = hero(container).querySelector('[class*="background-position"]')
-    expect(positioned).toBeTruthy()
+    // The JMAC ENTERPRISE sign sits at roughly 68-78% across the photograph,
+    // which is the whole reason this asset replaced the last one. These two
+    // anchors are what keep it inside the crop: 72% once the viewport is wide
+    // enough to show nearly the whole image, 80% below that, where the crop
+    // eats the left and the sign has to stay near the middle of what is left.
+    const layer = hero(container).querySelector('[class*="background-position"]') as HTMLElement
+    expect(layer).toBeTruthy()
+    expect(layer.className).toContain('[background-position:80%_center]')
+    expect(layer.className).toContain('lg:[background-position:72%_center]')
+    expect(layer.className).toContain('bg-cover')
+    expect(layer.className).toContain('bg-no-repeat')
   })
 
   it('appears exactly once on the page', () => {
     const { container } = show()
-    const carriers = styleAttributes(container).filter((s) => s.includes('jmac-footer-building'))
+    const carriers = styleAttributes(container).filter((s) => s.includes('jmac-enterprise-building'))
     expect(carriers.length).toBe(1)
     // And it is the hero that carries it.
-    expect(styleAttributes(hero(container)).some((s) => s.includes('jmac-footer-building'))).toBe(
+    expect(styleAttributes(hero(container)).some((s) => s.includes('jmac-enterprise-building'))).toBe(
       true
     )
+  })
+
+  it('is the branded building, with the old one gone rather than alongside it', () => {
+    const { container } = show()
+    const everything = styleAttributes(container).join(' ')
+    expect(everything).not.toContain('jmac-footer-building')
+  })
+
+  it('leaves the right side light enough for the signage to read', () => {
+    const { container } = show()
+    const desktop = styleAttributes(hero(container)).find(
+      (s) => s.includes('linear-gradient(90deg') || s.includes('linear-gradient(90deg,')
+    )
+    expect(desktop).toBeTruthy()
+    // The photograph is a night shot whose own sky is darker than --navy, so
+    // the overlay exists to settle the left rather than to darken the right.
+    // Anything approaching the old 78%/42% pair over the signage would put the
+    // lettering back under a wash it does not need.
+    const overSignage = /--navy\) (\d+)%, transparent\) 72%/.exec(desktop!)
+    expect(overSignage).toBeTruthy()
+    expect(Number(overSignage![1])).toBeLessThanOrEqual(35)
   })
 })
 

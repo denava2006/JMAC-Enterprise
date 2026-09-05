@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import heroBuilding from '@/assets/jmac-footer-building.webp'
+import heroBuilding from '@/assets/landing/jmac-enterprise-building.webp'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -117,45 +117,66 @@ function HeroSection() {
     // minimum, never a height: on a short laptop the hero grows instead of
     // clipping the rail.
     <section className="relative isolate flex flex-col overflow-hidden bg-primary text-primary-foreground sm:min-h-[calc(100svh-65px)]">
-      {/* The photograph, held to the right so the architecture sits in the
-          space the overlay leaves clear. Decorative: a CSS background rather
-          than an <img>, because there is nothing here a screen reader should
-          be told about. */}
+      {/* The photograph. The JMAC ENTERPRISE signage sits at roughly 68-78%
+          across and 28-48% down, so the horizontal anchor is what keeps it in
+          frame: at 1280 and up the image is wider than it is tall relative to
+          the hero and almost all of it shows, while narrower screens crop from
+          the left and 80% keeps the sign near the middle of what survives.
+          Decorative -- a CSS background rather than an <img>, because there is
+          nothing here a screen reader should be told about. */}
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-cover bg-no-repeat [background-position:80%_center] lg:[background-position:72%_center]"
         style={{ backgroundImage: `url(${heroBuilding})` }}
       />
 
-      {/* Desktop: nearly solid navy where the words are, thinning across so
-          the glass survives. Built from the palette tokens rather than a
-          second set of hand-picked blues that would drift from them. */}
+      {/* Desktop. This photograph is a night shot, and its own sky measures
+          rgb(4,31,63) -- darker than --navy at rgb(15,42,67). So the overlay is
+          not here to rescue contrast, which is already 16:1 against white on
+          the left. It is here to settle the left third to brand navy and then
+          get out of the way: by 72%, where the signage is, it is down to a
+          quarter, which leaves the lettering at about 178 rather than the 136
+          a heavier wash would have left. Text runs out at roughly 54% of the
+          width on every desktop size, because the content sits in a centred
+          max-w-6xl column -- that is what the 62% stop is measuring against.
+
+          The second gradient is a floor for the module rail. The brightest
+          part of the photograph is the lit windows at the bottom right, which
+          is exactly where the rail's last labels sit. */}
       <div
         aria-hidden="true"
         className="absolute inset-0 hidden sm:block"
         style={{
           backgroundImage:
+            'linear-gradient(0deg,' +
+            ' color-mix(in srgb, var(--navy) 82%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 30%, transparent) 18%,' +
+            ' transparent 34%),' +
             'linear-gradient(90deg,' +
-            ' color-mix(in srgb, var(--navy) 98%, transparent) 0%,' +
-            ' color-mix(in srgb, var(--navy) 95%, transparent) 38%,' +
-            ' color-mix(in srgb, var(--navy) 78%, transparent) 62%,' +
-            ' color-mix(in srgb, var(--navy-2) 42%, transparent) 100%)',
+            ' color-mix(in srgb, var(--navy) 88%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 84%, transparent) 32%,' +
+            ' color-mix(in srgb, var(--navy) 62%, transparent) 54%,' +
+            ' color-mix(in srgb, var(--navy) 26%, transparent) 72%,' +
+            ' color-mix(in srgb, var(--navy-2) 14%, transparent) 100%)',
         }}
       />
 
       {/* Mobile: the text takes the full width, so a left-to-right gradient
-          would have nothing to fade into. A heavier vertical wash instead, and
-          the building becomes texture rather than subject -- the right trade
-          at this size. */}
+          would have nothing to fade into, and at this width the crop puts the
+          building itself behind the copy rather than beside it. A vertical
+          wash instead -- lighter than the old one, because this image is
+          already navy and 86% was dimming architecture that was never bright
+          to begin with. The signage does not survive at this size, and that is
+          the right trade: the words come first. */}
       <div
         aria-hidden="true"
         className="absolute inset-0 sm:hidden"
         style={{
           backgroundImage:
             'linear-gradient(180deg,' +
-            ' color-mix(in srgb, var(--navy) 95%, transparent) 0%,' +
-            ' color-mix(in srgb, var(--navy) 90%, transparent) 55%,' +
-            ' color-mix(in srgb, var(--navy) 86%, transparent) 100%)',
+            ' color-mix(in srgb, var(--navy) 90%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 86%, transparent) 55%,' +
+            ' color-mix(in srgb, var(--navy) 82%, transparent) 100%)',
         }}
       />
 
