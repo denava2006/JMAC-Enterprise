@@ -27,6 +27,10 @@ class StubObserver {
 }
 vi.stubGlobal('IntersectionObserver', StubObserver)
 vi.stubGlobal('ResizeObserver', StubObserver)
+// PublicLayout scrolls to the top on navigation, and jsdom implements no
+// scrolling at all — left alone it prints a Not implemented error that reads
+// like a real one.
+vi.stubGlobal('scrollTo', () => {})
 
 vi.mock('@/hooks/usePublicCareers', () => ({
   usePublicOpenJobPostings: () => ({ data: [], isLoading: false, isError: false }),
@@ -37,6 +41,7 @@ vi.mock('@/hooks/usePublicBranches', () => ({
 }))
 
 import HomePage from '@/pages/public/HomePage'
+import { PublicLayout } from '@/layouts/PublicLayout'
 
 function show() {
   return render(
@@ -91,6 +96,58 @@ describe('the hero', () => {
   })
 })
 
+/**
+ * jsdom does no layout, so these read intent from the classes rather than
+ * measuring boxes. That is enough to catch the two ways this breaks: the
+ * subtraction drifting away from the header's real height, and the minimum
+ * hardening into a fixed height that would clip the rail on a short laptop.
+ */
+describe('the hero fills the first screen', () => {
+  it('subtracts exactly the height the sticky header takes', () => {
+    const { container } = show()
+    expect(hero(container).className).toContain('sm:min-h-[calc(100svh-65px)]')
+  })
+
+  it('is measured against the header this site actually renders', () => {
+    // 65px is h-16 plus the header's bottom border. The header is sticky, not
+    // fixed, so it really does take that out of the first screen — and if it
+    // ever stops being 64+1, the hero's subtraction has to move with it.
+    const { container } = render(
+      <MemoryRouter>
+        <PublicLayout />
+      </MemoryRouter>
+    )
+    const header = container.querySelector('header') as HTMLElement
+    expect(header.className).toContain('sticky')
+    expect(header.className).toContain('border-b')
+    expect(header.querySelector('[class*="h-16"]')).toBeTruthy()
+  })
+
+  it('leaves the phone content-driven', () => {
+    const { container } = show()
+    // The rule is sm-and-up only. An unprefixed min-h would force a full screen
+    // on a phone, where the copy should simply take the room it needs.
+    expect(hero(container).className).not.toMatch(/(^|\s)min-h-\[/)
+  })
+
+  it('grows rather than clips when the content needs more room', () => {
+    const { container } = show()
+    // A minimum, never a height, and never h-screen.
+    expect(hero(container).className).not.toMatch(/(^|:)h-screen/)
+    expect(hero(container).className).not.toMatch(/(^|:)h-\[calc/)
+  })
+
+  it('spends the extra height between the copy and the rail, not on padding', () => {
+    const { container } = show()
+    const inner = hero(container).querySelector('[class*="justify-between"]') as HTMLElement
+    expect(inner).toBeTruthy()
+    expect(inner.className).toContain('flex-1')
+    // The rail's old top margin became the container's gap, so justify-between
+    // has something to distribute around rather than fight.
+    expect(inner.className).toContain('gap-14')
+  })
+})
+
 describe('the building image', () => {
   it('is a background, not content — nothing announces it', () => {
     const { container } = show()
@@ -122,31 +179,32 @@ describe('the building image', () => {
     const { container } = show()
     const carriers = styleAttributes(container).filter((s) => s.includes('jmac-footer-building'))
     expect(carriers.length).toBe(1)
-    // And specifically not in the close, where it used to be.
-    const contact = container.querySelector('#contact') as HTMLElement
-    expect(styleAttributes(contact).some((s) => s.includes('jmac-footer-building'))).toBe(false)
+    // And it is the hero that carries it.
+    expect(styleAttributes(hero(container)).some((s) => s.includes('jmac-footer-building'))).toBe(
+      true
+    )
   })
 })
 
-describe('the closing section', () => {
-  it('does not repeat the hero pair', () => {
+/**
+ * The page ends on About and then the site footer. It briefly carried a closing
+ * careers band, which was one ask too many: the header offers Careers, Track
+ * Application and Login on every page, and the footer repeats all three
+ * directly underneath.
+ */
+describe('the page does not close on another call to action', () => {
+  it('ends on About, with no section after it', () => {
     const { container } = show()
-    const contact = container.querySelector('#contact') as HTMLElement
-    expect(contact).toBeTruthy()
-    for (const name of [/Explore Careers/i, /Employee Login/i]) {
-      const repeated = screen
-        .getAllByRole('link', { name })
-        .filter((el) => contact.contains(el))
-      expect(repeated.length).toBe(0)
-    }
+    const sections = Array.from(container.querySelectorAll('section'))
+    expect(sections.at(-1)?.getAttribute('id')).toBe('about')
+    expect(container.querySelector('#contact')).toBeNull()
   })
 
-  it('offers the half the hero does not — following an application already sent', () => {
-    const { container } = show()
-    const contact = container.querySelector('#contact') as HTMLElement
-    const track = screen.getByRole('link', { name: /Track an application/i })
-    expect(contact.contains(track)).toBe(true)
-    expect(track.getAttribute('href')).toBe('/track')
+  it('does not ask a third time for what the header and footer already offer', () => {
+    show()
+    expect(screen.queryByText('Looking for a role at JMAC?')).toBeNull()
+    expect(screen.queryByRole('link', { name: /See open positions/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Track an application/i })).toBeNull()
   })
 })
 

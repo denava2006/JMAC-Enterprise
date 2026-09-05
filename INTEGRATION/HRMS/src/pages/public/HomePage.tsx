@@ -108,7 +108,15 @@ function HeroSection() {
   })
 
   return (
-    <section className="relative isolate overflow-hidden bg-primary text-primary-foreground">
+    // The header is sticky rather than fixed, so it takes 65px out of the first
+    // screen -- h-16 plus its bottom border. Subtracting exactly that is what
+    // stops a strip of the next, light section showing under the hero on a tall
+    // monitor. svh rather than vh so a mobile browser's collapsing toolbar does
+    // not make the section taller than the screen it is meant to fill; the rule
+    // starts at sm anyway, because a phone should stay content-driven. It is a
+    // minimum, never a height: on a short laptop the hero grows instead of
+    // clipping the rail.
+    <section className="relative isolate flex flex-col overflow-hidden bg-primary text-primary-foreground sm:min-h-[calc(100svh-65px)]">
       {/* The photograph, held to the right so the architecture sits in the
           space the overlay leaves clear. Decorative: a CSS background rather
           than an <img>, because there is nothing here a screen reader should
@@ -151,7 +159,13 @@ function HeroSection() {
         }}
       />
 
-      <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 sm:pb-24 sm:pt-20">
+      {/* flex-1 so the container takes the height the section was given, and
+          justify-between so the extra goes into the gap between the copy and
+          the rail rather than into padding under everything. The gap is the
+          floor, which is what the rail's old top margin was; free space is
+          distributed above it. Nothing here grows to fill the screen -- the
+          building and the space around it carry the scale. */}
+      <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-between gap-14 px-4 pb-20 pt-16 sm:gap-20 sm:px-6 sm:pb-24 sm:pt-20">
         {/* Left-aligned rather than centred. A centred stack over a
             right-weighted photograph fights it: the text lands on the glass and
             neither reads. Held to ~640px so the lines stay comfortable and the
@@ -205,7 +219,7 @@ function HeroSection() {
             keeps the full width -- it is the base of the section, and pinning
             it to the text column would leave the right half empty below the
             building. */}
-        <motion.div {...rise(0.3)} className="mt-14 sm:mt-20">
+        <motion.div {...rise(0.3)}>
           <ModuleRail tone="dark" />
         </motion.div>
       </div>
@@ -415,66 +429,6 @@ function AboutSection() {
   )
 }
 
-/**
- * The closing section: navy, plain, and deliberately quiet.
- *
- * The building briefly lived here before moving to the hero, where it belongs
- * — an image that introduces the page does more work than one that ends it,
- * and using it twice would have made it decoration rather than a statement.
- * What is left is the navy bookend to the hero, carrying only the thing a
- * reader who has got this far actually needs.
- *
- * Which is not the hero's pair again. Explore Careers and Employee Login are
- * the first thing on the page; repeating them at the bottom says nothing new.
- * Following an application that has already been sent is the half the hero
- * does not offer.
- */
-function ClosingSection() {
-  const still = useReducedMotion()
-
-  return (
-    <section id="contact" className="bg-primary text-primary-foreground">
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-        <motion.div
-          initial={{ opacity: 0, y: still ? 0 : 14 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: still ? 0.2 : 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="flex max-w-2xl flex-col items-start gap-4"
-        >
-          <h2 className="font-display text-2xl font-bold tracking-[-0.015em] sm:text-3xl">
-            Looking for a role at JMAC?
-          </h2>
-          <p className="text-primary-foreground/75">
-            Applications are handled through this site. Apply from any open position, then use your
-            reference number to follow where it stands.
-          </p>
-          {/* Not the hero's pair again. Explore Careers and Employee Login are
-              already the first thing on the page; what is useful this far down
-              is the half the hero does not offer -- following an application
-              that has already been sent. */}
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg" variant="accent">
-              <Link to="/careers">
-                See open positions
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="border-white/40 bg-transparent text-white hover:bg-white/10"
-            >
-              <Link to="/track">Track an application</Link>
-            </Button>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  )
-}
-
 export default function HomePage() {
   return (
     <div>
@@ -483,8 +437,11 @@ export default function HomePage() {
       <BranchShowcase />
       <WhyJoinSection />
       <FeaturedCareersSection />
+      {/* About is the last thing the page says, and then the footer. There is
+          no closing call to action: Careers, Track Application and Login are in
+          the header on every page and again in the footer directly below, so a
+          band repeating them would be the third ask on one screen. */}
       <AboutSection />
-      <ClosingSection />
     </div>
   )
 }
