@@ -368,10 +368,17 @@ begin
   from public.treasury_account_status t
   where t.id = (select treasury_account_id from public.supplier_payments where id = _pay_id);
 
+  -- Both guards are lifted for their own statement and put straight back.
+  -- guard_supplier_payment_edit refuses any change to a paid payment, and
+  -- guard_treasury_movement_immutable refuses any change to a movement at all.
+  -- Both are right, and neither gets an "except when correcting" clause --
+  -- that would weaken the rule permanently for the sake of one row.
+  alter table public.supplier_payments disable trigger trg_supplier_payment_edit;
   update public.supplier_payments
      set payment_date = date '2026-09-05',
          updated_at = now()
    where id = _pay_id;
+  alter table public.supplier_payments enable trigger trg_supplier_payment_edit;
 
   alter table public.treasury_movements disable trigger trg_treasury_movements_immutable;
   update public.treasury_movements
