@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
+import footerBuilding from '@/assets/jmac-footer-building.webp'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -373,35 +374,107 @@ function AboutSection() {
   )
 }
 
-function ContactSection() {
+/**
+ * The closing section, and the first piece of real imagery on the page.
+ *
+ * It replaces a centred text CTA rather than sitting after one: two stacked
+ * closing calls to action would be one more than the page needs, and the
+ * footer below already carries Track an application for applicants who want
+ * it.
+ *
+ * The building is decorative, so it is a CSS background rather than an <img>
+ * — there is nothing here a screen reader should be told about. The overlay
+ * is what makes the text readable, and it is asymmetric on purpose: nearly
+ * solid navy on the left where the words are, thinning to the right so the
+ * architecture survives. Centring the image would put the glass behind the
+ * heading and lose both.
+ */
+function ClosingSection() {
+  const still = useReducedMotion()
+
   return (
-    <section id="contact" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-80px' }}
-        transition={{ duration: 0.4 }}
-        className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center"
-      >
-        <h2 className="font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
-          Looking for a role at JMAC?
-        </h2>
-        <p className="text-muted-foreground">
-          Applications are handled through this site. Apply from any open position, then use your reference number
-          to follow where it stands.
-        </p>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-          <Button asChild size="lg">
-            <Link to="/careers">
-              See open positions
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <Link to="/track">Track an application</Link>
-          </Button>
-        </div>
-      </motion.div>
+    <section
+      id="contact"
+      className="relative isolate overflow-hidden bg-primary text-primary-foreground"
+    >
+      {/* The photograph. Held to the right so the building stays in the space
+          the overlay leaves clear. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-cover bg-no-repeat [background-position:78%_center] sm:[background-position:70%_center]"
+        style={{ backgroundImage: `url(${footerBuilding})` }}
+      />
+
+      {/* Desktop: navy at the left edge, thinning across so the glass reads.
+          The stops come from the palette tokens, not from a second set of
+          hand-picked blues. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 hidden sm:block"
+        style={{
+          backgroundImage:
+            'linear-gradient(90deg,' +
+            ' color-mix(in srgb, var(--navy) 97%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 92%, transparent) 34%,' +
+            ' color-mix(in srgb, var(--navy) 66%, transparent) 64%,' +
+            ' color-mix(in srgb, var(--navy-2) 28%, transparent) 100%)',
+        }}
+      />
+
+      {/* Mobile: the text occupies most of the width, so the overlay is
+          heavier and vertical. The building becomes texture rather than
+          subject, which is the right trade at this size. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 sm:hidden"
+        style={{
+          backgroundImage:
+            'linear-gradient(180deg,' +
+            ' color-mix(in srgb, var(--navy) 94%, transparent) 0%,' +
+            ' color-mix(in srgb, var(--navy) 88%, transparent) 60%,' +
+            ' color-mix(in srgb, var(--navy) 80%, transparent) 100%)',
+        }}
+      />
+
+      <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
+        <motion.div
+          initial={{ opacity: 0, y: still ? 0 : 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: still ? 0.2 : 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="max-w-xl"
+        >
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary-foreground/60">
+            People build progress
+          </p>
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-[-0.02em] sm:text-[2.75rem] sm:leading-[1.1]">
+            Let&rsquo;s build a stronger tomorrow
+          </h2>
+          <p className="mt-5 text-primary-foreground/75 sm:text-lg">
+            Join a connected organisation where store teams, HR and finance work from the same
+            records. Explore open positions across our branches, or sign in if you already work
+            here.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            {/* The same treatment the hero gives its primary action, so the
+                page opens and closes on one visual idea rather than two. */}
+            <Button asChild size="lg" variant="accent">
+              <Link to="/careers">
+                Explore Careers
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="border-white/30 bg-transparent text-white hover:bg-white/10"
+            >
+              <Link to="/login">Employee Login</Link>
+            </Button>
+          </div>
+        </motion.div>
+      </div>
     </section>
   )
 }
@@ -415,7 +488,7 @@ export default function HomePage() {
       <WhyJoinSection />
       <FeaturedCareersSection />
       <AboutSection />
-      <ContactSection />
+      <ClosingSection />
     </div>
   )
 }
