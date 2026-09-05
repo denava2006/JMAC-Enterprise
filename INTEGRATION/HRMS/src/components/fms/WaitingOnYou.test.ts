@@ -16,6 +16,12 @@ const NOTHING = {
   invoiceDrafts: 0,
   invoicesReturned: 0,
   ordersToInvoice: 0,
+  reimbursementsToReview: 0,
+  reimbursementsToApprove: 0,
+  reimbursementsToPay: 0,
+  reimbursementPaymentsToApprove: 0,
+  payrollToDisburse: 0,
+  payrollDisbursementsToApprove: 0,
 }
 
 const EVERYTHING = {
@@ -33,6 +39,12 @@ const EVERYTHING = {
   invoiceDrafts: 12,
   invoicesReturned: 13,
   ordersToInvoice: 14,
+  reimbursementsToReview: 15,
+  reimbursementsToApprove: 16,
+  reimbursementsToPay: 17,
+  reimbursementPaymentsToApprove: 18,
+  payrollToDisburse: 19,
+  payrollDisbursementsToApprove: 20,
 }
 
 describe('what is waiting on the checker', () => {
@@ -43,6 +55,11 @@ describe('what is waiting on the checker', () => {
       { label: 'Vendors to approve', count: 2, to: '/fms/vendors' },
       { label: 'Categories to approve', count: 1, to: '/fms/categories' },
       { label: 'Supplier invoices to review', count: 11, to: '/fms/invoices' },
+      // F7. A claim to decide and a payment to authorise are different rows,
+      // because they are different decisions on different documents.
+      { label: 'Reimbursements to approve', count: 16, to: '/fms/reimbursements' },
+      { label: 'Reimbursement payments to approve', count: 18, to: '/fms/reimbursements' },
+      { label: 'Payroll disbursements to approve', count: 20, to: '/fms/payroll' },
     ])
   })
 
@@ -63,6 +80,7 @@ describe('what is waiting on the maker', () => {
       { label: 'Drafts you have not submitted', count: 10, to: '/fms/procurement' },
       { label: 'Vendors sent back', count: 8, to: '/fms/vendors' },
       { label: 'Categories sent back', count: 9, to: '/fms/categories' },
+      { label: 'Reimbursements awaiting review', count: 15, to: '/fms/reimbursements' },
     ])
   })
 
@@ -86,6 +104,10 @@ describe('what is waiting on the Accountant', () => {
         count: 14,
         to: '/fms/invoices?record=1',
       },
+      // F7. Money authorised and waiting to be sent, which is the
+      // Accountant's to send.
+      { label: 'Approved reimbursements awaiting payment', count: 17, to: '/fms/reimbursements' },
+      { label: 'Payroll awaiting disbursement', count: 19, to: '/fms/payroll' },
     ])
   })
 
@@ -93,6 +115,17 @@ describe('what is waiting on the Accountant', () => {
     const labels = waitingWork('accountant', EVERYTHING).map((i) => i.label)
     expect(labels.some((l) => l.includes('to approve'))).toBe(false)
     expect(labels.some((l) => l.includes('to review'))).toBe(false)
+  })
+
+  // The claim count and the payment count answer different questions, so they
+  // never share a row.
+  it('keeps claims to pay separate from payments to approve', () => {
+    const accountant = waitingWork('accountant', EVERYTHING).map((i) => i.label)
+    const manager = waitingWork('finance_manager', EVERYTHING).map((i) => i.label)
+    expect(accountant).toContain('Approved reimbursements awaiting payment')
+    expect(accountant).not.toContain('Reimbursement payments to approve')
+    expect(manager).toContain('Reimbursement payments to approve')
+    expect(manager).not.toContain('Approved reimbursements awaiting payment')
   })
 
   it('does not put the maker’s procurement work on their desk', () => {

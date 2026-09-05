@@ -46,6 +46,8 @@ import FinanceRequestsPage from '@/pages/fms/FinanceRequestsPage'
 import ProcurementPage from '@/pages/fms/ProcurementPage'
 import FinanceSalesPage from '@/pages/fms/FinanceSalesPage'
 import SettlementsPage from '@/pages/fms/SettlementsPage'
+import ReimbursementsPage from '@/pages/fms/ReimbursementsPage'
+import PayrollFinancePage from '@/pages/fms/PayrollFinancePage'
 import TreasuryPage from '@/pages/fms/TreasuryPage'
 import PosDeliveriesPage from '@/pages/pos/PosDeliveriesPage'
 import MyRequestsPage from '@/pages/employee-portal/MyRequestsPage'
@@ -164,6 +166,10 @@ export default function App() {
                   rather than on a page of their own. */}
               <Route path="settlements" element={<SettlementsPage />} />
               <Route path="treasury" element={<TreasuryPage />} />
+              {/* Employee expense claims, and paying finalized payroll. Both
+                  settle a payable; neither calculates one. */}
+              <Route path="reimbursements" element={<ReimbursementsPage />} />
+              <Route path="payroll" element={<PayrollFinancePage />} />
               <Route path="budgets" element={<BudgetsPage />} />
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />

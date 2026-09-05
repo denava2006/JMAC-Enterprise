@@ -1493,6 +1493,13 @@ export type Database = {
             referencedRelation: "finance_requests"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "finance_request_approvals_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "reimbursement_status"
+            referencedColumns: ["id"]
+          },
         ]
       }
       finance_request_attachments: {
@@ -1535,6 +1542,13 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "finance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_request_attachments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "reimbursement_status"
             referencedColumns: ["id"]
           },
           {
@@ -2191,6 +2205,243 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      payroll_disbursements: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          batch_id: string
+          created_at: string
+          decision_reason: string | null
+          disbursement_no: string | null
+          id: string
+          method: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          payment_date: string | null
+          prepared_by: string | null
+          reference: string | null
+          status: string
+          submitted_at: string | null
+          treasury_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          batch_id: string
+          created_at?: string
+          decision_reason?: string | null
+          disbursement_no?: string | null
+          id?: string
+          method: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_date?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          status?: string
+          submitted_at?: string | null
+          treasury_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          batch_id?: string
+          created_at?: string
+          decision_reason?: string | null
+          disbursement_no?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_date?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          status?: string
+          submitted_at?: string | null
+          treasury_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_disbursements_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_disbursements_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_finance_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_disbursements_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_finance_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_disbursements_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_disbursements_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_disbursements_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_account_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_disbursements_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_finance_batches: {
+        Row: {
+          batch_no: string | null
+          created_at: string
+          deductions_total: number
+          employee_count: number
+          frequency: string | null
+          gross_total: number
+          id: string
+          net_total: number
+          pay_date: string | null
+          period_end: string
+          period_start: string
+          source_finalized_at: string | null
+          source_payroll_period_id: string
+        }
+        Insert: {
+          batch_no?: string | null
+          created_at?: string
+          deductions_total: number
+          employee_count: number
+          frequency?: string | null
+          gross_total: number
+          id?: string
+          net_total: number
+          pay_date?: string | null
+          period_end: string
+          period_start: string
+          source_finalized_at?: string | null
+          source_payroll_period_id: string
+        }
+        Update: {
+          batch_no?: string | null
+          created_at?: string
+          deductions_total?: number
+          employee_count?: number
+          frequency?: string | null
+          gross_total?: number
+          id?: string
+          net_total?: number
+          pay_date?: string | null
+          period_end?: string
+          period_start?: string
+          source_finalized_at?: string | null
+          source_payroll_period_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_finance_batches_source_payroll_period_id_fkey"
+            columns: ["source_payroll_period_id"]
+            isOneToOne: true
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_finance_items: {
+        Row: {
+          batch_id: string
+          created_at: string
+          deductions_amount: number
+          employee_id: string
+          employee_name: string | null
+          gross_amount: number
+          id: string
+          net_amount: number
+          source_payroll_record_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          deductions_amount: number
+          employee_id: string
+          employee_name?: string | null
+          gross_amount: number
+          id?: string
+          net_amount: number
+          source_payroll_record_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          deductions_amount?: number
+          employee_id?: string
+          employee_name?: string | null
+          gross_amount?: number
+          id?: string
+          net_amount?: number
+          source_payroll_record_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_finance_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_finance_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_finance_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_finance_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_finance_items_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_finance_items_source_payroll_record_id_fkey"
+            columns: ["source_payroll_record_id"]
+            isOneToOne: true
+            referencedRelation: "payroll_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payroll_line_items: {
         Row: {
@@ -3559,6 +3810,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "purchase_order_sources_finance_request_id_fkey"
+            columns: ["finance_request_id"]
+            isOneToOne: false
+            referencedRelation: "reimbursement_status"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "purchase_order_sources_pos_inventory_request_id_fkey"
             columns: ["pos_inventory_request_id"]
             isOneToOne: false
@@ -3690,6 +3948,122 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reimbursement_payments: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          decision_reason: string | null
+          finance_request_id: string
+          id: string
+          method: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          payment_date: string | null
+          payment_no: string | null
+          prepared_by: string | null
+          reference: string | null
+          status: string
+          submitted_at: string | null
+          treasury_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          decision_reason?: string | null
+          finance_request_id: string
+          id?: string
+          method: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_date?: string | null
+          payment_no?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          status?: string
+          submitted_at?: string | null
+          treasury_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          decision_reason?: string | null
+          finance_request_id?: string
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_date?: string | null
+          payment_no?: string | null
+          prepared_by?: string | null
+          reference?: string | null
+          status?: string
+          submitted_at?: string | null
+          treasury_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reimbursement_payments_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_payments_finance_request_id_fkey"
+            columns: ["finance_request_id"]
+            isOneToOne: false
+            referencedRelation: "finance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_payments_finance_request_id_fkey"
+            columns: ["finance_request_id"]
+            isOneToOne: false
+            referencedRelation: "reimbursement_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_payments_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_payments_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_payments_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_account_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_payments_treasury_account_id_fkey"
+            columns: ["treasury_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -4622,6 +4996,77 @@ export type Database = {
           },
         ]
       }
+      payroll_finance_status: {
+        Row: {
+          amount_paid: number | null
+          available_to_prepare: number | null
+          balance_due: number | null
+          batch_no: string | null
+          created_at: string | null
+          deductions_total: number | null
+          employee_count: number | null
+          frequency: string | null
+          gross_total: number | null
+          id: string | null
+          net_total: number | null
+          pay_date: string | null
+          pending_disbursement: number | null
+          period_end: string | null
+          period_start: string | null
+          settlement_state: string | null
+          source_finalized_at: string | null
+          source_payroll_period_id: string | null
+        }
+        Insert: {
+          amount_paid?: never
+          available_to_prepare?: never
+          balance_due?: never
+          batch_no?: string | null
+          created_at?: string | null
+          deductions_total?: number | null
+          employee_count?: number | null
+          frequency?: string | null
+          gross_total?: number | null
+          id?: string | null
+          net_total?: number | null
+          pay_date?: string | null
+          pending_disbursement?: never
+          period_end?: string | null
+          period_start?: string | null
+          settlement_state?: never
+          source_finalized_at?: string | null
+          source_payroll_period_id?: string | null
+        }
+        Update: {
+          amount_paid?: never
+          available_to_prepare?: never
+          balance_due?: never
+          batch_no?: string | null
+          created_at?: string | null
+          deductions_total?: number | null
+          employee_count?: number | null
+          frequency?: string | null
+          gross_total?: number | null
+          id?: string | null
+          net_total?: number | null
+          pay_date?: string | null
+          pending_disbursement?: never
+          period_end?: string | null
+          period_start?: string | null
+          settlement_state?: never
+          source_finalized_at?: string | null
+          source_payroll_period_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_finance_batches_source_payroll_period_id_fkey"
+            columns: ["source_payroll_period_id"]
+            isOneToOne: true
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_branch_locations: {
         Row: {
           address: string | null
@@ -4706,6 +5151,71 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reimbursement_status: {
+        Row: {
+          amount: number | null
+          amount_paid: number | null
+          available_to_prepare: number | null
+          balance_due: number | null
+          budget_id: string | null
+          budget_name: string | null
+          created_at: string | null
+          department_id: string | null
+          description: string | null
+          expense_date: string | null
+          finance_category_id: string | null
+          finance_category_name: string | null
+          id: string | null
+          justification: string | null
+          needed_by: string | null
+          pending_payment_amount: number | null
+          priority: string | null
+          request_no: string | null
+          requester_id: string | null
+          requester_name: string | null
+          settlement_state: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_requests_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budget_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_finance_category_id_fkey"
+            columns: ["finance_category_id"]
+            isOneToOne: false
+            referencedRelation: "finance_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4926,6 +5436,10 @@ export type Database = {
         Args: { _email: string }
         Returns: string
       }
+      build_payroll_finance_batch: {
+        Args: { _period_id: string }
+        Returns: string
+      }
       can_manage_pos_catalogue: { Args: never; Returns: boolean }
       can_read_finance_master: { Args: never; Returns: boolean }
       can_read_finance_request: {
@@ -4979,6 +5493,17 @@ export type Database = {
           _sale_ids: string[]
           _settlement_date: string
           _submit?: boolean
+        }
+        Returns: string
+      }
+      create_payroll_disbursement: {
+        Args: {
+          _amount: number
+          _batch_id: string
+          _method?: string
+          _notes?: string
+          _submit?: boolean
+          _treasury_account_id: string
         }
         Returns: string
       }
@@ -5037,6 +5562,17 @@ export type Database = {
           _submit?: boolean
           _unit_cost?: number
           _vendor_id: string
+        }
+        Returns: string
+      }
+      create_reimbursement_payment: {
+        Args: {
+          _amount: number
+          _finance_request_id: string
+          _method?: string
+          _notes?: string
+          _submit?: boolean
+          _treasury_account_id: string
         }
         Returns: string
       }
@@ -5631,6 +6167,109 @@ export type Database = {
           vendor_name: string
         }[]
       }
+      get_payable_reimbursements: {
+        Args: never
+        Returns: {
+          amount: number | null
+          amount_paid: number | null
+          available_to_prepare: number | null
+          balance_due: number | null
+          budget_id: string | null
+          budget_name: string | null
+          created_at: string | null
+          department_id: string | null
+          description: string | null
+          expense_date: string | null
+          finance_category_id: string | null
+          finance_category_name: string | null
+          id: string | null
+          justification: string | null
+          needed_by: string | null
+          pending_payment_amount: number | null
+          priority: string | null
+          request_no: string | null
+          requester_id: string | null
+          requester_name: string | null
+          settlement_state: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "reimbursement_status"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_payroll_disbursements: {
+        Args: { _batch_id?: string }
+        Returns: {
+          account_name: string
+          amount: number
+          approved_at: string
+          approved_by: string
+          approved_by_name: string
+          batch_id: string
+          batch_no: string
+          created_at: string
+          decision_reason: string
+          disbursement_no: string
+          id: string
+          method: string
+          notes: string
+          paid_at: string
+          paid_by: string
+          paid_by_name: string
+          payment_date: string
+          prepared_by: string
+          prepared_by_name: string
+          reference: string
+          status: string
+          submitted_at: string
+          treasury_account_id: string
+        }[]
+      }
+      get_payroll_finance_batches: {
+        Args: never
+        Returns: {
+          amount_paid: number | null
+          available_to_prepare: number | null
+          balance_due: number | null
+          batch_no: string | null
+          created_at: string | null
+          deductions_total: number | null
+          employee_count: number | null
+          frequency: string | null
+          gross_total: number | null
+          id: string | null
+          net_total: number | null
+          pay_date: string | null
+          pending_disbursement: number | null
+          period_end: string | null
+          period_start: string | null
+          settlement_state: string | null
+          source_finalized_at: string | null
+          source_payroll_period_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "payroll_finance_status"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_payroll_finance_items: {
+        Args: { _batch_id: string }
+        Returns: {
+          deductions_amount: number
+          employee_id: string
+          employee_name: string
+          gross_amount: number
+          id: string
+          net_amount: number
+        }[]
+      }
       get_pos_carryable_products: {
         Args: { _branch_id: string }
         Returns: {
@@ -5910,6 +6549,70 @@ export type Database = {
           vacancies: number
         }[]
       }
+      get_reimbursement_payments: {
+        Args: { _request_id?: string }
+        Returns: {
+          account_name: string
+          amount: number
+          approved_at: string
+          approved_by: string
+          approved_by_name: string
+          created_at: string
+          decision_reason: string
+          finance_request_id: string
+          id: string
+          method: string
+          notes: string
+          paid_at: string
+          paid_by: string
+          paid_by_name: string
+          payment_date: string
+          payment_no: string
+          prepared_by: string
+          prepared_by_name: string
+          reference: string
+          request_no: string
+          requester_name: string
+          status: string
+          submitted_at: string
+          treasury_account_id: string
+        }[]
+      }
+      get_reimbursements: {
+        Args: never
+        Returns: {
+          amount: number | null
+          amount_paid: number | null
+          available_to_prepare: number | null
+          balance_due: number | null
+          budget_id: string | null
+          budget_name: string | null
+          created_at: string | null
+          department_id: string | null
+          description: string | null
+          expense_date: string | null
+          finance_category_id: string | null
+          finance_category_name: string | null
+          id: string | null
+          justification: string | null
+          needed_by: string | null
+          pending_payment_amount: number | null
+          priority: string | null
+          request_no: string | null
+          requester_id: string | null
+          requester_name: string | null
+          settlement_state: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "reimbursement_status"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_sale_detail: { Args: { _sale_id: string }; Returns: Json }
       get_settlement_branches: {
         Args: never
@@ -6139,6 +6842,8 @@ export type Database = {
         Args: { _payment_id: string }
         Returns: boolean
       }
+      payroll_batch_paid: { Args: { _batch_id: string }; Returns: number }
+      payroll_batch_pending: { Args: { _batch_id: string }; Returns: number }
       pos_audit_fee_summary: { Args: { _fees: Json }; Returns: string }
       pos_audit_is_manager_visible: {
         Args: {
@@ -6269,6 +6974,11 @@ export type Database = {
       record_application_milestone: {
         Args: { _application_id: string; _event: string; _occurred_at?: string }
         Returns: undefined
+      }
+      reimbursement_paid: { Args: { _request_id: string }; Returns: number }
+      reimbursement_pending_payment: {
+        Args: { _request_id: string }
+        Returns: number
       }
       reject_change_request: {
         Args: { p_reason: string; p_request_id: string }
@@ -6407,10 +7117,30 @@ export type Database = {
         }
         Returns: undefined
       }
+      transition_payroll_disbursement: {
+        Args: {
+          _disbursement_id: string
+          _payment_date?: string
+          _reason?: string
+          _reference?: string
+          _to_status: string
+        }
+        Returns: undefined
+      }
       transition_purchase_order: {
         Args: {
           _purchase_order_id: string
           _remarks?: string
+          _to_status: string
+        }
+        Returns: undefined
+      }
+      transition_reimbursement_payment: {
+        Args: {
+          _payment_date?: string
+          _payment_id: string
+          _reason?: string
+          _reference?: string
           _to_status: string
         }
         Returns: undefined

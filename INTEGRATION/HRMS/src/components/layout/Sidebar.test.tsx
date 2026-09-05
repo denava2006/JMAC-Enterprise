@@ -90,6 +90,8 @@ describe('exactly one navigation row is ever active', () => {
     ['/fms/requests', 'Requests'],
     ['/fms/sales', 'Sales & Collections'],
     ['/fms/settlements', 'Settlements'],
+    ['/fms/reimbursements', 'Reimbursements'],
+    ['/fms/payroll', 'Payroll Finance'],
     ['/fms/treasury', 'Cash & Bank'],
     ['/fms/procurement', 'Procurement'],
     ['/fms/budgets', 'Budgets'],

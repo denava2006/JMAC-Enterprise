@@ -9,6 +9,8 @@ import {
   useSupplierInvoices,
   useInvoiceablePurchaseOrders,
 } from '@/hooks/useSupplierInvoices'
+import { useReimbursements, useReimbursementPayments } from '@/hooks/useReimbursements'
+import { usePayrollFinanceBatches, usePayrollDisbursements } from '@/hooks/usePayrollFinance'
 
 export interface WaitingItem {
   label: string
@@ -45,6 +47,14 @@ export function waitingWork(
     invoiceDrafts: number
     invoicesReturned: number
     ordersToInvoice: number
+    // F7. Claims and payables are different counts and stay separate rows:
+    // one is a document to decide, the other is money to send.
+    reimbursementsToReview: number
+    reimbursementsToApprove: number
+    reimbursementsToPay: number
+    reimbursementPaymentsToApprove: number
+    payrollToDisburse: number
+    payrollDisbursementsToApprove: number
   },
 ): WaitingItem[] {
   if (role === 'finance_manager') {
@@ -54,6 +64,21 @@ export function waitingWork(
       { label: 'Vendors to approve', count: data.vendorsPending, to: '/fms/vendors' },
       { label: 'Categories to approve', count: data.categoriesPending, to: '/fms/categories' },
       { label: 'Supplier invoices to review', count: data.invoicesToReview, to: '/fms/invoices' },
+      {
+        label: 'Reimbursements to approve',
+        count: data.reimbursementsToApprove,
+        to: '/fms/reimbursements',
+      },
+      {
+        label: 'Reimbursement payments to approve',
+        count: data.reimbursementPaymentsToApprove,
+        to: '/fms/reimbursements',
+      },
+      {
+        label: 'Payroll disbursements to approve',
+        count: data.payrollDisbursementsToApprove,
+        to: '/fms/payroll',
+      },
     ].filter((i) => i.count > 0)
   }
 
@@ -74,6 +99,18 @@ export function waitingWork(
         count: data.ordersToInvoice,
         to: '/fms/invoices?record=1',
       },
+      // Approved claims and finalized payroll: money authorised and waiting
+      // for the Accountant to send it.
+      {
+        label: 'Approved reimbursements awaiting payment',
+        count: data.reimbursementsToPay,
+        to: '/fms/reimbursements',
+      },
+      {
+        label: 'Payroll awaiting disbursement',
+        count: data.payrollToDisburse,
+        to: '/fms/payroll',
+      },
     ].filter((i) => i.count > 0)
   }
 
@@ -88,6 +125,11 @@ export function waitingWork(
       { label: 'Drafts you have not submitted', count: data.draftsInProgress, to: '/fms/procurement' },
       { label: 'Vendors sent back', count: data.vendorsReturned, to: '/fms/vendors' },
       { label: 'Categories sent back', count: data.categoriesReturned, to: '/fms/categories' },
+      {
+        label: 'Reimbursements awaiting review',
+        count: data.reimbursementsToReview,
+        to: '/fms/reimbursements',
+      },
     ].filter((i) => i.count > 0)
   }
 
@@ -105,6 +147,10 @@ export function WaitingOnYou() {
   const { data: demand = [] } = useProcurementDemand()
   const { data: invoices = [] } = useSupplierInvoices()
   const { data: invoiceable = [] } = useInvoiceablePurchaseOrders()
+  const { data: claims = [] } = useReimbursements()
+  const { data: reimbursementPayments = [] } = useReimbursementPayments()
+  const { data: payrollBatches = [] } = usePayrollFinanceBatches()
+  const { data: payrollDisbursements = [] } = usePayrollDisbursements()
 
   const items = waitingWork(profile?.role, {
     vendorsPending: vendors.filter((v) => v.approval_status === 'pending_approval').length,
@@ -128,6 +174,23 @@ export function WaitingOnYou() {
     invoiceDrafts: invoices.filter((i) => i.status === 'draft').length,
     invoicesReturned: invoices.filter((i) => i.status === 'returned').length,
     ordersToInvoice: invoiceable.length,
+    // Every F7 count is derived from authoritative state, never stored.
+    reimbursementsToReview: claims.filter((c) => c.status === 'pending_validation').length,
+    reimbursementsToApprove: claims.filter((c) => c.status === 'pending_approval').length,
+    // Approved claims that still owe something — not a count of claims, and
+    // not a count of payments.
+    reimbursementsToPay: claims.filter(
+      (c) => c.status === 'approved' && Number(c.balance_due ?? 0) > 0,
+    ).length,
+    reimbursementPaymentsToApprove: reimbursementPayments.filter(
+      (p) => p.status === 'for_approval',
+    ).length,
+    payrollToDisburse: payrollBatches.filter(
+      (b) => Number(b.available_to_prepare ?? 0) > 0,
+    ).length,
+    payrollDisbursementsToApprove: payrollDisbursements.filter(
+      (d) => d.status === 'for_approval',
+    ).length,
   })
 
   if (items.length === 0) return null

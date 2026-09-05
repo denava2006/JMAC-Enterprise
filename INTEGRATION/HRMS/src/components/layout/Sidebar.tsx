@@ -92,6 +92,10 @@ const financeNav: NavItem[] = [
   { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
   { label: 'Settlements', to: '/fms/settlements', icon: ArrowDownLeft },
   { label: 'Supplier Invoices', to: '/fms/invoices', icon: FileBarChart },
+  // The other two things Finance pays out: an employee's own money back, and
+  // a finalized payroll. Grouped with the payables rather than scattered.
+  { label: 'Reimbursements', to: '/fms/reimbursements', icon: Receipt },
+  { label: 'Payroll Finance', to: '/fms/payroll', icon: Users },
   { label: 'Cash & Bank', to: '/fms/treasury', icon: Wallet },
   { label: 'Vendors', to: '/fms/vendors', icon: Store },
   { label: 'Categories', to: '/fms/categories', icon: Tags },
