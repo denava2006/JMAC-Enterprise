@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { businessTodayISODate } from '@/lib/dates'
 import { Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -409,12 +410,12 @@ function RecordPaymentDialog({
 }) {
   const transition = useTransitionPayment()
   const [reference, setReference] = React.useState('')
-  const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = React.useState(() => businessTodayISODate())
 
   React.useEffect(() => {
     if (!payment) return
     setReference('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(businessTodayISODate())
   }, [payment])
 
   if (!payment) return null

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { businessTodayISODate } from '@/lib/dates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -70,7 +71,7 @@ export function SupplierInvoiceBuilder({
     if (!open) return
     setPoId('')
     setNumber('')
-    setInvoiceDate(new Date().toISOString().slice(0, 10))
+    setInvoiceDate(businessTodayISODate())
     setDueDate('')
     setTax('0')
     setCharges('0')

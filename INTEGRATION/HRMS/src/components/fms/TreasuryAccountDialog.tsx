@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { businessTodayISODate } from '@/lib/dates'
 import {
   Dialog,
   DialogContent,
@@ -48,7 +49,7 @@ export function TreasuryAccountDialog({
   const [accountType, setAccountType] = React.useState<'cash' | 'bank'>('bank')
   const [branchId, setBranchId] = React.useState<string>(NONE)
   const [opening, setOpening] = React.useState('')
-  const [asOf, setAsOf] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [asOf, setAsOf] = React.useState(() => businessTodayISODate())
 
   React.useEffect(() => {
     if (!open) return
@@ -56,7 +57,7 @@ export function TreasuryAccountDialog({
     setAccountType('bank')
     setBranchId(NONE)
     setOpening('')
-    setAsOf(new Date().toISOString().slice(0, 10))
+    setAsOf(businessTodayISODate())
   }, [open])
 
   // A bank account belongs to the company; only a cash account can sit at a

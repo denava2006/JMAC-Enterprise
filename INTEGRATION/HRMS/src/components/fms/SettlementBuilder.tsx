@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { businessTodayISODate } from '@/lib/dates'
 import { Info } from 'lucide-react'
 import {
   Dialog,
@@ -75,7 +76,7 @@ export function SettlementBuilder({
   const [branchId, setBranchId] = React.useState<string>('')
   const [method, setMethod] = React.useState<string>('gcash')
   const [accountId, setAccountId] = React.useState<string>('')
-  const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = React.useState(() => businessTodayISODate())
   const [fee, setFee] = React.useState('')
   const [reference, setReference] = React.useState('')
   const [picked, setPicked] = React.useState<Set<string>>(new Set())
@@ -100,7 +101,7 @@ export function SettlementBuilder({
     setBranchId('')
     setMethod('gcash')
     setAccountId('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(businessTodayISODate())
     setFee('')
     setReference('')
     setPicked(new Set())

@@ -19,13 +19,22 @@ const state: {
   payments: Array<Record<string, unknown>>
 } = { role: 'accountant', invoice: {}, payments: [] }
 
+/** What the Record payment dialog actually sent. */
+const recorded: Array<Record<string, unknown>> = []
+
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { id: 'acc-1', role: state.role } }),
 }))
 
 vi.mock('@/hooks/useTreasury', () => ({
   useSupplierPayments: () => ({ data: state.payments, isLoading: false }),
-  useTransitionPayment: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useTransitionPayment: () => ({
+    mutate: vi.fn(),
+    mutateAsync: async (input: Record<string, unknown>) => {
+      recorded.push(input)
+    },
+    isPending: false,
+  }),
   useCreatePayment: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useTreasuryAccounts: () => ({
     data: [{ id: 'acc1', name: 'Main Bank Account', is_active: true, balance: 25000 }],
@@ -54,9 +63,89 @@ beforeEach(() => {
   state.role = 'accountant'
   state.invoice = invoice()
   state.payments = []
+  recorded.length = 0
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+describe('the date a completed payment is recorded on', () => {
+  function approved() {
+    return {
+      id: 'p9',
+      payment_no: 'PV-2026-0003',
+      supplier_invoice_id: 'inv1',
+      supplier_invoice_number: 'SI-93842',
+      invoice_no: 'AP-1',
+      vendor_name: 'Sahara Inc.',
+      treasury_account_id: 'acc1',
+      account_name: 'Main Bank Account',
+      amount: 1300,
+      method: 'bank_transfer',
+      payment_date: null,
+      reference: null,
+      notes: null,
+      status: 'approved',
+      prepared_by: 'acc-1',
+      prepared_by_name: 'Ana Cruz',
+      approved_by_name: 'Ben Reyes',
+      approved_at: '2026-09-04T16:00:00Z',
+      paid_by_name: null,
+      paid_at: null,
+      decision_reason: null,
+      created_at: '2026-09-04T15:00:00Z',
+    }
+  }
+
+  // The blocker, reproduced: 00:50 on 5 September in Manila is still
+  // 16:50 on the 4th in UTC. The dialog used to open showing the 4th.
+  it('opens on the Manila business day, not the UTC one', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-04T16:50:00Z'))
+    state.invoice = invoice({ balance_due: 1300, available_to_prepare: 0, pending_payment_amount: 1300 })
+    state.payments = [approved()]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }))
+    expect((screen.getByLabelText('Payment date') as HTMLInputElement).value).toBe('2026-09-05')
+  })
+
+  it('sends that calendar date through untouched, with no instant in between', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-04T16:50:00Z'))
+    state.invoice = invoice({ balance_due: 1300, available_to_prepare: 0, pending_payment_amount: 1300 })
+    state.payments = [approved()]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }))
+    fireEvent.change(screen.getByLabelText('Payment reference'), {
+      target: { value: 'CODEX-F6-PAY-20260905-0250' },
+    })
+    vi.useRealTimers()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Record payment' }).at(-1)!)
+    await screen.findByText('Payments')
+
+    expect(recorded).toHaveLength(1)
+    expect(recorded[0].paymentDate).toBe('2026-09-05')
+    expect(recorded[0].reference).toBe('CODEX-F6-PAY-20260905-0250')
+  })
+
+  it('sends whatever day the Accountant picks instead, unchanged', async () => {
+    state.invoice = invoice({ balance_due: 1300, available_to_prepare: 0, pending_payment_amount: 1300 })
+    state.payments = [approved()]
+    render(<InvoicePayments invoice={state.invoice as never} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }))
+    fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2026-01-01' } })
+    fireEvent.change(screen.getByLabelText('Payment reference'), { target: { value: 'REF-1' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Record payment' }).at(-1)!)
+    await screen.findByText('Payments')
+
+    expect(recorded[0].paymentDate).toBe('2026-01-01')
+  })
+})
 
 describe('the four figures an invoice carries', () => {
   it('shows owed and claimed as separate numbers', () => {

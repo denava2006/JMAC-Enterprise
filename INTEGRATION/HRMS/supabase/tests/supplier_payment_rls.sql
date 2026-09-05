@@ -80,7 +80,7 @@ declare
   pay1 uuid; pay2 uuid; pay3 uuid;
   ceiling numeric; reserved numeric; spent numeric; available numeric;
   total numeric; paid numeric; balance numeric; bal numeric;
-  state text; n integer; txt text;
+  state text; n integer; txt text; sale_day date;
   stock_before integer; stock_after integer;
   tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
@@ -607,6 +607,103 @@ begin
     from public.budget_status bs where bs.id = budget;
   if spent <> 1950 then raise exception 'FAIL 6d spent is %, expected 1950', spent; end if;
   raise notice 'PASS  6d spent totals every completed payment against the budget';
+
+  -- ======================================================================
+  -- 6b. The day a payment claims to have happened on
+  -- ======================================================================
+  --
+  -- Acceptance recorded a payment at 00:50 Manila on 5 September and the
+  -- database stored the 4th, on the payment and on its movement. The cause was
+  -- in the browser -- toISOString() takes the UTC day -- and the database
+  -- shifted nothing. These pin that: whatever date arrives is the date stored,
+  -- in both places and in the audit trail.
+  -- Its own payable: everything above is settled by now.
+  perform pg_temp.acts_as(pos_mgr); set local role authenticated;
+  select public.create_pos_stock_request(branch_a, product, 4, 'ZZ date case') into req_b;
+  reset role;
+  perform pg_temp.acts_as(fin_staff); set local role authenticated;
+  perform public.approve_pos_request(req_b, 'Accepted');
+  select public.create_purchase_order_from_source(
+    'pos_restock', req_b, vendor, null, null, 4, 65.00, null, true, budget) into po_b;
+  reset role;
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+  perform public.transition_purchase_order(po_b, 'approved');
+  reset role;
+  select id into line_a from public.purchase_order_items where purchase_order_id = po_b;
+  perform pg_temp.acts_as(pos_mgr); set local role authenticated;
+  perform public.receive_procurement_stock(line_a, 4, 'ZZ-DR3-' || tag, gen_random_uuid());
+  reset role;
+  perform pg_temp.acts_as(accountant2); set local role authenticated;
+  select public.create_supplier_invoice(
+    po_b, 'SI3-' || tag, current_date, current_date + 30,
+    jsonb_build_array(jsonb_build_object(
+      'purchase_order_item_id', line_a, 'quantity', 4, 'unit_price', 65.00)),
+    0, 0, null, 'ZZ date case') into invoice;
+  perform public.transition_supplier_invoice(invoice, 'for_review');
+  reset role;
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+  perform public.transition_supplier_invoice(invoice, 'approved');
+  reset role;
+
+  select v.balance_due into balance from public.supplier_invoice_status v where v.id = invoice;
+  if balance <> 260 then raise exception 'FAIL 6e fixture: balance is %, expected 260', balance; end if;
+
+  -- 200 of the 260, so 60 is left for the undated case below.
+  perform pg_temp.acts_as(accountant2); set local role authenticated;
+  select public.create_supplier_payment(invoice, bank, 200, 'bank_transfer', 'ZZ dated', true)
+    into pay1;
+  reset role;
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+  perform public.transition_supplier_payment(pay1, 'approved', null, null, null);
+  reset role;
+
+  perform pg_temp.acts_as(accountant); set local role authenticated;
+  perform public.transition_supplier_payment(
+    pay1, 'paid', null, 'DATED-' || tag, date '2026-09-05');
+  reset role;
+
+  select payment_date into sale_day from public.supplier_payments where id = pay1;
+  if sale_day <> date '2026-09-05' then
+    raise exception 'FAIL 6e the payment stored %, expected 2026-09-05', sale_day;
+  end if;
+  raise notice 'PASS  6e the payment keeps the exact calendar date it was given';
+
+  select occurred_on into sale_day from public.treasury_movements
+   where source_type = 'supplier_payment' and source_id = pay1;
+  if sale_day <> date '2026-09-05' then
+    raise exception 'FAIL 6f the movement is dated %, expected 2026-09-05', sale_day;
+  end if;
+  raise notice 'PASS  6f the treasury movement carries the same day, not the server''s';
+
+  select (new_data->>'payment_date')::date into sale_day from public.audit_logs
+   where table_name = 'supplier_payments' and record_id = pay1
+     and action = 'Supplier payment paid'
+   order by created_at desc limit 1;
+  if sale_day <> date '2026-09-05' then
+    raise exception 'FAIL 6g the audit entry says %, expected 2026-09-05', sale_day;
+  end if;
+  raise notice 'PASS  6g and so does the audit entry';
+
+  -- No silent fallback. current_date in this session is UTC, and guessing with
+  -- it is how the wrong day would come back.
+  perform pg_temp.acts_as(accountant2); set local role authenticated;
+  select public.create_supplier_payment(invoice, bank, 60, 'bank_transfer', 'ZZ undated', true)
+    into pay2;
+  reset role;
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+  perform public.transition_supplier_payment(pay2, 'approved', null, null, null);
+  reset role;
+  perform pg_temp.acts_as(accountant); set local role authenticated;
+  begin
+    perform public.transition_supplier_payment(pay2, 'paid', null, 'UNDATED-' || tag, null);
+    raise exception 'FAIL 6h a completed payment was recorded with no date';
+  exception when check_violation then
+    if sqlerrm <> 'Record the date this payment was made.' then
+      raise exception 'FAIL 6h wrong refusal: %', sqlerrm;
+    end if;
+    raise notice 'PASS  6h recording a payment requires stating the day it was made';
+  end;
+  reset role;
 
   -- ======================================================================
   -- 7. Who may look
