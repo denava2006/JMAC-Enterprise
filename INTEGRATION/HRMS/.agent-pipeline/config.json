@@ -11,7 +11,7 @@
       "--output-format",
       "text",
       "--permission-mode",
-      "acceptEdits",
+      "auto",
       "Follow the complete JMAC pipeline task provided on stdin. Execute only the authorized scope and end with the required PIPELINE_* contract."
     ]
   },
