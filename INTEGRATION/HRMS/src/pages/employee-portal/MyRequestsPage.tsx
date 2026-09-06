@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Plus, ReceiptText } from 'lucide-react'
 import { DataTable } from '@/components/data-table'
@@ -27,6 +26,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { reportInvalid } from '@/lib/formFeedback'
+import {
+  REQUEST_FIELD_LABELS,
+  newRequestSchema,
+  type NewRequestValues,
+} from '@/lib/requestForm'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import {
@@ -43,22 +47,10 @@ import {
   type FinanceRequestRow,
 } from '@/hooks/useFinanceRequests'
 
-const schema = z
-  .object({
-    type: z.enum(['purchase', 'reimbursement']),
-    title: z.string().min(1, 'Say what this is for').max(150),
-    description: z.string().max(1000).optional(),
-    justification: z.string().max(1000).optional(),
-    amount: z.number({ error: 'Enter an amount' }).positive('An amount must be more than zero'),
-    needed_by: z.string().optional(),
-    expense_date: z.string().optional(),
-    priority: z.enum(['low', 'medium', 'high']),
-  })
-  .refine((v) => v.type === 'reimbursement' || !v.expense_date, {
-    message: 'Only a reimbursement has a date the money was already spent',
-    path: ['expense_date'],
-  })
-type FormValues = z.infer<typeof schema>
+// The schema moved to lib/requestForm so that editing a draft refuses exactly
+// what raising one refuses. Two copies would eventually let a request be created
+// in a shape it could not then be edited into, or the reverse.
+type FormValues = NewRequestValues
 
 function NewRequestDialog({
   open,
@@ -72,7 +64,7 @@ function NewRequestDialog({
   const submitNow = useCreateAndSubmitRequest()
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(newRequestSchema),
     defaultValues: {
       type: 'purchase',
       title: '',
@@ -86,8 +78,6 @@ function NewRequestDialog({
   })
 
   const type = form.watch('type')
-
-  const labels = { title: 'What this is for', expense_date: 'Date spent', needed_by: 'Needed by' }
 
   function toRow(values: FormValues) {
     return {
@@ -111,14 +101,14 @@ function NewRequestDialog({
     await saveDraft.mutateAsync(toRow(values))
     form.reset()
     onOpenChange(false)
-  }, reportInvalid(labels))
+  }, reportInvalid(REQUEST_FIELD_LABELS))
 
   const onSubmitNow = form.handleSubmit(async (values) => {
     if (!profile?.id) return
     await submitNow.mutateAsync(toRow(values))
     form.reset()
     onOpenChange(false)
-  }, reportInvalid(labels))
+  }, reportInvalid(REQUEST_FIELD_LABELS))
 
   const busy = saveDraft.isPending || submitNow.isPending
 

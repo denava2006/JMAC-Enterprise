@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { businessTodayISODate, toISODate, todayISODate } from '@/lib/dates'
+import {
+  businessTodayISODate,
+  formatCalendarDate,
+  toISODate,
+  todayISODate,
+} from '@/lib/dates'
 
 /**
  * The bug this file exists for.
@@ -80,6 +85,56 @@ describe('the shape a date-only value travels in', () => {
     const value = businessTodayISODate()
     expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(value).toBe('2026-01-06')
+  })
+})
+
+/**
+ * Reading a stored calendar date back out.
+ *
+ * F7 acceptance found a reimbursement's expense_date shown nowhere, so this
+ * arrived with the field that displays it. The hazard is the mirror image of the
+ * one above: the write side must not convert to UTC on the way out, and the read
+ * side must not convert on the way in. `new Date('2026-09-07')` is parsed as UTC
+ * midnight, which renders as the 6th for every reader west of Greenwich.
+ *
+ * Worth being straight about what these can and cannot prove here. Any runner at
+ * a non-negative UTC offset — this one is +08 — renders both implementations
+ * identically, so a literal expected string would pass whichever were in place.
+ * The invariant below does not have that problem: it says the output must equal
+ * the same calendar fields formatted locally, which is false for the UTC-parsing
+ * version wherever the offset is negative, and true for the correct one
+ * everywhere.
+ */
+describe('a stored calendar date, written out for a reader', () => {
+  const en = { year: 'numeric', month: 'short', day: 'numeric' } as const
+
+  it('renders the day that is in the column, not the day UTC lands on', () => {
+    // Month is zero-based, so 8 is September. Constructed from the fields
+    // rather than parsed from a string, which is the whole point.
+    expect(formatCalendarDate('2026-09-07')).toBe(
+      new Date(2026, 8, 7).toLocaleDateString('en-PH', en),
+    )
+  })
+
+  it('holds at the boundaries a UTC conversion would push across', () => {
+    for (const [iso, y, m, d] of [
+      ['2026-01-01', 2026, 0, 1],
+      ['2026-12-31', 2026, 11, 31],
+      ['2028-02-29', 2028, 1, 29],
+      ['2026-09-07', 2026, 8, 7],
+    ] as const) {
+      expect(formatCalendarDate(iso), iso).toBe(
+        new Date(y, m, d).toLocaleDateString('en-PH', en),
+      )
+    }
+  })
+
+  it('has nothing to say about a date that is not there', () => {
+    expect(formatCalendarDate(null)).toBeNull()
+    expect(formatCalendarDate(undefined)).toBeNull()
+    expect(formatCalendarDate('')).toBeNull()
+    // A field arriving as rubbish should read as blank, not as "Invalid Date".
+    expect(formatCalendarDate('not-a-date')).toBeNull()
   })
 })
 

@@ -53,3 +53,22 @@ export function businessTodayISODate(): string {
     day: '2-digit',
   }).format(new Date())
 }
+
+/**
+ * A stored calendar date, written out for a reader.
+ *
+ * `new Date('2026-09-07')` parses as UTC midnight, which in Manila is 8am on
+ * the 7th — fine — but for anyone west of Greenwich it renders as the 6th. The
+ * date in the column is a calendar date with no instant attached, so the fix is
+ * to stop it becoming one: appending T00:00:00 with no Z makes it local
+ * midnight, and the day survives the trip to the screen wherever the reader is.
+ *
+ * The same one-liner is inlined in a dozen places across the portal already.
+ * New callers get it from here.
+ */
+export function formatCalendarDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const date = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}

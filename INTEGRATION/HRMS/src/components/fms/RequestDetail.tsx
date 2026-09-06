@@ -25,11 +25,14 @@ import {
   REQUEST_TYPE_LABEL,
   STATUS_TONE,
   actionsFor,
+  canEditDraft,
   statusLabel,
   type RequestAction,
   type RequestStatus,
   type RequestType,
 } from '@/lib/financeRequests'
+import { formatCalendarDate } from '@/lib/dates'
+import { EditRequestDialog } from '@/components/fms/EditRequestDialog'
 import {
   useFinanceRequest,
   useRequestParticipants,
@@ -277,13 +280,22 @@ export function RequestDetail({
 
   const [pending, setPending] = React.useState<RequestAction | null>(null)
   const [remarks, setRemarks] = React.useState('')
+  const [editing, setEditing] = React.useState(false)
 
   React.useEffect(() => {
     if (!requestId) {
       setPending(null)
       setRemarks('')
+      setEditing(false)
     }
   }, [requestId])
+
+  const editable =
+    !!request &&
+    canEditDraft(
+      { status: request.status as RequestStatus, requester_id: request.requester_id },
+      profile?.id,
+    )
 
   const actions = request
     ? actionsFor(
@@ -365,7 +377,16 @@ export function RequestDetail({
                 <Field label="Budget" value={request.budgets?.name} />
                 <Field label="Category" value={request.finance_categories?.name} />
                 <Field label="Vendor" value={request.vendors?.name} />
-                <Field label="Needed by" value={request.needed_by} />
+                {/* A reimbursement is for money already spent, so the date it
+                    was spent is the fact that dates the claim. It was stored
+                    from the first draft and shown nowhere, which left the
+                    reviewer approving an expense whose date they could not
+                    see. Purchases keep Needed by; neither type has both. */}
+                {(request.type as RequestType) === 'reimbursement' ? (
+                  <Field label="Date spent" value={formatCalendarDate(request.expense_date)} />
+                ) : (
+                  <Field label="Needed by" value={formatCalendarDate(request.needed_by)} />
+                )}
                 <Field label="Priority" value={request.priority} />
               </div>
 
@@ -427,7 +448,7 @@ export function RequestDetail({
                 request.requester_id !== profile?.id && <ClassificationPanel request={request} />}
 
               {/* What this person may do next. */}
-              {actions.length > 0 && (
+              {(actions.length > 0 || editable) && (
                 <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
                   {pending?.requiresRemarks && (
                     <div className="flex flex-col gap-1.5">
@@ -465,7 +486,16 @@ export function RequestDetail({
                         </Button>
                       </>
                     ) : (
-                      actions.map((action) => {
+                      <>
+                        {/* Correcting comes before sending, so it reads first
+                            and stays quiet: Submit is still the primary act on
+                            a draft. */}
+                        {editable && (
+                          <Button variant="outline" onClick={() => setEditing(true)}>
+                            Edit
+                          </Button>
+                        )}
+                        {actions.map((action) => {
                         // Only the forward move is blocked. Returning or
                         // rejecting an unclassified request is exactly what
                         // somebody should be able to do with one.
@@ -487,12 +517,17 @@ export function RequestDetail({
                             {action.label}
                           </Button>
                         )
-                      })
+                        })}
+                      </>
                     )}
                   </div>
                 </div>
               )}
             </div>
+
+            {editable && (
+              <EditRequestDialog request={request} open={editing} onOpenChange={setEditing} />
+            )}
           </>
         )}
       </DialogContent>

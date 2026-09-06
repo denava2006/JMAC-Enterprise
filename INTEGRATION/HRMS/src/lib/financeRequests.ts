@@ -150,6 +150,46 @@ export function actionsFor(
   return []
 }
 
+/**
+ * Whether this person may still correct this request themselves.
+ *
+ * Draft only, which is narrower than the amend policy that has covered draft
+ * and returned since F3. Those are different acts: correcting something nobody
+ * has read yet, and answering a reviewer who sent it back with remarks. The
+ * second wants the remarks in front of it and a Resubmit at the end, so it gets
+ * its own treatment when it is built rather than being quietly absorbed here.
+ *
+ * Not authorization. update_finance_request_draft decides that, and decides it
+ * again for anyone who never loads this page. This is what to offer, so that a
+ * button is never shown that is about to come back refused.
+ */
+export function canEditDraft(
+  request: { status: RequestStatus; requester_id: string },
+  viewerId: string | null | undefined,
+): boolean {
+  return !!viewerId && request.requester_id === viewerId && request.status === 'draft'
+}
+
+/**
+ * What went wrong, in the database's own words.
+ *
+ * Everything update_finance_request_draft raises is already a sentence written
+ * for the person reading it -- who owns the request, what state it is in, which
+ * field is wrong. The generic finance mapper would replace the 42501 ones with
+ * "Your finance role does not cover that action", which is both unhelpful and
+ * untrue: an employee correcting their own claim has no finance role at all.
+ * Only a genuine row-level-security refusal, which nobody wrote for a reader,
+ * gets a sentence of ours.
+ */
+export function describeRequestEditError(error: unknown): string {
+  const err = error as { message?: string } | null
+  const message = err?.message?.trim() ?? ''
+  if (!message || message.includes('row-level security')) {
+    return 'That change could not be saved.'
+  }
+  return message
+}
+
 /** The queue a finance role is responsible for clearing. */
 export function inboxStatusFor(role: UserRole | null | undefined): RequestStatus | null {
   if (role === 'finance_staff') return 'pending_validation'

@@ -7167,6 +7167,49 @@ export type Database = {
         Args: { _account_id: string }
         Returns: number
       }
+      update_finance_request_draft: {
+        Args: {
+          _amount: number
+          _description?: string
+          _expected_updated_at?: string
+          _expense_date?: string
+          _justification?: string
+          _needed_by?: string
+          _priority: string
+          _request_id: string
+          _title: string
+        }
+        Returns: {
+          amount: number
+          budget_id: string | null
+          created_at: string
+          delivery_branch_id: string | null
+          department_id: string | null
+          description: string | null
+          expense_date: string | null
+          finance_category_id: string | null
+          id: string
+          justification: string | null
+          needed_by: string | null
+          paid_at: string | null
+          paid_from_account_id: string | null
+          payment_reference: string | null
+          priority: string
+          request_no: string | null
+          requester_id: string
+          status: string
+          title: string
+          type: string
+          updated_at: string
+          vendor_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "finance_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_pos_product_details: {
         Args: { _category_id: string; _name: string; _product_id: string }
         Returns: undefined

@@ -12,7 +12,15 @@
  * supabase/tests/finance_requests_rls.sql proves the same table server-side.
  */
 import { describe, it, expect } from 'vitest'
-import { actionsFor, inboxStatusFor, isEditable, isOpen, statusLabel } from './financeRequests'
+import {
+  actionsFor,
+  canEditDraft,
+  describeRequestEditError,
+  inboxStatusFor,
+  isEditable,
+  isOpen,
+  statusLabel,
+} from './financeRequests'
 import type { RequestStatus } from './financeRequests'
 
 const ME = 'me'
@@ -188,6 +196,66 @@ describe('editability and openness', () => {
     expect(isOpen('rejected')).toBe(false)
     expect(isOpen('cancelled')).toBe(false)
     expect(isOpen('completed')).toBe(false)
+  })
+})
+
+/**
+ * Acceptance found a Draft reimbursement with Submit, Cancel and Close and no
+ * way to correct a wrong amount, so the only route to a right claim was to
+ * cancel and retype it. canEditDraft is what decides whether the Edit button is
+ * there; update_finance_request_draft is what decides whether it works, and
+ * supabase/tests/reimbursement_draft_edit_rls.sql proves that half.
+ */
+describe('correcting a draft', () => {
+  it('is offered to the person who raised it, while it is still a draft', () => {
+    expect(canEditDraft(req('draft', ME), ME)).toBe(true)
+  })
+
+  it('is not offered to anybody else, whatever they hold', () => {
+    expect(canEditDraft(req('draft', SOMEONE_ELSE), ME)).toBe(false)
+  })
+
+  it('is not offered once it has been submitted', () => {
+    // Including returned, which is editable by the older amend policy but is a
+    // different act: it answers a reviewer's remarks and ends in Resubmit.
+    for (const status of [
+      'pending_validation',
+      'pending_approval',
+      'approved',
+      'completed',
+      'returned',
+      'rejected',
+      'cancelled',
+    ] as const) {
+      expect(canEditDraft(req(status, ME), ME), status).toBe(false)
+    }
+  })
+
+  it('is not offered to a signed-out viewer', () => {
+    expect(canEditDraft(req('draft', ME), null)).toBe(false)
+    expect(canEditDraft(req('draft', ME), undefined)).toBe(false)
+  })
+})
+
+describe('what the server said went wrong', () => {
+  it('passes a written refusal through rather than replacing it', () => {
+    // These arrive as 42501, which the generic finance mapper turns into "Your
+    // finance role does not cover that action" — untrue of an employee with no
+    // finance role at all, and useless next to the sentence the database wrote.
+    expect(describeRequestEditError({ message: 'Only the person who raised a request can edit it.' }))
+      .toBe('Only the person who raised a request can edit it.')
+    expect(describeRequestEditError({ message: 'An amount must be more than zero.' }))
+      .toBe('An amount must be more than zero.')
+  })
+
+  it('substitutes its own sentence when nobody wrote one for a reader', () => {
+    expect(
+      describeRequestEditError({
+        message: 'new row violates row-level security policy for table "finance_requests"',
+      }),
+    ).toBe('That change could not be saved.')
+    expect(describeRequestEditError({})).toBe('That change could not be saved.')
+    expect(describeRequestEditError(null)).toBe('That change could not be saved.')
   })
 })
 

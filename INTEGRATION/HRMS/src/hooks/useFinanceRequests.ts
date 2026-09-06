@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { toast } from '@/components/ui/sonner'
 import { describeFinanceError } from './useFinanceMasterData'
-import type { RequestStatus } from '@/lib/financeRequests'
+import { describeRequestEditError, type RequestStatus } from '@/lib/financeRequests'
 
 export type FinanceRequest = Tables<'finance_requests'>
 export type RequestApproval = Tables<'finance_request_approvals'>
@@ -212,6 +212,62 @@ export function useUpdateFinanceRequest() {
     },
     'Request updated.',
   )
+}
+
+export interface DraftEditInput {
+  requestId: string
+  title: string
+  amount: number
+  priority: 'low' | 'medium' | 'high'
+  description?: string | null
+  justification?: string | null
+  expenseDate?: string | null
+  neededBy?: string | null
+  /** The updated_at the form was rendered from. The server refuses the write if
+   *  the row has moved on since, so a stale tab cannot overwrite a newer save. */
+  expectedUpdatedAt?: string | null
+}
+
+/**
+ * Correct one's own draft.
+ *
+ * A function rather than a PATCH, and that is the point. The amend policy scopes
+ * who and when but not which columns, so a direct update of a draft can still
+ * reach budget_id — the field deciding which ceiling the money comes out of.
+ * update_finance_request_draft has no parameter for it, checks the caller owns
+ * the request and that it is still a draft, and validates every field before it
+ * writes. The button below is a convenience; this is the rule.
+ */
+export function useUpdateRequestDraft() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: DraftEditInput) => {
+      const { error } = await supabase.rpc('update_finance_request_draft', {
+        _request_id: input.requestId,
+        _title: input.title,
+        _amount: input.amount,
+        _priority: input.priority,
+        // Omitted rather than null: PostgREST falls back to the parameter's SQL
+        // default, which is null, so clearing a field and never setting one
+        // reach the database as the same thing.
+        _description: input.description ?? undefined,
+        _justification: input.justification ?? undefined,
+        _expense_date: input.expenseDate || undefined,
+        _needed_by: input.neededBy || undefined,
+        _expected_updated_at: input.expectedUpdatedAt ?? undefined,
+      })
+      if (error) throw error
+    },
+    onSuccess: (_data, input) => {
+      queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.all })
+      // The detail dialog stays open on the request that was just edited, so
+      // its own cache entry has to be refreshed too — invalidating the list
+      // alone leaves the open dialog showing what was there before.
+      queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.one(input.requestId) })
+      toast.success('Draft updated.')
+    },
+    onError: (error) => toast.error(describeRequestEditError(error)),
+  })
 }
 
 export interface TransitionInput {
