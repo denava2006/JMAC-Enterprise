@@ -6,11 +6,18 @@
   "requireCleanWorkingTreeBeforeStart": true,
   "claude": {
     "command": "claude",
-    "args": ["-p", "--output-format", "text", "--permission-mode", "acceptEdits"]
+    "args": [
+      "-p",
+      "--output-format",
+      "text",
+      "--permission-mode",
+      "acceptEdits",
+      "Follow the complete JMAC pipeline task provided on stdin. Execute only the authorized scope and end with the required PIPELINE_* contract."
+    ]
   },
   "codex": {
     "command": "codex",
-    "args": ["exec", "-", "--sandbox", "read-only"]
+    "args": ["exec", "--sandbox", "read-only", "-"]
   },
   "riskPolicies": {
     "LOCAL_ONLY": {
