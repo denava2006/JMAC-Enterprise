@@ -15,12 +15,15 @@ const iso = () => new Date().toISOString()
 const WINDOWS = process.platform === 'win32'
 
 // npm-installed CLIs such as claude and codex are commonly exposed on Windows
-// as .cmd shims. Node cannot execute those shims with shell:false, which shows
-// up as spawn status=null / ENOENT even though the same command works in
-// PowerShell. Use the platform shell only for launching these fixed CLI commands.
-// Prompts are still sent through stdin, not interpolated into the command line.
-function shellForPlatform() {
-  return WINDOWS
+// as .cmd shims. Execute only those fixed CLI names through cmd.exe. Native
+// executables (Node and Git) stay on shell:false so paths containing spaces,
+// such as C:\Program Files\nodejs\node.exe, are passed safely and exactly.
+function windowsShimInvocation(command, args) {
+  if (!WINDOWS) return { command, args }
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', command, ...args],
+  }
 }
 
 async function readText(file) {
@@ -99,10 +102,11 @@ function policyText(config, risk) {
   ].join('\n')
 }
 
-async function commandExists(command) {
-  const result = spawnSync(command, ['--version'], {
+function commandExists(command, { windowsShim = false } = {}) {
+  const invocation = windowsShim ? windowsShimInvocation(command, ['--version']) : { command, args: ['--version'] }
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
-    shell: shellForPlatform(),
+    shell: false,
     windowsHide: true,
   })
   const errorDetail = result.error ? `${result.error.code || result.error.name}: ${result.error.message}` : ''
@@ -121,9 +125,10 @@ async function gitStatus(projectRoot) {
 async function runAgent({ name, command, args, prompt, cwd, reportFile, logFile }) {
   return new Promise((resolve) => {
     let settled = false
-    const child = spawn(command, args, {
+    const invocation = WINDOWS ? windowsShimInvocation(command, args) : { command, args }
+    const child = spawn(invocation.command, invocation.args, {
       cwd,
-      shell: shellForPlatform(),
+      shell: false,
       windowsHide: false,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -237,16 +242,16 @@ async function doctor() {
   const config = await loadConfig()
   const projectRoot = path.resolve(HERE, config.projectRoot)
   const checks = [
-    ['node', process.execPath],
-    ['git', 'git'],
-    ['claude', config.claude.command],
-    ['codex', config.codex.command],
+    ['node', process.execPath, false],
+    ['git', 'git', false],
+    ['claude', config.claude.command, true],
+    ['codex', config.codex.command, true],
   ]
 
   console.log(`Project root: ${projectRoot}`)
   let failed = false
-  for (const [label, command] of checks) {
-    const result = await commandExists(command)
+  for (const [label, command, windowsShim] of checks) {
+    const result = commandExists(command, { windowsShim })
     console.log(`${result.ok ? 'PASS' : 'FAIL'} ${label}: ${result.detail}`)
     if (!result.ok) failed = true
   }
