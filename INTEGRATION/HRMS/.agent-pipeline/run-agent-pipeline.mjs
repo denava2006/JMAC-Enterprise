@@ -12,6 +12,16 @@ const TASKS_DIR = path.join(HERE, 'tasks')
 const PROMPTS_DIR = path.join(HERE, 'prompts')
 
 const iso = () => new Date().toISOString()
+const WINDOWS = process.platform === 'win32'
+
+// npm-installed CLIs such as claude and codex are commonly exposed on Windows
+// as .cmd shims. Node cannot execute those shims with shell:false, which shows
+// up as spawn status=null / ENOENT even though the same command works in
+// PowerShell. Use the platform shell only for launching these fixed CLI commands.
+// Prompts are still sent through stdin, not interpolated into the command line.
+function shellForPlatform() {
+  return WINDOWS
+}
 
 async function readText(file) {
   return fs.readFile(file, 'utf8')
@@ -90,10 +100,15 @@ function policyText(config, risk) {
 }
 
 async function commandExists(command) {
-  const result = spawnSync(command, ['--version'], { encoding: 'utf8', shell: false })
+  const result = spawnSync(command, ['--version'], {
+    encoding: 'utf8',
+    shell: shellForPlatform(),
+    windowsHide: true,
+  })
+  const errorDetail = result.error ? `${result.error.code || result.error.name}: ${result.error.message}` : ''
   return {
     ok: result.status === 0,
-    detail: (result.stdout || result.stderr || '').trim().split(/\r?\n/)[0] || `exit ${result.status}`,
+    detail: (result.stdout || result.stderr || errorDetail).trim().split(/\r?\n/)[0] || `exit ${result.status}`,
   }
 }
 
@@ -105,9 +120,10 @@ async function gitStatus(projectRoot) {
 
 async function runAgent({ name, command, args, prompt, cwd, reportFile, logFile }) {
   return new Promise((resolve) => {
+    let settled = false
     const child = spawn(command, args, {
       cwd,
-      shell: false,
+      shell: shellForPlatform(),
       windowsHide: false,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -129,6 +145,8 @@ async function runAgent({ name, command, args, prompt, cwd, reportFile, logFile 
     })
 
     child.on('error', async (error) => {
+      if (settled) return
+      settled = true
       const synthetic = `# ${name} launch failure\n\n${error.stack || error.message}\n\nPIPELINE_VERDICT: FAIL\nPIPELINE_SEVERITY: BLOCKER\nPIPELINE_SUMMARY: ${name} could not be launched.\n`
       await fs.writeFile(reportFile, synthetic)
       await fs.writeFile(logFile, synthetic)
@@ -136,6 +154,8 @@ async function runAgent({ name, command, args, prompt, cwd, reportFile, logFile 
     })
 
     child.on('close', async (code) => {
+      if (settled) return
+      settled = true
       const report = stdout.trim() || `# ${name} returned no stdout\n\nPIPELINE_VERDICT: FAIL\nPIPELINE_SEVERITY: HIGH\nPIPELINE_SUMMARY: ${name} returned no report on stdout.\n`
       const log = [`# ${name} run`, `exit=${code}`, '', '## STDOUT', stdout, '', '## STDERR', stderr].join('\n')
       await fs.writeFile(reportFile, `${report.trim()}\n`)
@@ -143,6 +163,10 @@ async function runAgent({ name, command, args, prompt, cwd, reportFile, logFile 
       resolve({ code, stdout: report, stderr })
     })
 
+    child.stdin.on('error', () => {
+      // If a CLI exits before consuming stdin, close/error handling above owns
+      // the report. Avoid turning EPIPE into an unhandled process exception.
+    })
     child.stdin.write(prompt)
     child.stdin.end()
   })
@@ -213,10 +237,10 @@ async function doctor() {
   const config = await loadConfig()
   const projectRoot = path.resolve(HERE, config.projectRoot)
   const checks = [
-    ['node', process.execPath, ['--version']],
-    ['git', 'git', ['--version']],
-    ['claude', config.claude.command, ['--version']],
-    ['codex', config.codex.command, ['--version']],
+    ['node', process.execPath],
+    ['git', 'git'],
+    ['claude', config.claude.command],
+    ['codex', config.codex.command],
   ]
 
   console.log(`Project root: ${projectRoot}`)
@@ -262,94 +286,74 @@ async function runPipeline({ qaFirst = false }) {
     lastSummary: null,
   })
 
-  let latestClaudeReport = ''
-  let latestCodexReport = ''
-
-  if (qaFirst) {
-    console.log('\n=== QA-FIRST: CODEX ===\n')
-    const qa = await runCodex(config, projectRoot, 0, codexTask, '')
-    latestCodexReport = qa.stdout
-    if (qa.verdict === 'PASS') {
-      await saveState({ status: 'passed', iteration: 0 })
-      console.log('\nPIPELINE COMPLETE: Codex PASS\n')
-      return
-    }
-    if (qa.verdict === 'HUMAN_GATE') {
-      await saveState({ status: 'human_gate', iteration: 0 })
-      console.log('\nPIPELINE PAUSED: human approval required.\n')
-      return
-    }
-  }
+  let codexFindings = ''
 
   for (let iteration = 1; iteration <= config.maxIterations; iteration += 1) {
     await saveState({ iteration })
-    console.log(`\n=== ITERATION ${iteration}/${config.maxIterations}: CLAUDE ===\n`)
 
-    const builder = await runClaude(config, projectRoot, iteration, claudeTask, latestCodexReport)
-    latestClaudeReport = builder.stdout
+    if (!qaFirst || iteration > 1) {
+      console.log(`\n=== Claude iteration ${iteration} ===\n`)
+      const claude = await runClaude(config, projectRoot, iteration, claudeTask, codexFindings)
+      if (claude.verdict === 'HUMAN_GATE') {
+        await saveState({ status: 'human_gate' })
+        console.log('\nPipeline stopped at Claude human gate.')
+        return
+      }
+      if (claude.verdict !== 'PASS') {
+        await saveState({ status: 'failed' })
+        console.log('\nPipeline stopped because Claude did not return PASS.')
+        return
+      }
+    }
 
-    if (builder.verdict === 'HUMAN_GATE') {
+    const claudeReportPath = path.join(REPORTS_DIR, 'claude-report.md')
+    const claudeReport = (await exists(claudeReportPath)) ? await readText(claudeReportPath) : ''
+
+    console.log(`\n=== Codex QA iteration ${iteration} ===\n`)
+    const codex = await runCodex(config, projectRoot, iteration, codexTask, claudeReport)
+
+    if (codex.verdict === 'PASS') {
+      await saveState({ status: 'passed', finishedAt: iso() })
+      console.log('\nPipeline PASS.')
+      return
+    }
+    if (codex.verdict === 'HUMAN_GATE') {
       await saveState({ status: 'human_gate' })
-      console.log('\nPIPELINE PAUSED: Claude reached a human gate.\n')
-      return
-    }
-    if (builder.verdict !== 'PASS') {
-      await saveState({ status: 'builder_failed' })
-      console.log('\nPIPELINE STOPPED: Claude did not produce PASS.\n')
+      console.log('\nPipeline stopped at Codex human gate.')
       return
     }
 
-    console.log(`\n=== ITERATION ${iteration}/${config.maxIterations}: CODEX ===\n`)
-    const qa = await runCodex(config, projectRoot, iteration, codexTask, latestClaudeReport)
-    latestCodexReport = qa.stdout
-
-    if (qa.verdict === 'PASS') {
-      await saveState({ status: 'passed' })
-      console.log('\nPIPELINE COMPLETE: Codex PASS\n')
-      return
-    }
-    if (qa.verdict === 'HUMAN_GATE') {
-      await saveState({ status: 'human_gate' })
-      console.log('\nPIPELINE PAUSED: Codex reached a human gate.\n')
-      return
-    }
-
-    console.log('\nCodex returned FAIL. Findings will be passed to Claude on the next iteration.\n')
+    codexFindings = codex.stdout
+    qaFirst = false
+    console.log('\nCodex reported FAIL. Findings will be supplied to Claude on the next iteration.')
   }
 
-  await saveState({ status: 'iteration_limit' })
-  console.log(`\nPIPELINE PAUSED: reached maxIterations=${config.maxIterations}. Human review required.\n`)
-  process.exitCode = 2
+  await saveState({ status: 'iteration_limit', finishedAt: iso() })
+  console.log(`\nPipeline stopped after ${config.maxIterations} iterations.`)
 }
 
-async function status() {
+async function showStatus() {
   const state = await loadState()
   console.log(JSON.stringify(state, null, 2))
 }
 
 async function init() {
   await ensureRuntime()
-  console.log('Runtime files initialized:')
-  console.log(path.join(TASKS_DIR, 'claude-task.md'))
-  console.log(path.join(TASKS_DIR, 'codex-task.md'))
-  console.log(STATE_PATH)
+  console.log(`Initialized runtime under ${HERE}`)
+  console.log(`Edit ${path.join(TASKS_DIR, 'claude-task.md')}`)
+  console.log(`Edit ${path.join(TASKS_DIR, 'codex-task.md')}`)
 }
 
-const command = process.argv[2] || 'help'
+const command = process.argv[2] || 'status'
 
 try {
   if (command === 'doctor') await doctor()
   else if (command === 'init') await init()
   else if (command === 'run') await runPipeline({ qaFirst: false })
   else if (command === 'qa') await runPipeline({ qaFirst: true })
-  else if (command === 'status') await status()
-  else {
-    console.log(`JMAC Agent Pipeline v1\n\nCommands:\n  init    create local runtime task/state files\n  doctor  verify node/git/claude/codex availability\n  run     Claude implementation first, then Codex QA\n  qa      Codex QA first; on FAIL loop into Claude fixes\n  status  print current pipeline state\n`)
-  }
+  else if (command === 'status') await showStatus()
+  else throw new Error(`Unknown command: ${command}`)
 } catch (error) {
-  console.error(error?.stack || String(error))
-  try {
-    await saveState({ status: 'error', lastSummary: error?.message || String(error) })
-  } catch {}
+  console.error(error.stack || error.message)
   process.exitCode = 1
 }
