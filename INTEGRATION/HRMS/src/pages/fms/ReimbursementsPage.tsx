@@ -17,6 +17,10 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import { ReasonDialog } from '@/components/fms/ReasonDialog'
+import {
+  ClassificationPanel,
+  missingBeforeForwarding,
+} from '@/components/fms/ClassificationPanel'
 import { DisbursementPanel, PrepareDialog } from '@/components/fms/DisbursementPanel'
 import {
   useCreateReimbursementPayment,
@@ -52,9 +56,14 @@ export default function ReimbursementsPage() {
   const { data: claims = [], isLoading, isError, error } = useReimbursements()
   const transition = useTransitionReimbursement()
   const [openId, setOpenId] = React.useState<string | null>(null)
-  const [reasonFor, setReasonFor] = React.useState<{ id: string; to: string; label: string } | null>(
-    null
-  )
+  const [reasonFor, setReasonFor] = React.useState<{
+    id: string
+    to: string
+    label: string
+    /** Moving it on, rather than stopping it. Different question, different
+     *  wording, and not required. */
+    forwarding: boolean
+  } | null>(null)
 
   const awaitingReview = claims.filter((c) => c.status === 'pending_validation')
   const awaitingApproval = claims.filter((c) => c.status === 'pending_approval')
@@ -189,20 +198,39 @@ export default function ReimbursementsPage() {
         onDecide={(to, label) => {
           if (!openId) return
           if (to === 'approved') transition.mutate({ id: openId, to })
-          else setReasonFor({ id: openId, to, label })
+          else setReasonFor({ id: openId, to, label, forwarding: to === 'pending_approval' })
         }}
       />
 
+      {/* One dialog, two questions. Forwarding a checked claim is the ordinary
+          outcome of review and takes an optional note for the Finance Manager;
+          returning or rejecting one stops it, and the employee is owed an
+          explanation. They shared a required "Reason" with a rejection
+          placeholder, so passing a perfectly good claim along meant typing a
+          complaint about it. */}
       <ReasonDialog
         open={!!reasonFor}
         title={reasonFor?.label ?? 'Confirm'}
-        description="This is kept with the claim and shown to the employee."
-        placeholder="The receipt does not match the amount claimed…"
+        description={
+          reasonFor?.forwarding
+            ? 'The Finance Manager sees this with the claim when they approve it.'
+            : 'This is kept with the claim and shown to the employee.'
+        }
+        label={reasonFor?.forwarding ? 'Note for the Finance Manager' : 'Reason'}
+        optional={reasonFor?.forwarding ?? false}
+        destructive={!reasonFor?.forwarding}
+        placeholder={
+          reasonFor?.forwarding
+            ? 'Receipt checked against the amount claimed…'
+            : 'The receipt does not match the amount claimed…'
+        }
         confirmLabel={reasonFor?.label ?? 'Confirm'}
         pending={transition.isPending}
         onOpenChange={(open) => !open && setReasonFor(null)}
         onConfirm={(remarks) => {
-          if (reasonFor) transition.mutate({ id: reasonFor.id, to: reasonFor.to, remarks })
+          if (reasonFor) {
+            transition.mutate({ id: reasonFor.id, to: reasonFor.to, remarks: remarks || null })
+          }
           setReasonFor(null)
         }}
       />
@@ -232,6 +260,8 @@ function ReimbursementDetail({
     pending: Number(claim.pending_payment_amount ?? 0),
   })
   const canPrepare = canPrepareReimbursementPayment(claim, profile?.role)
+  const missing =
+    claim.status === 'pending_validation' ? missingBeforeForwarding(claim) : []
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -318,17 +348,52 @@ function ReimbursementDetail({
             />
           )}
 
+          {/* Finance Staff's half of validation. The same panel the requests
+              queue uses, against the same policy and the same trigger — this
+              page having none of its own is the defect F7 acceptance found. */}
+          <ClassificationPanel
+            record={{
+              id: claim.id,
+              status: claim.status,
+              requester_id: claim.requester_id,
+              budget_id: claim.budget_id,
+              finance_category_id: claim.finance_category_id,
+            }}
+            showVendor={false}
+            nextOwner="the Finance Manager"
+          />
+
           {actions.length > 0 && (
-            <div className="flex flex-wrap justify-end gap-2">
-              {actions.map((a) => (
-                <Button
-                  key={a.to}
-                  variant={a.tone === 'default' ? 'default' : a.tone}
-                  onClick={() => onDecide(a.to, a.label)}
-                >
-                  {a.label}
-                </Button>
-              ))}
+            <div className="flex flex-col items-end gap-2">
+              {/* Said before the button is pressed rather than after the server
+                  refuses it. Only the forward is blocked: returning or
+                  rejecting an unclassified claim is exactly what somebody
+                  should still be able to do with one. */}
+              {missing.length > 0 && (
+                <p className="text-xs text-warning">
+                  Assign {missing.join(', ')} before forwarding this claim for approval.
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                {actions.map((a) => {
+                  const blocked = missing.length > 0 && a.to === 'pending_approval'
+                  return (
+                    <Button
+                      key={a.to}
+                      variant={a.tone === 'default' ? 'default' : a.tone}
+                      disabled={blocked}
+                      title={
+                        blocked
+                          ? 'Approving a claim with no budget would reserve nothing against it.'
+                          : undefined
+                      }
+                      onClick={() => onDecide(a.to, a.label)}
+                    >
+                      {a.label}
+                    </Button>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>

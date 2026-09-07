@@ -494,11 +494,15 @@ begin
     end if;
     raise notice 'PASS  11b transferring afterwards does not redirect a request already raised';
 
-    -- Push it through to approved so it can be procured.
+    -- Push it through to approved so it can be procured. Validation now
+    -- includes charging it to a budget, because approving a request that has
+    -- none reserves nothing -- so the fixture classifies it the way Finance
+    -- Staff do rather than skipping the step.
     perform pg_temp.acts_as(worker); set local role authenticated;
     perform public.transition_finance_request(fin_req, 'pending_validation');
     reset role;
     perform pg_temp.acts_as(staff); set local role authenticated;
+    update public.finance_requests set budget_id = budget where id = fin_req;
     perform public.transition_finance_request(fin_req, 'pending_approval');
     reset role;
     perform pg_temp.acts_as(manager); set local role authenticated;

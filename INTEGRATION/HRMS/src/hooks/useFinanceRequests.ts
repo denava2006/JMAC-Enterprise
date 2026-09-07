@@ -4,6 +4,7 @@ import type { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { toast } from '@/components/ui/sonner'
 import { describeFinanceError } from './useFinanceMasterData'
 import { describeRequestEditError, type RequestStatus } from '@/lib/financeRequests'
+import { REIMBURSEMENT_KEY } from '@/lib/reimbursements'
 
 export type FinanceRequest = Tables<'finance_requests'>
 export type RequestApproval = Tables<'finance_request_approvals'>
@@ -211,6 +212,11 @@ export function useUpdateFinanceRequest() {
       }
     },
     'Request updated.',
+    // Classification is written from two surfaces now — the requests queue and
+    // the reimbursement queue — and both read from different caches. Saving on
+    // one and leaving the other showing "Not assigned" is how somebody assigns
+    // a budget twice.
+    [REIMBURSEMENT_KEY],
   )
 }
 

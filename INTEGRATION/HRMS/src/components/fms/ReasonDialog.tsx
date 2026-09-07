@@ -31,6 +31,8 @@ export function ReasonDialog({
   confirmLabel,
   destructive = true,
   pending = false,
+  label = 'Reason',
+  optional = false,
   onOpenChange,
   onConfirm,
 }: {
@@ -41,6 +43,20 @@ export function ReasonDialog({
   confirmLabel: string
   destructive?: boolean
   pending?: boolean
+  /** What this text is, for the person writing it. A refusal takes a reason; a
+   *  step forward takes a note, and calling both "Reason" made forwarding read
+   *  like refusing. */
+  label?: string
+  /**
+   * Whether the transition actually requires it.
+   *
+   * Stopping something takes an explanation and the workflow demands one. Moving
+   * something on does not — transition_finance_request accepts a null remark for
+   * a validation, and the requests queue has always forwarded without asking. The
+   * reimbursement queue asked anyway, with a rejection placeholder, so Finance
+   * Staff had to invent a grievance to pass a claim along.
+   */
+  optional?: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (reason: string) => void
 }) {
@@ -50,7 +66,7 @@ export function ReasonDialog({
     if (open) setReason('')
   }, [open])
 
-  const blank = reason.trim().length === 0
+  const blank = !optional && reason.trim().length === 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -62,7 +78,12 @@ export function ReasonDialog({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="reason-text">
-            Reason <span className="text-destructive">*</span>
+            {label}{' '}
+            {optional ? (
+              <span className="text-muted-foreground">(optional)</span>
+            ) : (
+              <span className="text-destructive">*</span>
+            )}
           </Label>
           <Textarea
             id="reason-text"
