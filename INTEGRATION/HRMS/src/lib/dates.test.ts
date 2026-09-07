@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   businessTodayISODate,
+  formatBusinessDateTime,
   formatCalendarDate,
   toISODate,
   todayISODate,
@@ -135,6 +136,47 @@ describe('a stored calendar date, written out for a reader', () => {
     expect(formatCalendarDate('')).toBeNull()
     // A field arriving as rubbish should read as blank, not as "Invalid Date".
     expect(formatCalendarDate('not-a-date')).toBeNull()
+  })
+})
+
+/**
+ * An audit timestamp, which is the opposite problem to the one above.
+ *
+ * A date column must not be converted at all; a timestamptz is a real instant
+ * and must be, and the only question is to what. The browser's own zone is the
+ * tempting answer and it is wrong for an approval trail: two people comparing
+ * notes about the same forwarding should be describing the same clock time
+ * rather than discovering they are eight hours apart.
+ */
+describe('an instant, in the timezone the books run on', () => {
+  const manila = (iso: string) =>
+    new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(iso))
+
+  it('renders an instant in Manila regardless of where it is read', () => {
+    // 01:08Z is 09:08 in Manila. Stated as an invariant rather than a literal,
+    // because a runner at UTC+8 cannot tell the two implementations apart.
+    expect(formatBusinessDateTime('2026-09-07T01:08:00.000Z')).toBe(
+      manila('2026-09-07T01:08:00.000Z'),
+    )
+  })
+
+  it('holds across the day boundary UTC and Manila disagree about', () => {
+    // 16:00Z on the 4th is already 00:00 on the 5th in Manila — the window
+    // that cost F6 an acceptance, now on the read side.
+    const at = '2026-09-04T16:00:00.000Z'
+    expect(formatBusinessDateTime(at)).toBe(manila(at))
+    expect(formatBusinessDateTime(at)).toContain('Sep 5')
+  })
+
+  it('has nothing to say about an instant that is not there', () => {
+    expect(formatBusinessDateTime(null)).toBeNull()
+    expect(formatBusinessDateTime(undefined)).toBeNull()
+    expect(formatBusinessDateTime('')).toBeNull()
+    expect(formatBusinessDateTime('not-a-timestamp')).toBeNull()
   })
 })
 

@@ -21,6 +21,7 @@ import {
   ClassificationPanel,
   missingBeforeForwarding,
 } from '@/components/fms/ClassificationPanel'
+import { RequestHistory } from '@/components/fms/RequestHistory'
 import { DisbursementPanel, PrepareDialog } from '@/components/fms/DisbursementPanel'
 import {
   useCreateReimbursementPayment,
@@ -347,6 +348,14 @@ function ReimbursementDetail({
               }
             />
           )}
+
+          {/* Who did what to this claim, and when. The Finance Manager is being
+              asked to approve it, so the submission and the Finance Staff
+              forwarding that got it here belong on the same screen as the
+              Approve button rather than on another one. Reading it changes
+              nothing: the trail is append-only and written only by
+              transition_finance_request. */}
+          <RequestHistory requestId={claim.id} type="reimbursement" />
 
           {/* Finance Staff's half of validation. The same panel the requests
               queue uses, against the same policy and the same trigger — this

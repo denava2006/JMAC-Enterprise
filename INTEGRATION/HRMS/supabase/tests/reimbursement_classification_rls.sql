@@ -349,6 +349,99 @@ begin
   raise notice 'PASS  7a a resubmitted claim is Finance Staff''s to classify again';
   reset role;
 
+  -- ======================================================================
+  -- 8. The trail the Finance Manager approves against
+  -- ======================================================================
+  -- F7-QA-06: the Manager was being asked to approve RB-2026-0001 with no way
+  -- to see who submitted it or who forwarded it. The UI had no History section;
+  -- the access was never the problem, and these say so rather than assuming it.
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+
+  select count(*)::integer into n
+  from public.finance_request_approvals where request_id = claim_b;
+  if n < 2 then
+    raise exception 'FAIL 8a the Finance Manager reads % trail rows, expected the submission and the forwarding', n;
+  end if;
+
+  select count(*)::integer into n
+  from public.finance_request_approvals
+  where request_id = claim_b and action = 'submitted' and actor_id = employee;
+  if n <> 1 then raise exception 'FAIL 8a the submission is not visible to the Manager'; end if;
+
+  select count(*)::integer into n
+  from public.finance_request_approvals
+  where request_id = claim_b and action = 'validated' and actor_id = fin_staff;
+  if n <> 1 then raise exception 'FAIL 8a the Finance Staff forwarding is not visible'; end if;
+  raise notice 'PASS  8a the Finance Manager reads the submission and the forwarding';
+
+  -- And the names, without Finance being handed the staff directory.
+  select count(*)::integer into n
+  from public.finance_request_participants() p where p.profile_id in (employee, fin_staff);
+  if n <> 2 then
+    raise exception 'FAIL 8b the Manager resolved % of the 2 actor names', n; end if;
+  raise notice 'PASS  8b and resolves both actors to names through the participants RPC';
+  reset role;
+
+  -- The claimant keeps the view of their own claim they already had.
+  perform pg_temp.acts_as(employee); set local role authenticated;
+  select count(*)::integer into n
+  from public.finance_request_approvals where request_id = claim_b;
+  if n < 2 then raise exception 'FAIL 8c the claimant lost sight of their own trail'; end if;
+  raise notice 'PASS  8c the claimant still reads the history of their own claim';
+  reset role;
+
+  -- Somebody with no part in it reads nothing. Showing history to a reviewer
+  -- must not have widened anything.
+  perform pg_temp.acts_as(other_emp); set local role authenticated;
+  select count(*)::integer into n
+  from public.finance_request_approvals where request_id = claim_b;
+  if n <> 0 then raise exception 'FAIL 8d an unrelated employee read % trail rows', n; end if;
+  select count(*)::integer into n
+  from public.finance_request_participants() p where p.profile_id = employee;
+  if n <> 0 then raise exception 'FAIL 8d an unrelated employee resolved the claimant''s name'; end if;
+  raise notice 'PASS  8d an unrelated employee reads neither the trail nor the names';
+  reset role;
+
+  -- Append-only, for everybody. A record of decisions that can be edited is
+  -- not a record of decisions -- and reading one must never write one.
+  -- Refused harder than an empty policy would: there is no insert, update or
+  -- delete grant on the table at all, so these raise rather than quietly
+  -- affecting no rows. Only transition_finance_request writes here, and it is
+  -- SECURITY DEFINER.
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
+  begin
+    insert into public.finance_request_approvals (request_id, actor_id, action, to_status)
+    values (claim_b, fin_mgr, 'approved', 'approved');
+    raise exception 'FAIL 8e a Manager wrote an approval row directly';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    update public.finance_request_approvals set remarks = 'ZZ rewritten' where request_id = claim_b;
+    raise exception 'FAIL 8e a trail entry was edited';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    delete from public.finance_request_approvals where request_id = claim_b;
+    raise exception 'FAIL 8e a trail entry was deleted';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'PASS  8e the trail is append-only: it cannot be written, edited or deleted by hand';
+
+  -- And nothing about reading it moved the claim or the money.
+  select status into txt from public.finance_requests where id = claim_b;
+  if txt <> 'approved' then raise exception 'FAIL 8f reading the history changed the status to %', txt; end if;
+  select bs.reserved, bs.spent into reserved, spent from public.budget_status bs where bs.id = budget;
+  if reserved <> 700 or spent <> 0 then
+    raise exception 'FAIL 8f reading the history moved reserved to % and spent to %', reserved, spent; end if;
+  select count(*)::integer into n from public.reimbursement_payments where finance_request_id = claim_b;
+  if n <> 0 then raise exception 'FAIL 8f reading the history created a payment'; end if;
+  select count(*)::integer into n from public.treasury_movements where source_id = claim_b;
+  if n <> 0 then raise exception 'FAIL 8f reading the history moved treasury'; end if;
+  raise notice 'PASS  8f and reading it moves no status, no budget, no payment and no treasury';
+  reset role;
+
   raise notice '--------------------------------------------------';
   raise notice 'reimbursement_classification_rls: all checks passed';
 end $$;

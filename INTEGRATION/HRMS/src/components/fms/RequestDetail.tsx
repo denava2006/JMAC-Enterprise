@@ -14,7 +14,6 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/currency'
 import {
-  APPROVAL_ACTION_LABEL,
   REQUEST_TYPE_LABEL,
   STATUS_TONE,
   actionsFor,
@@ -29,13 +28,13 @@ import { EditRequestDialog } from '@/components/fms/EditRequestDialog'
 import {
   useFinanceRequest,
   useRequestParticipants,
-  useRequestTrail,
   useTransitionRequest,
 } from '@/hooks/useFinanceRequests'
 import {
   ClassificationPanel,
   missingBeforeForwarding,
 } from '@/components/fms/ClassificationPanel'
+import { RequestHistory } from '@/components/fms/RequestHistory'
 
 export function StatusBadge({
   status,
@@ -142,7 +141,8 @@ export function RequestDetail({
 }) {
   const { profile } = useAuth()
   const { data: request, isLoading } = useFinanceRequest(requestId ?? undefined)
-  const { data: trail = [] } = useRequestTrail(requestId ?? undefined)
+  // The trail is RequestHistory's to fetch now. Names stay here too: the
+  // dialog header says whose request this is, which is the same question.
   const { data: names } = useRequestParticipants()
   const transition = useTransitionRequest()
 
@@ -285,33 +285,7 @@ export function RequestDetail({
               )}
 
               {/* The trail. Append-only, so this is the whole story. */}
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-semibold text-foreground">History</p>
-                <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
-                  {trail.length === 0 ? (
-                    <p className="p-3 text-sm text-muted-foreground">
-                      Nothing has happened to this request yet.
-                    </p>
-                  ) : (
-                    trail.map((entry) => (
-                      <div key={entry.id} className="flex items-start justify-between gap-3 p-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground">
-                            {APPROVAL_ACTION_LABEL[entry.action] ?? entry.action}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {(entry.actor_id && names?.get(entry.actor_id)) ?? '…'}
-                            {entry.remarks ? ` — ${entry.remarks}` : ''}
-                          </p>
-                        </div>
-                        <p className="shrink-0 text-xs text-muted-foreground">
-                          {new Date(entry.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <RequestHistory requestId={request.id} type={request.type as RequestType} />
 
               {profile?.role === 'finance_staff' &&
                 request.status === 'pending_validation' &&

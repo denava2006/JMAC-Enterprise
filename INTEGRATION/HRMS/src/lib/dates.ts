@@ -66,6 +66,32 @@ export function businessTodayISODate(): string {
  * The same one-liner is inlined in a dozen places across the portal already.
  * New callers get it from here.
  */
+/**
+ * An instant, written out in the timezone the books run on.
+ *
+ * Different from formatCalendarDate below, and the difference is the point. A
+ * date column is a calendar date with no instant attached, so it must not be
+ * converted at all. An audit timestamp is a real instant, so it must be
+ * converted — the only question is to what.
+ *
+ * The browser's own zone is the tempting answer and it is wrong for this.
+ * Approval trails are read by more than one person, and two of them comparing
+ * notes about "the 9:08 forwarding" should be talking about the same event
+ * rather than discovering they are eight hours apart. JMAC's books are in
+ * Manila, so that is what the trail is stamped in, and the zone is named on
+ * screen so nobody has to guess whose clock it is.
+ */
+export function formatBusinessDateTime(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return null
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: BUSINESS_TIMEZONE,
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(at)
+}
+
 export function formatCalendarDate(iso: string | null | undefined): string | null {
   if (!iso) return null
   const date = new Date(`${iso}T00:00:00`)
