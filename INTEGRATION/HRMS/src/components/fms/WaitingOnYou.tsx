@@ -53,8 +53,11 @@ export function waitingWork(
     reimbursementsToApprove: number
     reimbursementsToPay: number
     reimbursementPaymentsToApprove: number
+    /** Approved and not yet sent -- the Accountant's last step. */
+    reimbursementPaymentsToRecord: number
     payrollToDisburse: number
     payrollDisbursementsToApprove: number
+    payrollDisbursementsToRecord: number
   },
 ): WaitingItem[] {
   if (role === 'finance_manager') {
@@ -106,9 +109,23 @@ export function waitingWork(
         count: data.reimbursementsToPay,
         to: '/fms/reimbursements',
       },
+      // Authorised and still not sent. A payment the Manager has approved is
+      // waiting on nobody but the Accountant, and it was the one step of the
+      // chain with nothing on the overview pointing at it — the claim behind it
+      // stops being counted above the moment a payment covers its balance.
+      {
+        label: 'Approved payments to record as paid',
+        count: data.reimbursementPaymentsToRecord,
+        to: '/fms/reimbursements',
+      },
       {
         label: 'Payroll awaiting disbursement',
         count: data.payrollToDisburse,
+        to: '/fms/payroll',
+      },
+      {
+        label: 'Approved disbursements to record as paid',
+        count: data.payrollDisbursementsToRecord,
         to: '/fms/payroll',
       },
     ].filter((i) => i.count > 0)
@@ -185,12 +202,16 @@ export function WaitingOnYou() {
     reimbursementPaymentsToApprove: reimbursementPayments.filter(
       (p) => p.status === 'for_approval',
     ).length,
+    reimbursementPaymentsToRecord: reimbursementPayments.filter((p) => p.status === 'approved')
+      .length,
     payrollToDisburse: payrollBatches.filter(
       (b) => Number(b.available_to_prepare ?? 0) > 0,
     ).length,
     payrollDisbursementsToApprove: payrollDisbursements.filter(
       (d) => d.status === 'for_approval',
     ).length,
+    payrollDisbursementsToRecord: payrollDisbursements.filter((d) => d.status === 'approved')
+      .length,
   })
 
   if (items.length === 0) return null

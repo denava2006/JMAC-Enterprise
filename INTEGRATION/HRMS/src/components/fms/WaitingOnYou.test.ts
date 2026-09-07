@@ -20,8 +20,10 @@ const NOTHING = {
   reimbursementsToApprove: 0,
   reimbursementsToPay: 0,
   reimbursementPaymentsToApprove: 0,
+  reimbursementPaymentsToRecord: 0,
   payrollToDisburse: 0,
   payrollDisbursementsToApprove: 0,
+  payrollDisbursementsToRecord: 0,
 }
 
 const EVERYTHING = {
@@ -43,8 +45,10 @@ const EVERYTHING = {
   reimbursementsToApprove: 16,
   reimbursementsToPay: 17,
   reimbursementPaymentsToApprove: 18,
+  reimbursementPaymentsToRecord: 21,
   payrollToDisburse: 19,
   payrollDisbursementsToApprove: 20,
+  payrollDisbursementsToRecord: 22,
 }
 
 describe('what is waiting on the checker', () => {
@@ -107,8 +111,32 @@ describe('what is waiting on the Accountant', () => {
       // F7. Money authorised and waiting to be sent, which is the
       // Accountant's to send.
       { label: 'Approved reimbursements awaiting payment', count: 17, to: '/fms/reimbursements' },
+      // The last step of the chain, and the one the overview used to be silent
+      // about: once a payment covers a claim's balance the row above stops
+      // counting it, so an approved-but-unsent payment appeared on no queue at
+      // all until somebody went looking for it.
+      { label: 'Approved payments to record as paid', count: 21, to: '/fms/reimbursements' },
       { label: 'Payroll awaiting disbursement', count: 19, to: '/fms/payroll' },
+      { label: 'Approved disbursements to record as paid', count: 22, to: '/fms/payroll' },
     ])
+  })
+
+  it('counts the payment states apart, because they are different work', () => {
+    // Approving a payment is the Manager's; recording it as sent is the
+    // Accountant's. One number for both would put each of them on the other's
+    // queue.
+    const accountant = waitingWork('accountant', EVERYTHING).map((i) => i.label)
+    const manager = waitingWork('finance_manager', EVERYTHING).map((i) => i.label)
+    expect(accountant).toContain('Approved payments to record as paid')
+    expect(accountant).not.toContain('Reimbursement payments to approve')
+    expect(manager).toContain('Reimbursement payments to approve')
+    expect(manager).not.toContain('Approved payments to record as paid')
+  })
+
+  it('shows nothing at all when nothing is waiting', () => {
+    // Every new row is filtered on count > 0 like the rest, so an idle desk
+    // stays an empty list rather than a wall of zeroes.
+    expect(waitingWork('accountant', NOTHING)).toEqual([])
   })
 
   it('offers them no approval, because they approve nothing', () => {

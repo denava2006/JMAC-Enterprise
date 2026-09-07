@@ -20,6 +20,7 @@ export function StatCard({
   value,
   icon: Icon,
   isLoading,
+  isError,
   index,
   size = 'compact',
 }: {
@@ -27,6 +28,14 @@ export function StatCard({
   value: ReactNode
   icon: ComponentType<{ className?: string }>
   isLoading?: boolean
+  /**
+   * The query behind this figure failed.
+   *
+   * Without this a failed load renders whatever the caller computed from an
+   * empty array, which for money is ₱0.00 — a number a reader has no way to
+   * tell apart from a real zero. An unknown figure has to look unknown.
+   */
+  isError?: boolean
   /** When set, the card fades in on a stagger. Omit for a static card. */
   index?: number
   /** 'compact' above a dense table; 'default' where the figures are the page. */
@@ -50,6 +59,16 @@ export function StatCard({
           <p className={compact ? 'text-xs text-muted-foreground' : 'text-sm text-muted-foreground'}>{label}</p>
           {isLoading ? (
             <Skeleton className={compact ? 'mt-1 h-6 w-12' : 'mt-1 h-7 w-12'} />
+          ) : isError ? (
+            <p
+              className={
+                compact
+                  ? 'mt-0.5 text-sm font-medium text-muted-foreground'
+                  : 'mt-0.5 text-base font-medium text-muted-foreground'
+              }
+            >
+              Unavailable
+            </p>
           ) : (
             <p
               className={

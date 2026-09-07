@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Landmark, PiggyBank, Store, Tags, TrendingUp, Wallet } from 'lucide-react'
+import { Landmark, Lock, PiggyBank, Receipt, Store, Tags, TrendingUp, Wallet } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
@@ -20,19 +20,25 @@ import { useFinanceSalesPresets, useFinanceSalesSummary } from '@/hooks/useFinan
 /**
  * The Finance overview.
  *
- * Master data is what exists so far, so this counts master data and says what
- * it is for. It deliberately shows no spending figure: nothing in JMAC can yet
- * produce one, and a dashboard reporting ₱0.00 spent would be read as a fact
- * about the business rather than as a phase that has not been built.
+ * It used to be a master-data dashboard, and said so: "Requests, reimbursements,
+ * payments and the ledger are later phases... reserved and spent stay at zero
+ * because nothing can yet produce either number." That was true when it was
+ * written and had been wrong for five phases by the time F7 acceptance read it
+ * — requests, procurement, supplier invoices, reimbursements and payroll all
+ * ship. A finance overview telling an Accountant that spending is structurally
+ * zero, while ₱1,300 has actually been spent, is worse than one showing nothing.
  *
- * Today's sales are the exception, and they earn it: POS genuinely records
- * them, so the figure means what it says. Two numbers only -- the Sales &
- * Collections page is where the breakdown lives, and duplicating it here would
- * give the enterprise two places to disagree about a day's takings.
+ * Every figure here is summed from budget_status, the same view the Budgets
+ * page reads, which derives reserved and spent from the requests and payments
+ * themselves. Nothing on this page computes money: adding a second opinion
+ * about what has been spent is how two screens come to disagree.
+ *
+ * Today's sales come from the server query the Sales page uses, for the same
+ * reason. Two numbers only -- the breakdown lives there.
  */
 export default function FinanceHomePage() {
   const { profile } = useAuth()
-  const { data: budgets = [], isLoading: budgetsLoading } = useBudgets()
+  const { data: budgets = [], isLoading: budgetsLoading, isError: budgetsFailed } = useBudgets()
   const { data: vendors = [], isLoading: vendorsLoading } = useVendors()
   const { data: categories = [], isLoading: categoriesLoading } = useFinanceCategories()
   const { data: accounts = [], isLoading: accountsLoading } = useFinanceAccounts()
@@ -49,9 +55,19 @@ export default function FinanceHomePage() {
     cashierId: null,
   })
 
+  // Summed from budget_status, never recomputed. The view already derives each
+  // budget's reserved from its approved requests and its spent from what has
+  // actually been paid; remaining is amount − reserved − spent, server-side.
+  // Adding those four up across the live budgets is the only arithmetic here.
   const activeBudgets = budgets.filter((b) => b.status === 'active')
-  const ceiling = activeBudgets.reduce((sum, b) => sum + Number(b.amount), 0)
-  const allocated = activeBudgets.reduce((sum, b) => sum + Number(b.allocated), 0)
+  const total = (field: 'amount' | 'reserved' | 'spent' | 'remaining') =>
+    activeBudgets.reduce((sum, b) => sum + Number(b[field] ?? 0), 0)
+  const ceiling = total('amount')
+  const reserved = total('reserved')
+  const spent = total('spent')
+  const remaining = total('remaining')
+
+  const referenceLoading = budgetsLoading || vendorsLoading || categoriesLoading || accountsLoading
 
   const modules = [
     {
@@ -84,36 +100,46 @@ export default function FinanceHomePage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title={`Finance`}
-        description={`Welcome, ${firstName(profile?.full_name)}. Master data for JMAC Enterprise.`}
+        description={`Welcome, ${firstName(profile?.full_name)}. Budgets, requests, procurement, reimbursements and payroll.`}
         action={profile?.role ? <Badge variant="secondary">{ROLE_LABEL[profile.role]}</Badge> : undefined}
       />
 
       <WaitingOnYou />
 
+      {/* The four figures a budget actually has. Reserved is money approved and
+          committed but not yet gone; spent is money that has left. They were
+          absent here, and the note underneath asserted both were structurally
+          zero — which is how an overview came to contradict its own Budgets
+          page. Every one of them fails to "Unavailable" rather than to ₱0.00,
+          because a figure nobody could load is not a figure of nought. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Active budgets"
-          value={activeBudgets.length}
-          icon={PiggyBank}
-          isLoading={budgetsLoading}
-        />
         <StatCard
           label="Approved ceiling"
           value={formatMoney(ceiling)}
           icon={PiggyBank}
           isLoading={budgetsLoading}
+          isError={budgetsFailed}
         />
         <StatCard
-          label="Allocated"
-          value={formatMoney(allocated)}
-          icon={PiggyBank}
+          label="Reserved"
+          value={formatMoney(reserved)}
+          icon={Lock}
           isLoading={budgetsLoading}
+          isError={budgetsFailed}
         />
         <StatCard
-          label="Active vendors"
-          value={vendors.filter((v) => v.is_active).length}
-          icon={Store}
-          isLoading={vendorsLoading}
+          label="Spent"
+          value={formatMoney(spent)}
+          icon={Receipt}
+          isLoading={budgetsLoading}
+          isError={budgetsFailed}
+        />
+        <StatCard
+          label="Remaining"
+          value={formatMoney(remaining)}
+          icon={Wallet}
+          isLoading={budgetsLoading}
+          isError={budgetsFailed}
         />
       </div>
 
@@ -155,16 +181,26 @@ export default function FinanceHomePage() {
 
       <Card>
         <CardContent className="flex flex-col gap-2 py-4">
+          {/* Counting rows that have not arrived yet gives four zeroes, which
+              reads as a finance function with nothing set up rather than as a
+              page that is still loading. */}
           <p className="text-sm font-medium text-foreground">
-            {categories.filter((c) => c.is_active).length} categories ·{' '}
-            {accounts.filter((a) => a.is_active).length} open accounts
-            {categoriesLoading || accountsLoading ? '' : ''}
+            {referenceLoading ? (
+              'Loading reference data…'
+            ) : (
+              <>
+                {activeBudgets.length} active budgets · {vendors.filter((v) => v.is_active).length}{' '}
+                active vendors · {categories.filter((c) => c.is_active).length} categories ·{' '}
+                {accounts.filter((a) => a.is_active).length} open accounts
+              </>
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
-            Requests, reimbursements, payments and the ledger are later phases. Until they exist,
-            a budget reports what was approved and what has been allocated — reserved and spent stay
-            at zero because nothing can yet produce either number. Your own attendance, leave and
-            payslips are in My Workspace.
+            Purchase requests, procurement, supplier invoices, employee reimbursements and payroll
+            payments are all in service — reserved and spent above are what those have actually
+            committed and paid against the approved ceilings. Accounting entries and the general
+            ledger are the next stage of this work. Your own attendance, leave and payslips are in
+            My Workspace.
           </p>
         </CardContent>
       </Card>
