@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { toast } from '@/components/ui/sonner'
-import { describeFinanceError } from './useFinanceMasterData'
+import { FINANCE_KEYS, describeFinanceError } from './useFinanceMasterData'
 import { describeRequestEditError, type RequestStatus } from '@/lib/financeRequests'
 import { REIMBURSEMENT_KEY } from '@/lib/reimbursements'
 
@@ -276,6 +276,34 @@ export function useUpdateRequestDraft() {
   })
 }
 
+/**
+ * Everything a workflow transition makes out of date, in one list.
+ *
+ * F7 acceptance found the Finance Manager approving RB-2026-0001 and watching
+ * the status change while the History block below it kept saying the claim had
+ * only been submitted and forwarded. Reloading the page showed the approval,
+ * so nothing was wrong with the write.
+ *
+ * The cause was two mutations calling the same RPC with different invalidation
+ * lists. useTransitionRequest cleared the trail; useTransitionReimbursement
+ * cleared the reimbursement list and the budgets and nothing else, and
+ * ['reimbursements'] is not a prefix of ['finance','requests',id,'trail'], so
+ * the trail query was never told it had gone stale. Two lists that have to
+ * agree and no reason for anyone to keep them in step is a drift waiting to
+ * happen, so now there is one.
+ *
+ * ['finance','requests'] is a prefix of both the single-request key and the
+ * trail key, and TanStack matches by prefix, so it covers all three.
+ */
+export function invalidateAfterRequestTransition(client: QueryClient) {
+  client.invalidateQueries({ queryKey: REQUEST_KEYS.all })
+  client.invalidateQueries({ queryKey: FINANCE_KEYS.budgets })
+  client.invalidateQueries({ queryKey: ['finance', 'request-participants'] })
+  // The same row is a claim on the reimbursement queue, whose list, payments
+  // and balances all read from a different RPC.
+  client.invalidateQueries({ queryKey: REIMBURSEMENT_KEY })
+}
+
 export interface TransitionInput {
   requestId: string
   to: RequestStatus
@@ -296,11 +324,7 @@ export function useTransitionRequest() {
       if (error) throw error
     },
     onSuccess: (_data, input) => {
-      queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.all })
-      queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.one(input.requestId) })
-      queryClient.invalidateQueries({ queryKey: REQUEST_KEYS.trail(input.requestId) })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'budgets'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'request-participants'] })
+      invalidateAfterRequestTransition(queryClient)
       toast.success(TRANSITION_TOAST[input.to] ?? 'Request updated.')
     },
     onError: (error) => toast.error(describeFinanceError(error)),

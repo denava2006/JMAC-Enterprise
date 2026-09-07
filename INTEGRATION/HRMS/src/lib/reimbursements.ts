@@ -210,6 +210,87 @@ export function paymentActionsFor(
   }
 }
 
+export interface NextStep {
+  /** The role that owns the next move, named the way JMAC names roles. */
+  actor: string
+  /** What they do, completing the sentence "Next step: {actor} {description}". */
+  description: string
+}
+
+/**
+ * Who has the claim next, and what they do with it.
+ *
+ * F7 acceptance approved RB-2026-0001 and was left with "Approved — awaiting
+ * payment" and "Available to prepare ₱1,000" — true, and silent about who does
+ * the preparing. The status says what has happened; this says what happens
+ * next, which is a different question and was not being answered anywhere.
+ *
+ * Derived, never stored. A second column recording whose turn it is would be
+ * one more thing to disagree with the status, and this has no authority of its
+ * own: every move it names is one transition_finance_request or
+ * transition_reimbursement_payment already refuses to anybody else.
+ *
+ * For an approved claim the answer is not always the Accountant, which is why
+ * the payments are read rather than assumed. A payment sitting for_approval is
+ * the Finance Manager's, and an authorised one waiting to be sent is the
+ * Accountant's again — saying "Accountant prepares the payment" while one is
+ * already on the Manager's desk would be worse than saying nothing.
+ */
+export function nextStepFor(
+  claim: {
+    status?: string | null
+    balance_due?: number | string | null
+    available_to_prepare?: number | string | null
+  },
+  payments: Array<{ status: ReimbursementPaymentStatus }> = []
+): NextStep | null {
+  switch (claim.status) {
+    case 'draft':
+      return { actor: 'The employee', description: 'submits the claim to Finance.' }
+    case 'returned':
+      return { actor: 'The employee', description: 'corrects the claim and resubmits it.' }
+    case 'pending_validation':
+      return {
+        actor: 'Finance Staff',
+        description: 'check the claim and charge it to a budget.',
+      }
+    case 'pending_approval':
+      return {
+        actor: 'The Finance Manager',
+        description: 'approves the claim or returns it for correction.',
+      }
+    case 'approved':
+      break
+    default:
+      // completed, rejected, cancelled — nobody is waiting on anybody.
+      return null
+  }
+
+  // An approved claim, in the order the money actually moves.
+  const held = (status: ReimbursementPaymentStatus) => payments.some((p) => p.status === status)
+
+  if (held('for_approval')) {
+    return { actor: 'The Finance Manager', description: 'approves the prepared payment.' }
+  }
+  if (held('approved')) {
+    return {
+      actor: 'The Accountant',
+      description: 'records the completed payment with its reference.',
+    }
+  }
+  if (held('draft') || held('returned')) {
+    return {
+      actor: 'The Accountant',
+      description: 'submits the prepared payment for approval.',
+    }
+  }
+  if (Number(claim.available_to_prepare ?? 0) > 0) {
+    return { actor: 'The Accountant', description: 'prepares the reimbursement payment.' }
+  }
+  // Nothing left to prepare and nothing in flight: the claim is settled.
+  return null
+}
+
 export const APPROVAL_IS_NOT_PAYMENT_NOTE =
   'Approving authorises the payment. It does not send money — no bank transfer ' +
   'API is connected. The reimbursement balance falls only when the Accountant ' +

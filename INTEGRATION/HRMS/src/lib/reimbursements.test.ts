@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPrepareReimbursementPayment,
+  nextStepFor,
   paymentActionsFor,
   reimbursementActionsFor,
   reimbursementStateLabel,
@@ -203,5 +204,82 @@ describe('who may act on a payment', () => {
   it('offers nothing once a payment is paid', () => {
     const can = paymentActionsFor(payment({ status: 'paid' }), 'accountant', 'a1')
     expect(can.canSubmit || can.canDecide || can.canRecord).toBe(false)
+  })
+})
+
+/**
+ * Whose turn it is next.
+ *
+ * F7 acceptance approved RB-2026-0001 and was left with "Approved — awaiting
+ * payment" and "Available to prepare ₱1,000" — both true, and silent about who
+ * does the preparing. The status says what has happened; this says what happens
+ * next, and nothing was answering that.
+ */
+describe('who has the claim next', () => {
+  const approved = { status: 'approved', balance_due: 1000, available_to_prepare: 1000 }
+
+  it('names Finance Staff while the claim is being checked', () => {
+    const step = nextStepFor({ status: 'pending_validation' })
+    expect(step?.actor).toBe('Finance Staff')
+    expect(step?.description).toMatch(/budget/)
+  })
+
+  it('names the Finance Manager while it waits for approval', () => {
+    expect(nextStepFor({ status: 'pending_approval' })?.actor).toBe('The Finance Manager')
+  })
+
+  it('names the Accountant once it is approved and nothing is prepared yet', () => {
+    const step = nextStepFor(approved, [])
+    expect(step?.actor).toBe('The Accountant')
+    expect(step?.description).toBe('prepares the reimbursement payment.')
+  })
+
+  it('hands it back to the Finance Manager once a payment awaits approval', () => {
+    // The defect this guards against is saying "Accountant prepares the
+    // payment" while one is already sitting on the Manager's desk.
+    const step = nextStepFor(approved, [{ status: 'for_approval' }])
+    expect(step?.actor).toBe('The Finance Manager')
+    expect(step?.description).toBe('approves the prepared payment.')
+  })
+
+  it('returns to the Accountant once the payment is authorised but not sent', () => {
+    const step = nextStepFor(approved, [{ status: 'approved' }])
+    expect(step?.actor).toBe('The Accountant')
+    expect(step?.description).toMatch(/records the completed payment/)
+  })
+
+  it('asks the Accountant to send a draft or a returned payment onward', () => {
+    for (const status of ['draft', 'returned'] as const) {
+      const step = nextStepFor(approved, [{ status }])
+      expect(step?.actor, status).toBe('The Accountant')
+      expect(step?.description, status).toMatch(/submits the prepared payment/)
+    }
+  })
+
+  it('says nothing once the claim is fully paid', () => {
+    expect(
+      nextStepFor({ status: 'approved', balance_due: 0, available_to_prepare: 0 }, [
+        { status: 'paid' },
+      ]),
+    ).toBeNull()
+  })
+
+  it('says nothing about a claim nobody is waiting on', () => {
+    for (const status of ['completed', 'rejected', 'cancelled']) {
+      expect(nextStepFor({ status }), status).toBeNull()
+    }
+  })
+
+  it('points a draft and a returned claim back at the employee', () => {
+    expect(nextStepFor({ status: 'draft' })?.actor).toBe('The employee')
+    expect(nextStepFor({ status: 'returned' })?.description).toMatch(/resubmits/)
+  })
+
+  it('ignores payments that are no longer live', () => {
+    // A rejected payment is not somebody's turn; the claim is back to needing
+    // one prepared.
+    const step = nextStepFor(approved, [{ status: 'rejected' }, { status: 'paid' }])
+    expect(step?.actor).toBe('The Accountant')
+    expect(step?.description).toBe('prepares the reimbursement payment.')
   })
 })

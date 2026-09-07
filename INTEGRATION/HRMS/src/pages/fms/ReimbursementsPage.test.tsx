@@ -401,6 +401,71 @@ describe('when the history cannot be shown', () => {
   })
 })
 
+/**
+ * After approval the screen said "Approved — awaiting payment" and "Available
+ * to prepare ₱1,000" — both true, and silent about who does the preparing.
+ */
+describe('who the claim is waiting on', () => {
+  it('names the Accountant once a claim is approved and nothing is prepared', () => {
+    state.role = 'finance_manager'
+    state.viewer = 'angelo'
+    state.claim = {
+      ...claim,
+      status: 'approved',
+      budget_id: 'b-active',
+      budget_name: 'Operations 2026',
+      available_to_prepare: 1000,
+    }
+    open()
+    expect(screen.getByText(/Next step:/)).toBeTruthy()
+    expect(screen.getByText(/The Accountant prepares the reimbursement payment\./)).toBeTruthy()
+  })
+
+  it('still shows the Manager no Accountant controls while saying so', () => {
+    state.role = 'finance_manager'
+    state.viewer = 'angelo'
+    state.claim = {
+      ...claim,
+      status: 'approved',
+      budget_id: 'b-active',
+      available_to_prepare: 1000,
+    }
+    open()
+    // Naming the next actor is not the same as becoming them.
+    expect(screen.queryByRole('button', { name: /Prepare/ })).toBeNull()
+    expect(screen.queryByText('Classification')).toBeNull()
+  })
+
+  it('names Finance Staff while the claim is still being checked', () => {
+    state.role = 'finance_staff'
+    open()
+    expect(screen.getByText(/Finance Staff check the claim and charge it to a budget\./)).toBeTruthy()
+  })
+
+  it('names the Finance Manager while it waits for approval', () => {
+    state.role = 'finance_manager'
+    state.viewer = 'angelo'
+    state.claim = { ...claim, status: 'pending_approval', budget_id: 'b-active' }
+    open()
+    expect(screen.getByText(/The Finance Manager approves the claim or returns it/)).toBeTruthy()
+  })
+
+  it('leaves the status badge alone — this is guidance, not a new status', () => {
+    state.role = 'finance_manager'
+    state.viewer = 'angelo'
+    state.claim = {
+      ...claim,
+      status: 'approved',
+      budget_id: 'b-active',
+      available_to_prepare: 1000,
+    }
+    open()
+    // Once in the table's Status column and once on the dialog badge, both
+    // unchanged — the guidance is a sentence beside them, not a relabelling.
+    expect(screen.getAllByText('Approved — awaiting payment').length).toBe(2)
+  })
+})
+
 describe('reviewing moves no money', () => {
   it('offers no payment controls while the claim is still being reviewed', () => {
     open()

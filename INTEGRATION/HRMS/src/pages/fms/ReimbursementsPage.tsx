@@ -35,6 +35,7 @@ import {
   PAYMENT_STATUS_LABEL,
   canPrepareReimbursementPayment,
   describeReimbursementError,
+  nextStepFor,
   paymentActionsFor,
   reimbursementActionsFor,
   reimbursementStateLabel,
@@ -263,6 +264,10 @@ function ReimbursementDetail({
   const canPrepare = canPrepareReimbursementPayment(claim, profile?.role)
   const missing =
     claim.status === 'pending_validation' ? missingBeforeForwarding(claim) : []
+  // Reads the payments rather than assuming the Accountant: once one is with
+  // the Finance Manager for approval, they are the next actor, not the
+  // Accountant who prepared it.
+  const nextStep = nextStepFor(claim, payments)
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -290,6 +295,20 @@ function ReimbursementDetail({
               <Figure label="Purpose" value={claim.title} />
             </CardContent>
           </Card>
+
+          {/* What has happened is on the badge; this is what happens next.
+              Shown for every state somebody is still waiting on, and nothing
+              at all once the claim is settled, rejected or withdrawn. */}
+          {nextStep && (
+            <Card>
+              <CardContent className="py-3">
+                <p className="text-sm text-foreground">
+                  <span className="font-medium">Next step:</span> {nextStep.actor}{' '}
+                  {nextStep.description}
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {claim.justification && (
             <Card>

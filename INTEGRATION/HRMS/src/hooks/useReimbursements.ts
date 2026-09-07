@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/sonner'
 import { TREASURY_KEY } from '@/lib/treasury'
 import { FINANCE_KEYS } from '@/hooks/useFinanceMasterData'
+import { invalidateAfterRequestTransition } from '@/hooks/useFinanceRequests'
 import {
   REIMBURSEMENT_KEY,
   REIMBURSEMENT_PAYMENT_KEY,
@@ -72,9 +73,13 @@ export function useTransitionReimbursement() {
       if (error) throw error
     },
     onSuccess: (_r, input) => {
-      qc.invalidateQueries({ queryKey: REIMBURSEMENT_KEY })
-      // Approving reserves budget; withdrawing releases it.
-      qc.invalidateQueries({ queryKey: FINANCE_KEYS.budgets })
+      // The same list the requests queue uses. This used to clear the
+      // reimbursement list and the budgets only, which left the History block
+      // in the open dialog showing the claim as it was before the approval --
+      // ['reimbursements'] is not a prefix of the trail's key, so nothing told
+      // it to refetch. Approving reserves budget and withdrawing releases it,
+      // and both are covered in there too.
+      invalidateAfterRequestTransition(qc)
       toast.success(
         input.to === 'approved'
           ? 'Approved. The budget now holds this amount.'
