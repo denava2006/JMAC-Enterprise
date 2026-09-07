@@ -171,22 +171,87 @@ export function canEditDraft(
 }
 
 /**
- * What went wrong, in the database's own words.
+ * SQLSTATEs update_finance_request_draft raises on purpose.
+ *
+ * P0001 is PL/pgSQL's default for a bare RAISE, and the other three are the
+ * ones the function names explicitly. A code outside this set did not come
+ * from a RAISE anybody wrote -- it came from the engine.
+ */
+const AUTHORED_CODES = new Set([
+  '42501', // insufficient_privilege -- who may edit, and in what state
+  '23514', // check_violation -- the validation rules, and the staleness guard
+  'P0002', // no_data_found -- the request is gone
+  'P0001', // raise_exception -- a RAISE with no errcode
+])
+
+/**
+ * Phrases that only ever appear in something Postgres wrote about itself.
+ *
+ * A code alone is not enough: 23514 is both the function's own validation
+ * failures and a table constraint tripping, and the second arrives naming the
+ * constraint and the relation. So the text is checked too, and a message
+ * carrying any of these is a message about the schema rather than about the
+ * claim.
+ */
+const INTERNAL_SIGNATURES = [
+  'numeric field overflow',
+  'value overflows numeric format',
+  'violates check constraint',
+  'violates foreign key constraint',
+  'violates not-null constraint',
+  'violates unique constraint',
+  'duplicate key value',
+  'row-level security',
+  'permission denied',
+  'invalid input syntax',
+  'value too long for type',
+  'out of range',
+  'null value in column',
+  'does not exist',
+  'relation "',
+  'column "',
+  'constraint "',
+  'table "',
+]
+
+/**
+ * What went wrong, in the database's own words -- when those words were meant
+ * for a reader.
  *
  * Everything update_finance_request_draft raises is already a sentence written
- * for the person reading it -- who owns the request, what state it is in, which
+ * for the person reading it: who owns the request, what state it is in, which
  * field is wrong. The generic finance mapper would replace the 42501 ones with
  * "Your finance role does not cover that action", which is both unhelpful and
- * untrue: an employee correcting their own claim has no finance role at all.
- * Only a genuine row-level-security refusal, which nobody wrote for a reader,
- * gets a sentence of ours.
+ * untrue -- an employee correcting their own claim has no finance role at all.
+ *
+ * What must not pass through is the other kind. An amount too large for
+ * numeric(14,2) came back as "numeric field overflow"; a tripped constraint
+ * comes back naming the table and the constraint. Neither says anything a
+ * claimant can act on, and both describe the schema to whoever asked. So a
+ * refusal is passed on only when it carries a code the function raises
+ * deliberately and reads like prose rather than like a catalogue entry.
  */
 export function describeRequestEditError(error: unknown): string {
-  const err = error as { message?: string } | null
-  const message = err?.message?.trim() ?? ''
-  if (!message || message.includes('row-level security')) {
+  const err = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown } | null
+  const message = typeof err?.message === 'string' ? err.message.trim() : ''
+  if (!message) return 'That change could not be saved.'
+
+  // An error that names a code must name one of ours. An error with no code at
+  // all -- a thrown Error, a rejected string -- is judged on its words alone.
+  if (typeof err?.code === 'string' && err.code && !AUTHORED_CODES.has(err.code)) {
     return 'That change could not be saved.'
   }
+
+  // Checked across every field the error carries: PostgREST puts the readable
+  // half of a constraint failure in `details` as often as in `message`.
+  const carried = [err?.message, err?.details, err?.hint]
+    .filter((field): field is string => typeof field === 'string')
+    .join(' ')
+    .toLowerCase()
+  if (INTERNAL_SIGNATURES.some((phrase) => carried.includes(phrase))) {
+    return 'That change could not be saved.'
+  }
+
   return message
 }
 

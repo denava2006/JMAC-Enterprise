@@ -94,7 +94,7 @@ declare
   admin_id uuid; employee uuid; other_emp uuid;
   fin_staff uuid; fin_mgr uuid;
   cat_id uuid; budget uuid; other_budget uuid;
-  claim_a uuid; claim_b uuid; row_before public.finance_requests;
+  claim_a uuid; claim_b uuid; own_claim uuid; row_before public.finance_requests;
   updated public.finance_requests;
   stamp timestamptz; amt numeric; txt text; d date;
   n integer;
@@ -191,19 +191,49 @@ begin
   if n <> 0 then raise exception 'FAIL 2d editing wrote % approval rows', n; end if;
   raise notice 'PASS  2d editing writes nothing to the approval trail';
 
-  select count(*)::integer into n
-  from public.treasury_movements where source_id = claim_a;
-  if n <> 0 then raise exception 'FAIL 2e editing moved treasury'; end if;
+  -- The money checks run as Finance, not as the claimant, and that is the whole
+  -- point of the change. treasury_movements, reimbursement_payments and
+  -- budget_status are all readable only by can_read_finance_master(), so asking
+  -- these questions as the employee returned zero rows and NULL columns
+  -- whatever the truth was: `count(*)` came back 0 because nothing was visible,
+  -- and `reserved <> 0` on a NULL is NULL, which is not true, so it never
+  -- raised. Four assertions that could not fail.
+  reset role;
+  perform pg_temp.acts_as(fin_staff); set local role authenticated;
+  if not public.can_read_finance_master() then
+    raise exception 'FAIL 2e the financial checks are running as somebody who cannot read them';
+  end if;
+
   select count(*)::integer into n
   from public.reimbursement_payments where finance_request_id = claim_a;
   if n <> 0 then raise exception 'FAIL 2e editing created a payment'; end if;
+
+  -- A reimbursement movement references the PAYMENT it settled, not the
+  -- request -- pay_reimbursement writes source_type 'reimbursement_payment'
+  -- with the payment id. Matching source_id against the request id therefore
+  -- matched nothing however broken the code was. Both are asked now: no
+  -- movement behind any payment of this claim, and none naming the claim
+  -- directly either.
+  select count(*)::integer into n
+  from public.treasury_movements m
+  where m.source_id = claim_a
+     or (m.source_type = 'reimbursement_payment'
+         and m.source_id in (select p.id from public.reimbursement_payments p
+                             where p.finance_request_id = claim_a));
+  if n <> 0 then raise exception 'FAIL 2e editing moved treasury'; end if;
   raise notice 'PASS  2e no treasury movement and no payment came out of an edit';
 
   select b.reserved, b.spent into reserved, spent
   from public.budget_status b where b.id = budget;
+  if not found then
+    raise exception 'FAIL 2f the budget could not be read, so nothing was checked'; end if;
+  if reserved is null or spent is null then
+    raise exception 'FAIL 2f budget_status answered null rather than a number'; end if;
   if reserved <> 0 or spent <> 0 then
     raise exception 'FAIL 2f editing reserved % and spent %', reserved, spent; end if;
   raise notice 'PASS  2f a Draft correction reserves nothing and spends nothing';
+  reset role;
+  perform pg_temp.acts_as(employee); set local role authenticated;
 
   -- ======================================================================
   -- 3. The requester never writes the classification
@@ -225,6 +255,58 @@ begin
     raise notice 'PASS  3b nor set its category';
   end;
 
+  -- And holding finance_staff does not make your own claim somebody else's to
+  -- check. The classification policy scoped who and when -- pending_validation,
+  -- finance_staff -- but never "somebody other than the claimant", so a Finance
+  -- Staff member could raise a reimbursement, submit it, and then choose the
+  -- budget line it came out of. transition_finance_request has gated every
+  -- reviewing move behind `not _is_owner` since F3. This is the same rule on
+  -- the one surface that is a policy rather than a function.
+  reset role;
+  perform pg_temp.acts_as(fin_staff); set local role authenticated;
+  insert into public.finance_requests
+    (type, title, description, justification, requester_id, amount,
+     expense_date, priority, status)
+  values ('reimbursement', 'ZZ finance own claim ' || tag, 'ZZ details', 'ZZ purpose',
+          fin_staff, 1000, current_date - 1, 'medium', 'draft')
+  returning id into own_claim;
+  -- Submitting is the owner's act, and correctly so. It is what puts the claim
+  -- into the one state where classification is writable at all.
+  perform public.transition_finance_request(own_claim, 'pending_validation', null);
+
+  -- No UPDATE policy reaches this row now: amend wants draft or returned, and
+  -- classify wants somebody who did not raise it. Row-level security filters
+  -- rather than raising, so what is asserted is that nothing was written --
+  -- which is the security property. The trigger below is what produces a
+  -- sentence, and 3e proves it independently.
+  update public.finance_requests set budget_id = budget where id = own_claim;
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'FAIL 3c Finance Staff charged a claim they raised to a budget'; end if;
+  raise notice 'PASS  3c nor does finance_staff get to classify a claim it raised itself';
+
+  select count(*)::integer into n from public.finance_requests
+   where id = own_claim and (budget_id is not null or finance_category_id is not null
+                             or vendor_id is not null);
+  if n <> 0 then raise exception 'FAIL 3d the refused self-classification landed anyway'; end if;
+  raise notice 'PASS  3d and the claim is still unclassified';
+
+  -- With row-level security out of the way -- still acting as fin_staff, since
+  -- auth.uid() reads the JWT claim and not the database role -- the trigger
+  -- refuses it on its own. Two independent gates, so widening the policy later
+  -- cannot reopen this by itself.
+  reset role;
+  begin
+    update public.finance_requests set budget_id = budget where id = own_claim;
+    raise exception 'FAIL 3e the trigger allowed a requester to classify their own claim';
+  exception when insufficient_privilege then
+    raise notice 'PASS  3e and the trigger refuses it with the policy out of the way';
+  end;
+  -- Classifying somebody else's is still the job, and 5-and-after proves it:
+  -- the same fin_staff sets budget and category on claim_a below.
+  reset role;
+  perform pg_temp.acts_as(employee); set local role authenticated;
+
   -- ======================================================================
   -- 4. Nobody else may edit it
   -- ======================================================================
@@ -240,10 +322,20 @@ begin
     raise notice 'PASS  4a another employee cannot edit a Draft that is not theirs';
   end;
 
+  -- Read back as the owner. From over here the claim is invisible -- the read
+  -- policy is `requester_id = auth.uid() or Finance` -- so the old check
+  -- compared NULL with 1250.50, which is NULL, which never raised. It would
+  -- have passed just as happily if the hijack had succeeded.
+  reset role;
+  perform pg_temp.acts_as(employee); set local role authenticated;
   select amount, title into amt, txt from public.finance_requests where id = claim_a;
-  if amt <> 1250.50 or txt <> 'ZZ corrected title' then
-    raise exception 'FAIL 4b the refused edit changed the row anyway'; end if;
+  if not found then
+    raise exception 'FAIL 4b the claim could not be read back, so nothing was checked'; end if;
+  if amt is distinct from 1250.50 or txt is distinct from 'ZZ corrected title' then
+    raise exception 'FAIL 4b the refused edit changed the row anyway: % %', amt, txt; end if;
   raise notice 'PASS  4b and the refusal left the claim exactly as it was';
+  reset role;
+  perform pg_temp.acts_as(other_emp); set local role authenticated;
 
   -- Having a Draft of one's own is not a licence to edit someone else's.
   updated := public.update_finance_request_draft(
@@ -305,9 +397,18 @@ begin
     raise notice 'PASS  5c an approved claim is not editable';
   end;
 
+  -- The reservation is the financial invariant this whole suite exists to
+  -- protect, so it is read by somebody who can actually see a budget. Asked as
+  -- the claimant it returned no row at all, and `NULL <> 1250.50` is NULL --
+  -- the assertion could not have failed if approval had reserved nothing.
+  reset role;
+  perform pg_temp.acts_as(fin_mgr); set local role authenticated;
   select b.reserved into reserved from public.budget_status b where b.id = budget;
-  if reserved <> 1250.50 then
-    raise exception 'FAIL 5d the approved reservation is % rather than 1250.50', reserved; end if;
+  if not found then
+    raise exception 'FAIL 5d the budget could not be read, so the reservation was never checked'; end if;
+  if reserved is distinct from 1250.50 then
+    raise exception 'FAIL 5d the approved reservation is % rather than 1250.50',
+      coalesce(reserved::text, 'null'); end if;
   raise notice 'PASS  5d and the reservation still matches what was approved';
 
   -- A returned claim goes back for correction, which is the one later state
@@ -373,11 +474,31 @@ begin
     raise notice 'PASS  6e an over-long title is refused';
   end;
 
+  -- An amount larger than numeric(14,2) can hold. Without this the row reached
+  -- the UPDATE and Postgres answered "numeric field overflow", a sentence about
+  -- a column that the client then put on screen.
+  begin
+    perform public.update_finance_request_draft(
+      _request_id => claim_b, _title => 'ZZ ok', _amount => 1000000000000,
+      _priority => 'medium');
+    raise exception 'FAIL 6f an amount too large for the column was accepted';
+  exception when check_violation then
+    raise notice 'PASS  6f an amount the column cannot hold is refused in words';
+  end;
+
   -- The one rule that is specific to reimbursements, and it is already a table
   -- constraint: only a reimbursement has a date the money was already spent.
   select amount into amt from public.finance_requests where id = claim_b;
-  if amt <> 700 then raise exception 'FAIL 6f a refused edit changed the amount to %', amt; end if;
-  raise notice 'PASS  6f none of the refused edits changed anything';
+  if amt <> 700 then raise exception 'FAIL 6g a refused edit changed the amount to %', amt; end if;
+  raise notice 'PASS  6g none of the refused edits changed anything';
+
+  -- And the boundary is where the column puts it, not one short of it.
+  updated := public.update_finance_request_draft(
+    _request_id => claim_b, _title => 'ZZ ok', _amount => 999999999999.99,
+    _priority => 'low');
+  if updated.amount <> 999999999999.99 then
+    raise exception 'FAIL 6h the largest amount that fits was refused: %', updated.amount; end if;
+  raise notice 'PASS  6h while the largest amount that does fit is accepted';
 
   -- ======================================================================
   -- 7. A stale edit is refused rather than overwriting a newer one

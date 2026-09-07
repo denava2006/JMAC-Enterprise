@@ -29,6 +29,20 @@ import {
 import type { RequestType } from '@/lib/financeRequests'
 import { useUpdateRequestDraft, type FinanceRequestRow } from '@/hooks/useFinanceRequests'
 
+/** What this form owns, read off a request row. One place, so opening the
+ *  editor and reloading it cannot drift apart. */
+function valuesOf(request: FinanceRequestRow): EditRequestValues {
+  return {
+    title: request.title,
+    description: request.description ?? '',
+    justification: request.justification ?? '',
+    amount: Number(request.amount),
+    needed_by: request.needed_by ?? '',
+    expense_date: request.expense_date ?? '',
+    priority: (request.priority as EditRequestValues['priority']) ?? 'medium',
+  }
+}
+
 /**
  * Correcting a draft before it goes to Finance.
  *
@@ -57,32 +71,66 @@ export function EditRequestDialog({
 
   const form = useForm<EditRequestValues>({
     resolver: zodResolver(editRequestSchema),
-    defaultValues: {
-      title: request.title,
-      description: request.description ?? '',
-      justification: request.justification ?? '',
-      amount: Number(request.amount),
-      needed_by: request.needed_by ?? '',
-      expense_date: request.expense_date ?? '',
-      priority: (request.priority as EditRequestValues['priority']) ?? 'medium',
-    },
+    defaultValues: valuesOf(request),
   })
 
-  // Reopening the dialog on a request that has since changed — someone saved in
-  // another tab, or the row was refetched — has to start from what is there now
-  // rather than from what was there when this component first mounted.
+  /**
+   * Which version of the row this form is showing, and whether it has since
+   * been overtaken.
+   *
+   * The first version of this dialog reset the form whenever `updated_at`
+   * changed, on the reasoning that a reopened editor should show what the draft
+   * says now. True when it is reopened; wrong while it is open. A background
+   * refetch would land mid-correction and replace what was being typed —
+   * 1250.50 back to 1100, the retyped details back to the stored ones — with
+   * nothing on screen to say it had happened. Worse, the save that followed
+   * carried the *newer* timestamp, so the staleness guard in
+   * update_finance_request_draft saw a save that had read the current row and
+   * let the replacement values through as though somebody had meant them.
+   *
+   * So the version is pinned to what was actually rendered, and a row that
+   * moves underneath an untouched form is still followed — nothing is at stake
+   * — while one that moves underneath a correction in progress stops and says
+   * so.
+   */
+  const rendered = React.useRef<{ id: string; version: string | null } | null>(null)
+  const [loadedVersion, setLoadedVersion] = React.useState<string | null>(null)
+  const [overtaken, setOvertaken] = React.useState(false)
+
+  // Read during render so the effect below is subscribed to it rather than
+  // reading a stale value off the formState proxy.
+  const isDirty = form.formState.isDirty
+
+  // The inputs are uncontrolled, so a reset that changes no subscribed piece of
+  // form state re-renders nothing and leaves the boxes showing the old values
+  // while the form submits the new ones. Keying the form on the version loaded
+  // into it rebuilds the inputs whenever one actually is, so what is on screen
+  // is what would be saved.
+  const load = React.useCallback(() => {
+    form.reset(valuesOf(request))
+    rendered.current = { id: request.id, version: request.updated_at }
+    setLoadedVersion(request.updated_at)
+    setOvertaken(false)
+  }, [form, request])
+
   React.useEffect(() => {
-    if (!open) return
-    form.reset({
-      title: request.title,
-      description: request.description ?? '',
-      justification: request.justification ?? '',
-      amount: Number(request.amount),
-      needed_by: request.needed_by ?? '',
-      expense_date: request.expense_date ?? '',
-      priority: (request.priority as EditRequestValues['priority']) ?? 'medium',
-    })
-  }, [open, request.id, request.updated_at])
+    if (!open) {
+      // Closed. Reopening starts from the draft as it stands then.
+      rendered.current = null
+      setOvertaken(false)
+      return
+    }
+    if (!rendered.current || rendered.current.id !== request.id) {
+      load()
+      return
+    }
+    if (rendered.current.version === request.updated_at) return
+    if (isDirty) {
+      setOvertaken(true)
+      return
+    }
+    load()
+  }, [open, request.id, request.updated_at, isDirty, load])
 
   const onSubmit = form.handleSubmit(async (values) => {
     await save.mutateAsync({
@@ -94,9 +142,10 @@ export function EditRequestDialog({
       justification: values.justification?.trim() || null,
       expenseDate: isReimbursement ? values.expense_date || null : null,
       neededBy: isReimbursement ? null : values.needed_by || null,
-      // What this form was rendered from. If the row has moved on, the server
-      // refuses rather than overwriting whatever arrived in between.
-      expectedUpdatedAt: request.updated_at,
+      // The version these values were typed against, not whatever has arrived
+      // since. If the row has moved on, the server refuses rather than
+      // overwriting what came in between.
+      expectedUpdatedAt: rendered.current?.version ?? request.updated_at,
     })
     onOpenChange(false)
   }, reportInvalid(REQUEST_FIELD_LABELS))
@@ -112,7 +161,40 @@ export function EditRequestDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <form key={loadedVersion ?? 'initial'} onSubmit={onSubmit} className="flex flex-col gap-4">
+          {/* Named, not silent. Whichever way this is resolved it is somebody's
+              decision, so both ways out are on screen rather than one of them
+              happening quietly. */}
+          {overtaken && (
+            <div
+              role="status"
+              className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3"
+            >
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                This draft changed somewhere else while you were editing it. What you typed is
+                still here and has not been saved.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={load}>
+                  Use the newer version
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    // Overwriting deliberately: the version being replaced is
+                    // the one the save now carries, so the server accepts it.
+                    rendered.current = { id: request.id, version: request.updated_at }
+                    setOvertaken(false)
+                  }}
+                >
+                  Keep mine
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-title">What is this for?</Label>
             <Input id="edit-title" {...form.register('title')} autoFocus />

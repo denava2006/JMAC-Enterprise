@@ -257,6 +257,60 @@ describe('what the server said went wrong', () => {
     expect(describeRequestEditError({})).toBe('That change could not be saved.')
     expect(describeRequestEditError(null)).toBe('That change could not be saved.')
   })
+
+  it('does not read the schema out loud when Postgres describes itself', () => {
+    // An amount too large for numeric(14,2) reached the UPDATE and came back as
+    // an overflow. It is a true sentence about a column and a useless one to a
+    // claimant, and it names the storage of a finance table to whoever asked.
+    expect(
+      describeRequestEditError({
+        code: '22003',
+        message: 'numeric field overflow',
+        details: 'A field with precision 14, scale 2 must round to an absolute value less than 10^12.',
+      }),
+    ).toBe('That change could not be saved.')
+
+    // A tripped table constraint arrives as 23514 -- the same code the function
+    // uses for its own validation -- so the code alone is not enough to tell
+    // them apart, and the words are checked as well.
+    expect(
+      describeRequestEditError({
+        code: '23514',
+        message:
+          'new row for relation "finance_requests" violates check constraint "finance_requests_expense_date_is_reimbursement"',
+      }),
+    ).toBe('That change could not be saved.')
+
+    for (const leak of [
+      { code: '23503', message: 'insert or update on table "finance_requests" violates foreign key constraint "finance_requests_budget_id_fkey"' },
+      { code: '23505', message: 'duplicate key value violates unique constraint "finance_requests_request_no_key"' },
+      { code: '22P02', message: 'invalid input syntax for type numeric: "abc"' },
+      { code: '42501', message: 'permission denied for table finance_requests' },
+      { code: '42883', message: 'function public.update_finance_request_draft(unknown) does not exist' },
+    ]) {
+      expect(describeRequestEditError(leak), leak.message).toBe('That change could not be saved.')
+    }
+  })
+
+  it('still passes the sentences the function raises on purpose', () => {
+    // These are the codes update_finance_request_draft names, carrying the
+    // words it wrote. Replacing them with an apology is the whole reason this
+    // mapper exists rather than the generic finance one.
+    const authored = [
+      { code: '42501', message: 'Only the person who raised a request can edit it.' },
+      { code: '23514', message: 'An amount must be more than zero.' },
+      { code: '23514', message: 'Keep the amount under 1,000,000,000,000.' },
+      { code: 'P0002', message: 'That request no longer exists.' },
+      {
+        code: '23514',
+        message:
+          'This request was changed somewhere else while you were editing it. Close it and open it again to see the current version.',
+      },
+    ]
+    for (const err of authored) {
+      expect(describeRequestEditError(err), err.message).toBe(err.message)
+    }
+  })
 })
 
 describe('each finance role has one queue to clear', () => {

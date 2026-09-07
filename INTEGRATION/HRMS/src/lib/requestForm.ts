@@ -23,11 +23,27 @@ export const REQUEST_FIELD_LABELS = {
   needed_by: 'Needed by',
 }
 
+/**
+ * The largest amount the column can hold: finance_requests.amount is
+ * numeric(14,2), so twelve digits before the point and two after.
+ *
+ * Without this the form accepts 1000000000000 happily and the database answers
+ * "numeric field overflow", which is a sentence about a column rather than
+ * about the claim somebody just tried to file. The bound belongs here, next to
+ * the other limits, and update_finance_request_draft states it again so a
+ * caller that never loads this form is told the same thing.
+ */
+export const AMOUNT_CEILING = 999999999999.99
+const TOO_MUCH = 'Keep the amount under 1,000,000,000,000'
+
 const shape = {
   title: z.string().min(1, 'Say what this is for').max(150, 'Keep this under 150 characters'),
   description: z.string().max(1000, 'Keep the details under 1000 characters').optional(),
   justification: z.string().max(1000, 'Keep the reason under 1000 characters').optional(),
-  amount: z.number({ error: 'Enter an amount' }).positive('An amount must be more than zero'),
+  amount: z
+    .number({ error: 'Enter an amount' })
+    .positive('An amount must be more than zero')
+    .max(AMOUNT_CEILING, TOO_MUCH),
   needed_by: z.string().optional(),
   expense_date: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high']),
