@@ -10,6 +10,7 @@ import {
   useInvoiceablePurchaseOrders,
 } from '@/hooks/useSupplierInvoices'
 import { useReimbursements, useReimbursementPayments } from '@/hooks/useReimbursements'
+import { hasAvailableToPrepare } from '@/lib/reimbursements'
 import { usePayrollFinanceBatches, usePayrollDisbursements } from '@/hooks/usePayrollFinance'
 
 export interface WaitingItem {
@@ -194,11 +195,15 @@ export function WaitingOnYou() {
     // Every F7 count is derived from authoritative state, never stored.
     reimbursementsToReview: claims.filter((c) => c.status === 'pending_validation').length,
     reimbursementsToApprove: claims.filter((c) => c.status === 'pending_approval').length,
-    // Approved claims that still owe something — not a count of claims, and
-    // not a count of payments.
-    reimbursementsToPay: claims.filter(
-      (c) => c.status === 'approved' && Number(c.balance_due ?? 0) > 0,
-    ).length,
+    // Claims the Accountant can still prepare a payment against — the same
+    // predicate the reimbursement detail uses to decide whether to offer
+    // Prepare payment, so the queue and the page cannot disagree.
+    //
+    // This was balance_due > 0, which subtracts only what has been PAID. A
+    // claim whose whole balance was already covered by an instruction sitting
+    // with the Finance Manager was still advertised here as the Accountant's
+    // work, while the detail page correctly showed them nothing to do.
+    reimbursementsToPay: claims.filter(hasAvailableToPrepare).length,
     reimbursementPaymentsToApprove: reimbursementPayments.filter(
       (p) => p.status === 'for_approval',
     ).length,

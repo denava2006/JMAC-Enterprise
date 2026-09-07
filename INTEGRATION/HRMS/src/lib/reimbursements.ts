@@ -164,12 +164,43 @@ export function reimbursementActionsFor(
   return []
 }
 
-/** Whether another payment may still be prepared against this claim. */
+/**
+ * Whether this claim still has room for another payment instruction.
+ *
+ * About the claim, not about the viewer — which is the whole point of it being
+ * separate from canPrepareReimbursementPayment below. The Accountant's overview
+ * queue counted approved claims with balance_due > 0, and balance_due subtracts
+ * only what has been PAID. RB-2026-0001 had ₱1,000 owing and a ₱1,000
+ * instruction already sitting with the Finance Manager, so the overview
+ * advertised work the detail page had correctly withdrawn: the same claim, two
+ * screens, opposite answers.
+ *
+ * available_to_prepare is the server's own answer, and it is the one that
+ * accounts for live instructions:
+ *
+ *   available = greatest(amount − reimbursement_paid − reimbursement_pending, 0)
+ *
+ * where pending sums payments in draft, for_approval or approved. Returned and
+ * rejected instructions are not live and release their room; paid ones have
+ * already moved into the paid term. Nothing here re-derives any of that.
+ */
+export function hasAvailableToPrepare(r: {
+  status?: string | null
+  available_to_prepare?: number | string | null
+}): boolean {
+  // The status test is belt and braces: available_to_prepare is already 0 for
+  // anything that is not approved, server-side.
+  return r.status === 'approved' && Number(r.available_to_prepare ?? 0) > 0
+}
+
+/** Whether another payment may still be prepared against this claim, by this
+ *  person. The claim half is shared with the overview queue so the two cannot
+ *  disagree about whether the Accountant has work. */
 export function canPrepareReimbursementPayment(
   r: { status?: string | null; available_to_prepare?: number | string | null },
   role: string | undefined
 ): boolean {
-  return role === 'accountant' && r.status === 'approved' && Number(r.available_to_prepare ?? 0) > 0
+  return role === 'accountant' && hasAvailableToPrepare(r)
 }
 
 /**

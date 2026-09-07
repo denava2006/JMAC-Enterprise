@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPrepareReimbursementPayment,
+  hasAvailableToPrepare,
   nextStepFor,
   paymentActionsFor,
   reimbursementActionsFor,
@@ -281,5 +282,86 @@ describe('who has the claim next', () => {
     const step = nextStepFor(approved, [{ status: 'rejected' }, { status: 'paid' }])
     expect(step?.actor).toBe('The Accountant')
     expect(step?.description).toBe('prepares the reimbursement payment.')
+  })
+})
+
+/**
+ * Whether the Accountant can still prepare a payment against a claim.
+ *
+ * F7-QA-10: the overview counted approved claims with balance_due > 0, and
+ * balance_due subtracts only what has been PAID. RB-2026-0001 had P1,000 owing
+ * and a P1,000 instruction already with the Finance Manager, so the overview
+ * advertised Accountant work while the detail page correctly showed none.
+ *
+ * available_to_prepare is the server's own answer and accounts for live
+ * instructions: amount - paid - pending, where pending sums payments in draft,
+ * for_approval or approved. These pin the cases from the defect report.
+ */
+describe('whether a claim still has room for an instruction', () => {
+  const claim = (over: Record<string, unknown> = {}) => ({
+    status: 'approved',
+    balance_due: 1000,
+    available_to_prepare: 1000,
+    ...over,
+  })
+
+  it('A. counts an approved claim with nothing prepared against it', () => {
+    expect(hasAvailableToPrepare(claim({ available_to_prepare: 1000 }))).toBe(true)
+  })
+
+  it('B. does not count one whose balance is fully covered by a live instruction', () => {
+    // The production case: owing P1,000, pending P1,000, available P0. The
+    // next step is the Finance Manager's, not the Accountant's.
+    expect(
+      hasAvailableToPrepare(claim({ balance_due: 1000, available_to_prepare: 0 })),
+    ).toBe(false)
+  })
+
+  it('C. still counts one that is only partly covered', () => {
+    expect(hasAvailableToPrepare(claim({ balance_due: 1000, available_to_prepare: 600 }))).toBe(
+      true,
+    )
+  })
+
+  it('E. does not count one that is fully paid', () => {
+    expect(
+      hasAvailableToPrepare(claim({ balance_due: 0, available_to_prepare: 0 })),
+    ).toBe(false)
+  })
+
+  it('F. counts it again once a rejected instruction releases the room', () => {
+    // reimbursement_pending_payment sums draft, for_approval and approved only,
+    // so rejecting or returning an instruction gives its room back and the
+    // server raises available_to_prepare. Nothing here recomputes that.
+    expect(hasAvailableToPrepare(claim({ available_to_prepare: 0 }))).toBe(false)
+    expect(hasAvailableToPrepare(claim({ available_to_prepare: 1000 }))).toBe(true)
+  })
+
+  it('never counts a claim that is not approved, whatever the number says', () => {
+    for (const status of ['draft', 'pending_validation', 'pending_approval', 'returned', 'rejected']) {
+      expect(hasAvailableToPrepare(claim({ status })), status).toBe(false)
+    }
+  })
+
+  it('reads a string amount the same as a number', () => {
+    expect(hasAvailableToPrepare(claim({ available_to_prepare: '600.00' }))).toBe(true)
+    expect(hasAvailableToPrepare(claim({ available_to_prepare: '0.00' }))).toBe(false)
+  })
+
+  it('G. is the same question the detail page asks before offering Prepare', () => {
+    // The overview and the detail page cannot disagree, because the claim half
+    // of both answers is this one function.
+    for (const available of [0, 600, 1000]) {
+      const c = claim({ available_to_prepare: available })
+      expect(canPrepareReimbursementPayment(c, 'accountant'), String(available)).toBe(
+        hasAvailableToPrepare(c),
+      )
+    }
+  })
+
+  it('and the role check still sits on top of it', () => {
+    const c = claim({ available_to_prepare: 1000 })
+    expect(hasAvailableToPrepare(c)).toBe(true)
+    expect(canPrepareReimbursementPayment(c, 'finance_manager')).toBe(false)
   })
 })
