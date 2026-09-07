@@ -185,9 +185,15 @@ export default function SupplierInvoicesPage() {
         <StatCard label="Overdue" value={overdue.length} icon={AlertTriangle} isLoading={isLoading} />
       </div>
 
+      {/* The sentence that used to end "supplier payment is a later phase" —
+          written before F6 shipped it, and false ever since. The distinction it
+          draws is still the important one, so only the stale half changed:
+          approving an invoice acknowledges a debt, and paying it is a separate
+          act on the Settlements side. */}
       <p className="-mt-2 text-xs text-muted-foreground">
         An approved invoice is a debt the company acknowledges, not a payment. Nothing here moves
-        money, changes a budget, or touches branch stock — supplier payment is a later phase.
+        money, changes a budget, or touches branch stock — paying a supplier is a separate step,
+        recorded against a treasury account once the Finance Manager has authorised it.
       </p>
 
       <div className="flex flex-wrap gap-2">
