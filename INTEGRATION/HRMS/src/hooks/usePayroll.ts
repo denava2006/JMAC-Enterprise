@@ -562,50 +562,43 @@ export function useAddPayrollLineItem() {
 
 // ---- Steps 14-16: Generate Payslip, Release, Save ----
 
+/**
+ * Release one payroll period.
+ *
+ * One call, because release is one act. This used to be four round trips: read
+ * the period, read its approved records, insert a payslip per record in a loop,
+ * then flip the records to released. The payslip inserts DISCARDED their errors
+ * — `await supabase.from('payslips').insert(...)` with the result thrown away —
+ * so payroll released whether or not the employees got payslips, and with no
+ * uniqueness on payslips.payroll_record_id a retry issued them twice.
+ *
+ * release_payroll_period does all of it inside one transaction: every payslip,
+ * every record, the period, and the Finance snapshot. Any failure takes the
+ * whole thing with it, so there is no longer a state where payroll is half
+ * released. Retrying a period that already released returns its existing
+ * Finance batch rather than doing anything again.
+ *
+ * Authority is unchanged — the RPC re-checks is_hr_manager_or_admin(), the same
+ * rule protect_payroll_approval has always enforced.
+ */
 export function useReleasePayroll() {
-  const { profile } = useAuth()
   const invalidate = useInvalidatePayroll()
   return useMutation({
     mutationFn: async ({ periodId }: { periodId: string }) => {
-      const { data: period, error: periodError } = await supabase.from('payroll_periods').select('status').eq('id', periodId).single()
-      if (periodError) throw periodError
-      if (period.status !== 'approved') {
-        throw new Error('Every employee in this period must be approved before payroll can be released.')
-      }
-
-      // Only approved records are released. A record still sitting in draft or
-      // rejected can't ride along on the period's status.
-      const { data: records, error: recordsError } = await supabase
-        .from('payroll_records')
-        .select('id')
-        .eq('payroll_period_id', periodId)
-        .eq('status', 'approved')
-      if (recordsError) throw recordsError
-
-      const now = new Date().toISOString()
-      for (const record of records) {
-        await supabase.from('payslips').insert({ payroll_record_id: record.id, released_at: now })
-      }
-
-      const { error: recordsUpdateError } = await supabase
-        .from('payroll_records')
-        .update({ status: 'released', released_at: now })
-        .eq('payroll_period_id', periodId)
-        .eq('status', 'approved')
-      if (recordsUpdateError) throw recordsUpdateError
-      // The period's own status follows its records via trigger — no separate
-      // update here, which is what used to let the two drift apart.
-
-      await supabase.from('audit_logs').insert([
-        { actor_id: profile?.id, action: 'Payslip Generated', table_name: 'payroll_periods', record_id: periodId },
-        { actor_id: profile?.id, action: 'Payslip Released', table_name: 'payroll_periods', record_id: periodId },
-      ])
+      const { data, error } = await supabase.rpc('release_payroll_period', {
+        _period_id: periodId,
+      })
+      if (error) throw error
+      return data as string | null
     },
     onSuccess: (_data, { periodId }) => {
       invalidate(periodId)
-      toast.success('Payroll successfully completed.')
+      toast.success('Payroll released. Payslips are issued and Finance has the batch.')
     },
-    onError: (error) => toast.error(error.message),
+    // The server's message, which names what stopped it — which employee is
+    // not approved, or which payslip is missing. Replacing it with "Release
+    // failed" would throw away the only useful part.
+    onError: (error) => toast.error(error.message || 'Payroll could not be released.'),
   })
 }
 

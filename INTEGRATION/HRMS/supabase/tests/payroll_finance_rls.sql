@@ -141,9 +141,15 @@ begin
   -- Releasing every record is what makes the period released, and the period
   -- becoming released is what calls Finance. Nobody types a Finance batch.
   -- Release is the HR Manager's: HR Staff prepare, the Manager finalizes.
+  --
+  -- Through release_payroll_period rather than by hand: since the F7 payroll
+  -- preflight a period cannot reach released with a record that has no
+  -- payslip, and issuing the payslips is part of releasing. Hand-releasing the
+  -- records here would be testing a route the product no longer has.
   perform pg_temp.acts_as(hr_mgr); set local role authenticated;
-  update public.payroll_records set status = 'released', released_at = now()
+  update public.payroll_records set status = 'approved'
    where payroll_period_id = period;
+  perform public.release_payroll_period(period);
   reset role;
 
   select status into txt from public.payroll_periods where id = period;

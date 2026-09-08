@@ -6984,6 +6984,7 @@ export type Database = {
         Args: { p_reason: string; p_request_id: string }
         Returns: undefined
       }
+      release_payroll_period: { Args: { _period_id: string }; Returns: string }
       rename_pos_category: {
         Args: { _category_id: string; _name: string }
         Returns: undefined
