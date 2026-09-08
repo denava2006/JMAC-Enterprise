@@ -85,21 +85,29 @@ describe('exactly one navigation row is ever active', () => {
       .map((el) => el.textContent?.trim())
   }
 
+  // Each row now names the role whose workspace contains that module, because
+  // the Finance menu is role-specific: asking for a row that is not in this
+  // account's sidebar would be testing access, which financeModules.test.ts
+  // covers. What is being tested here is still only the highlight.
   it.each([
-    ['/fms', 'Overview'],
-    ['/fms/requests', 'Requests'],
-    ['/fms/sales', 'Sales & Collections'],
-    ['/fms/settlements', 'Settlements'],
-    ['/fms/reimbursements', 'Reimbursements'],
-    ['/fms/payroll', 'Payroll Finance'],
-    ['/fms/treasury', 'Cash & Bank'],
-    ['/fms/procurement', 'Procurement'],
-    ['/fms/budgets', 'Budgets'],
-    ['/fms/vendors', 'Vendors'],
-    ['/fms/categories', 'Categories'],
-    ['/fms/accounts', 'Chart of Accounts'],
-  ])('marks only %s active, as %s', (path, expected) => {
-    state.role = 'finance_staff'
+    ['/fms', 'Overview', 'finance_staff'],
+    ['/fms/requests', 'Requests', 'finance_staff'],
+    ['/fms/procurement', 'Procurement', 'finance_staff'],
+    ['/fms/budgets', 'Budgets', 'finance_staff'],
+    ['/fms/vendors', 'Vendors', 'finance_staff'],
+    ['/fms/categories', 'Categories', 'finance_staff'],
+    ['/fms/reimbursements', 'Reimbursements', 'finance_staff'],
+    ['/fms/sales', 'Sales & Collections', 'accountant'],
+    ['/fms/settlements', 'Settlements', 'accountant'],
+    ['/fms/payroll', 'Payroll Finance', 'accountant'],
+    ['/fms/treasury', 'Cash & Bank', 'accountant'],
+    ['/fms/accounts', 'Chart of Accounts', 'accountant'],
+    ['/fms/journal', 'Journal Entries', 'accountant'],
+    ['/fms/ledger', 'General Ledger', 'accountant'],
+    ['/fms/trial-balance', 'Trial Balance', 'accountant'],
+    ['/fms/reports', 'Reports', 'accountant'],
+  ] as [string, string, UserRole][])('marks only %s active, as %s', (path, expected, role) => {
+    state.role = role
     show(path)
     expect(activeLinkNames()).toEqual([expected])
   })

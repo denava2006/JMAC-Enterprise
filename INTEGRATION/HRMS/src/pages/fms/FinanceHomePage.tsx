@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Landmark, Lock, PiggyBank, Receipt, Store, Tags, TrendingUp, Wallet } from 'lucide-react'
+import { Lock, PiggyBank, Receipt, TrendingUp, Wallet } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
@@ -16,6 +16,7 @@ import {
   useVendors,
 } from '@/hooks/useFinanceMasterData'
 import { useFinanceSalesPresets, useFinanceSalesSummary } from '@/hooks/useFinanceSales'
+import { canAccessFinanceModule, financeOverviewTiles } from '@/lib/financeModules'
 
 /**
  * The Finance overview.
@@ -69,32 +70,26 @@ export default function FinanceHomePage() {
 
   const referenceLoading = budgetsLoading || vendorsLoading || categoriesLoading || accountsLoading
 
-  const modules = [
-    {
-      to: '/fms/budgets',
-      icon: PiggyBank,
-      title: 'Budgets',
-      body: 'Approved ceilings, and the allocations drawn against them.',
-    },
-    {
-      to: '/fms/vendors',
-      icon: Store,
-      title: 'Vendors',
-      body: 'Suppliers the company pays, and what each one supplies.',
-    },
-    {
-      to: '/fms/categories',
-      icon: Tags,
-      title: 'Categories',
-      body: 'How money is classified — separate from POS product categories.',
-    },
-    {
-      to: '/fms/accounts',
-      icon: Landmark,
-      title: 'Chart of Accounts',
-      body: 'The cash, bank and e-wallet accounts money moves through.',
-    },
-  ]
+  // Summaries follow the workspace. Showing an Accountant a budget's Remaining
+  // when Budgets is not theirs to open, or a Finance Staff today's takings when
+  // Sales is not, is the same dead end as a tile that bounces you -- a figure
+  // you cannot go and look into. Same policy as the sidebar and the guard.
+  const can = (route: string) => canAccessFinanceModule(profile?.role, route)
+  const showBudgetFigures = can('/fms/budgets')
+  const showSalesFigures = can('/fms/sales')
+
+  const referenceCounts = [
+    showBudgetFigures ? `${activeBudgets.length} active budgets` : null,
+    can('/fms/vendors') ? `${vendors.filter((v) => v.is_active).length} active vendors` : null,
+    can('/fms/categories') ? `${categories.filter((c) => c.is_active).length} categories` : null,
+    can('/fms/accounts') ? `${accounts.filter((a) => a.is_active).length} open accounts` : null,
+  ].filter(Boolean)
+
+  // The shortcuts, from the same table the sidebar and the route guard read.
+  // They used to be four hard-coded links shown to everyone, which after the
+  // workspaces were separated would have offered an Accountant three modules
+  // their own URL now refuses -- a tile that bounces you is worse than no tile.
+  const modules = financeOverviewTiles(profile?.role)
 
   return (
     <div className="flex flex-col gap-5">
@@ -112,66 +107,70 @@ export default function FinanceHomePage() {
           zero — which is how an overview came to contradict its own Budgets
           page. Every one of them fails to "Unavailable" rather than to ₱0.00,
           because a figure nobody could load is not a figure of nought. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Approved ceiling"
-          value={formatMoney(ceiling)}
-          icon={PiggyBank}
-          isLoading={budgetsLoading}
-          isError={budgetsFailed}
-        />
-        <StatCard
-          label="Reserved"
-          value={formatMoney(reserved)}
-          icon={Lock}
-          isLoading={budgetsLoading}
-          isError={budgetsFailed}
-        />
-        <StatCard
-          label="Spent"
-          value={formatMoney(spent)}
-          icon={Receipt}
-          isLoading={budgetsLoading}
-          isError={budgetsFailed}
-        />
-        <StatCard
-          label="Remaining"
-          value={formatMoney(remaining)}
-          icon={Wallet}
-          isLoading={budgetsLoading}
-          isError={budgetsFailed}
-        />
-      </div>
+      {showBudgetFigures && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Approved ceiling"
+            value={formatMoney(ceiling)}
+            icon={PiggyBank}
+            isLoading={budgetsLoading}
+            isError={budgetsFailed}
+          />
+          <StatCard
+            label="Reserved"
+            value={formatMoney(reserved)}
+            icon={Lock}
+            isLoading={budgetsLoading}
+            isError={budgetsFailed}
+          />
+          <StatCard
+            label="Spent"
+            value={formatMoney(spent)}
+            icon={Receipt}
+            isLoading={budgetsLoading}
+            isError={budgetsFailed}
+          />
+          <StatCard
+            label="Remaining"
+            value={formatMoney(remaining)}
+            icon={Wallet}
+            isLoading={budgetsLoading}
+            isError={budgetsFailed}
+          />
+        </div>
+      )}
 
       {/* Today's trading, from the same server query the Sales page uses --
           two figures, not a second copy of that page. "Today" is the
           Philippine business day the database resolves, not the browser's. */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <StatCard
-          label="Today's net sales"
-          value={formatMoney(Number(today?.net_sales ?? 0))}
-          icon={TrendingUp}
-          isLoading={todayLoading}
-        />
-        <StatCard
-          label="Today's collections"
-          value={formatMoney(Number(today?.total_collected ?? 0))}
-          icon={Wallet}
-          isLoading={todayLoading}
-        />
-      </div>
+      {showSalesFigures && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <StatCard
+            label="Today's net sales"
+            value={formatMoney(Number(today?.net_sales ?? 0))}
+            icon={TrendingUp}
+            isLoading={todayLoading}
+          />
+          <StatCard
+            label="Today's collections"
+            value={formatMoney(Number(today?.total_collected ?? 0))}
+            icon={Wallet}
+            isLoading={todayLoading}
+          />
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {modules.map((module) => (
-          <Link key={module.to} to={module.to} className="group">
+          <Link key={module.route} to={module.route} className="group">
             <Card className="h-full transition-colors group-hover:border-accent/40">
               <CardContent className="flex items-start gap-3 p-4">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
                   <module.icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-medium text-foreground">{module.title}</p>
-                  <p className="text-sm text-muted-foreground">{module.body}</p>
+                  <p className="font-medium text-foreground">{module.label}</p>
+                  <p className="text-sm text-muted-foreground">{module.blurb}</p>
                 </div>
               </CardContent>
             </Card>
@@ -185,15 +184,7 @@ export default function FinanceHomePage() {
               reads as a finance function with nothing set up rather than as a
               page that is still loading. */}
           <p className="text-sm font-medium text-foreground">
-            {referenceLoading ? (
-              'Loading reference data…'
-            ) : (
-              <>
-                {activeBudgets.length} active budgets · {vendors.filter((v) => v.is_active).length}{' '}
-                active vendors · {categories.filter((c) => c.is_active).length} categories ·{' '}
-                {accounts.filter((a) => a.is_active).length} open accounts
-              </>
-            )}
+            {referenceLoading ? 'Loading reference data…' : referenceCounts.join(' · ')}
           </p>
           <p className="text-xs text-muted-foreground">
             Purchase requests, procurement, supplier invoices, employee reimbursements and payroll

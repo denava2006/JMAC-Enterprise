@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -24,21 +25,14 @@ import {
   Boxes,
   ShoppingCart,
   Receipt as ReceiptIcon,
-  PiggyBank,
-  Landmark,
   ReceiptText,
-  PackageCheck,
-  TrendingUp,
-  ArrowDownLeft,
-  BookOpen,
-  BookMarked,
-  Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { portalForPath } from '@/lib/portals'
 import { canAccessModule } from '@/lib/roles'
+import { financeNavFor } from '@/lib/financeModules'
 import { JmacWordmark } from '@/components/Brand'
 import { BuildStamp } from '@/components/BuildStamp'
 
@@ -84,40 +78,11 @@ const referenceNav: NavItem[] = [
   { label: 'Work Schedules', to: '/dashboard/admin/work-schedules', icon: CalendarClock },
 ]
 
-// Finance. Its own array rather than a filter over mainNav: a Finance Manager
-// standing in /fms wants budgets and vendors, not the HR modules they have no
-// access to. The same reasoning as employeeNav above.
-const financeNav: NavItem[] = [
-  { label: 'Overview', to: '/fms', icon: LayoutDashboard },
-  { label: 'Requests', to: '/fms/requests', icon: ReceiptText },
-  { label: 'Sales & Collections', to: '/fms/sales', icon: TrendingUp },
-  { label: 'Procurement', to: '/fms/procurement', icon: PackageCheck },
-  { label: 'Budgets', to: '/fms/budgets', icon: PiggyBank },
-  { label: 'Settlements', to: '/fms/settlements', icon: ArrowDownLeft },
-  { label: 'Supplier Invoices', to: '/fms/invoices', icon: FileBarChart },
-  // The other two things Finance pays out: an employee's own money back, and
-  // a finalized payroll. Grouped with the payables rather than scattered.
-  { label: 'Reimbursements', to: '/fms/reimbursements', icon: Receipt },
-  { label: 'Payroll Finance', to: '/fms/payroll', icon: Users },
-  { label: 'Cash & Bank', to: '/fms/treasury', icon: Wallet },
-  { label: 'Vendors', to: '/fms/vendors', icon: Store },
-  { label: 'Categories', to: '/fms/categories', icon: Tags },
-]
-
-// The books. Everything above moves money; nothing here does -- these pages
-// read what those transactions already recorded. Its own section for that
-// reason, so the working queues are not diluted by four read-only reports.
-//
-// Chart of Accounts sits here rather than with the other reference data: it is
-// what the journal posts into, and it was the odd item out at the end of the
-// list above.
-const accountingNav: NavItem[] = [
-  { label: 'Chart of Accounts', to: '/fms/accounts', icon: Landmark },
-  { label: 'Journal Entries', to: '/fms/journal', icon: BookOpen },
-  { label: 'General Ledger', to: '/fms/ledger', icon: BookMarked },
-  { label: 'Trial Balance', to: '/fms/trial-balance', icon: Scale },
-  { label: 'Reports', to: '/fms/reports', icon: FileBarChart },
-]
+// Finance navigation is not a list here any more. The three Finance roles do
+// different jobs, so they get different workspaces, and both those workspaces
+// and the route guards are derived from one table -- financeNavFor() over
+// FINANCE_MODULES in lib/financeModules.ts. A list in this file would be a
+// second opinion about who may open what, and the two would drift.
 
 // Genuinely Administrator-only.
 const adminNav: NavItem[] = [
@@ -195,6 +160,15 @@ export function NavRow({ item, end }: { item: NavItem; end?: boolean }) {
   )
 }
 
+/** The small uppercase heading above a group of rows. */
+function NavGroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </p>
+  )
+}
+
 export function Sidebar() {
   const { profile } = useAuth()
   const { pathname } = useLocation()
@@ -208,9 +182,11 @@ export function Sidebar() {
   const inFinance = portal === 'finance'
   const visibleMainNav = inSelfService
     ? employeeNav
-    : inFinance
-      ? financeNav
-      : mainNav.filter((item) => canAccessModule(profile?.role, item.to))
+    : mainNav.filter((item) => canAccessModule(profile?.role, item.to))
+
+  // Finance is grouped and role-specific, so it is sections rather than a
+  // flat list. Same table the route guard reads.
+  const financeSections = inFinance ? financeNavFor(profile?.role) : []
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex print:hidden">
@@ -222,26 +198,20 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-        {visibleMainNav.map((item) => (
-          <NavRow key={item.to} item={item} />
-        ))}
-
-        {inFinance && (
-          <>
-            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Accounting
-            </p>
-            {accountingNav.map((item) => (
-              <NavRow key={item.to} item={item} />
-            ))}
-          </>
-        )}
+        {inFinance
+          ? financeSections.map((section) => (
+              <React.Fragment key={section.group ?? 'top'}>
+                {section.group && <NavGroupLabel>{section.group}</NavGroupLabel>}
+                {section.modules.map((m) => (
+                  <NavRow key={m.route} item={{ label: m.label, to: m.route, icon: m.icon }} />
+                ))}
+              </React.Fragment>
+            ))
+          : visibleMainNav.map((item) => <NavRow key={item.to} item={item} />)}
 
         {!inSelfService && !inFinance && (
           <>
-            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Reference Data
-            </p>
+            <NavGroupLabel>Reference Data</NavGroupLabel>
             {referenceNav
               .filter((item) => canAccessModule(profile?.role, item.to))
               .map((item) => (
@@ -252,16 +222,12 @@ export function Sidebar() {
 
         {profile?.role === 'admin' && !inFinance && (
           <>
-            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Administration
-            </p>
+            <NavGroupLabel>Administration</NavGroupLabel>
             {adminNav.map((item) => (
               <NavRow key={item.to} item={item} />
             ))}
 
-            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              POS Management
-            </p>
+            <NavGroupLabel>POS Management</NavGroupLabel>
             {posAdminNav.map((item) => (
               <NavRow key={item.to} item={item} />
             ))}

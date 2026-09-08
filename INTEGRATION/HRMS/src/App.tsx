@@ -58,6 +58,7 @@ import JournalEntriesPage from '@/pages/fms/JournalEntriesPage'
 import GeneralLedgerPage from '@/pages/fms/GeneralLedgerPage'
 import TrialBalancePage from '@/pages/fms/TrialBalancePage'
 import AccountingReportsPage from '@/pages/fms/AccountingReportsPage'
+import { FinanceModuleRoute } from '@/components/fms/FinanceModuleRoute'
 import PosTillPage from '@/pages/pos/PosTillPage'
 import PosTransactionsPage from '@/pages/pos/PosTransactionsPage'
 import AdminPosTransactionsPage from '@/pages/admin/PosTransactionsPage'
@@ -155,36 +156,154 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
+              {/* Every page below is wrapped in FinanceModuleRoute, which asks
+                  the same FINANCE_MODULES table the sidebar builds itself from.
+                  A role whose workspace does not contain a module is refused
+                  its URL too, so hiding a link is never the only thing in the
+                  way. The database is still the authority; this only decides
+                  what is worth rendering. */}
               <Route index element={<FinanceHomePage />} />
-              <Route path="requests" element={<FinanceRequestsPage />} />
-              <Route path="procurement" element={<ProcurementPage />} />
+              <Route
+                path="requests"
+                element={
+                  <FinanceModuleRoute route="/fms/requests">
+                    <FinanceRequestsPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="procurement"
+                element={
+                  <FinanceModuleRoute route="/fms/procurement">
+                    <ProcurementPage />
+                  </FinanceModuleRoute>
+                }
+              />
               {/* Supplier invoices and what is owed on them. One route:
                   an account payable is an approved invoice nobody has
                   paid, not a separate document. */}
-              <Route path="invoices" element={<SupplierInvoicesPage />} />
+              <Route
+                path="invoices"
+                element={
+                  <FinanceModuleRoute route="/fms/invoices">
+                    <SupplierInvoicesPage />
+                  </FinanceModuleRoute>
+                }
+              />
               {/* Read-only. POS owns every sale behind this page, and a
                   correction has to start where the transaction did. */}
-              <Route path="sales" element={<FinanceSalesPage />} />
+              <Route
+                path="sales"
+                element={
+                  <FinanceModuleRoute route="/fms/sales">
+                    <FinanceSalesPage />
+                  </FinanceModuleRoute>
+                }
+              />
               {/* Collections arriving in a company account, and the accounts
                   themselves. Supplier payments live on the invoice they settle
                   rather than on a page of their own. */}
-              <Route path="settlements" element={<SettlementsPage />} />
-              <Route path="treasury" element={<TreasuryPage />} />
+              <Route
+                path="settlements"
+                element={
+                  <FinanceModuleRoute route="/fms/settlements">
+                    <SettlementsPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="treasury"
+                element={
+                  <FinanceModuleRoute route="/fms/treasury">
+                    <TreasuryPage />
+                  </FinanceModuleRoute>
+                }
+              />
               {/* Employee expense claims, and paying finalized payroll. Both
                   settle a payable; neither calculates one. */}
-              <Route path="reimbursements" element={<ReimbursementsPage />} />
-              <Route path="payroll" element={<PayrollFinancePage />} />
-              <Route path="budgets" element={<BudgetsPage />} />
-              <Route path="vendors" element={<VendorsPage />} />
-              <Route path="categories" element={<FinanceCategoriesPage />} />
-              <Route path="accounts" element={<FinanceAccountsPage />} />
+              <Route
+                path="reimbursements"
+                element={
+                  <FinanceModuleRoute route="/fms/reimbursements">
+                    <ReimbursementsPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="payroll"
+                element={
+                  <FinanceModuleRoute route="/fms/payroll">
+                    <PayrollFinancePage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="budgets"
+                element={
+                  <FinanceModuleRoute route="/fms/budgets">
+                    <BudgetsPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="vendors"
+                element={
+                  <FinanceModuleRoute route="/fms/vendors">
+                    <VendorsPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="categories"
+                element={
+                  <FinanceModuleRoute route="/fms/categories">
+                    <FinanceCategoriesPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="accounts"
+                element={
+                  <FinanceModuleRoute route="/fms/accounts">
+                    <FinanceAccountsPage />
+                  </FinanceModuleRoute>
+                }
+              />
               {/* Accounting. Read-only by construction: these pages record
                   what the routes above already did, and none of them can
                   create, edit or approve an entry. */}
-              <Route path="journal" element={<JournalEntriesPage />} />
-              <Route path="ledger" element={<GeneralLedgerPage />} />
-              <Route path="trial-balance" element={<TrialBalancePage />} />
-              <Route path="reports" element={<AccountingReportsPage />} />
+              <Route
+                path="journal"
+                element={
+                  <FinanceModuleRoute route="/fms/journal">
+                    <JournalEntriesPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="ledger"
+                element={
+                  <FinanceModuleRoute route="/fms/ledger">
+                    <GeneralLedgerPage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="trial-balance"
+                element={
+                  <FinanceModuleRoute route="/fms/trial-balance">
+                    <TrialBalancePage />
+                  </FinanceModuleRoute>
+                }
+              />
+              <Route
+                path="reports"
+                element={
+                  <FinanceModuleRoute route="/fms/reports">
+                    <AccountingReportsPage />
+                  </FinanceModuleRoute>
+                }
+              />
             </Route>
 
             <Route

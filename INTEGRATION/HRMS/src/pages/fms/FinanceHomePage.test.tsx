@@ -49,7 +49,12 @@ const state: {
   budgets: BUDGETS,
   budgetsLoading: false,
   budgetsError: false,
-  role: 'accountant',
+  // The Finance Manager, because these tests are about the budget figures and
+  // the Manager is a role whose workspace contains Budgets. It used to be the
+  // Accountant, which stopped being a role that sees these cards when the
+  // workspaces were separated -- an Accountant cannot open Budgets, so the
+  // overview no longer offers them a ceiling they cannot go and look into.
+  role: 'finance_manager',
 }
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -92,7 +97,7 @@ beforeEach(() => {
   state.budgets = BUDGETS
   state.budgetsLoading = false
   state.budgetsError = false
-  state.role = 'accountant'
+  state.role = 'finance_manager'
 })
 
 afterEach(cleanup)
@@ -189,6 +194,62 @@ describe('an unknown figure does not become a zero', () => {
     show()
     expect(screen.getByText(/Loading reference data/)).toBeTruthy()
     expect(screen.queryByText(/0 active budgets/)).toBeNull()
+  })
+})
+
+/**
+ * The overview summarises the workspace it belongs to.
+ *
+ * A figure from a page the viewer will be turned away from is a dead end: they
+ * can read the number and can never go and look into it. So the summaries and
+ * the shortcut tiles are filtered through the same policy as the sidebar and
+ * the route guard.
+ */
+describe('the overview follows the role', () => {
+  const tiles = () => screen.getAllByRole('link').map((a) => a.getAttribute('href'))
+
+  it('shows the Accountant sales and settlement, not budgets', () => {
+    state.role = 'accountant'
+    show()
+    expect(screen.queryByText('Approved ceiling')).toBeNull()
+    expect(screen.queryByText('Reserved')).toBeNull()
+    expect(screen.getByText("Today's net sales")).toBeTruthy()
+  })
+
+  it('shows Finance Staff budgets, not the sales they have no work in', () => {
+    state.role = 'finance_staff'
+    show()
+    expect(screen.getByText('Approved ceiling')).toBeTruthy()
+    expect(screen.queryByText("Today's net sales")).toBeNull()
+  })
+
+  it('shows the Finance Manager both', () => {
+    show()
+    expect(screen.getByText('Approved ceiling')).toBeTruthy()
+    expect(screen.getByText("Today's net sales")).toBeTruthy()
+  })
+
+  it('never offers a shortcut to a module the viewer cannot open', () => {
+    state.role = 'accountant'
+    show()
+    expect(tiles()).not.toContain('/fms/budgets')
+    expect(tiles()).not.toContain('/fms/vendors')
+    expect(tiles()).not.toContain('/fms/categories')
+    expect(tiles()).toContain('/fms/accounts')
+  })
+
+  it('gives Finance Staff shortcuts into their own work', () => {
+    state.role = 'finance_staff'
+    show()
+    expect(tiles()).toContain('/fms/budgets')
+    expect(tiles()).not.toContain('/fms/accounts')
+  })
+
+  it('counts only the reference data the role can reach', () => {
+    state.role = 'accountant'
+    show()
+    expect(screen.queryByText(/active vendors/)).toBeNull()
+    expect(screen.getByText(/open accounts/)).toBeTruthy()
   })
 })
 
