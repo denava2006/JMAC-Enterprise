@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { PosProductCard } from '@/components/pos/PosProductCard'
 import { PosPaymentMethod } from '@/components/pos/PosPaymentMethod'
 import { PosSummaryCard } from '@/components/pos/PosSummaryCard'
+import { Package } from 'lucide-react'
 import { TILL_METHODS } from '@/lib/posTill'
 import type { CatalogueProduct } from '@/lib/posTill'
 
@@ -172,5 +173,26 @@ describe('the register summary card', () => {
   it('takes a formatted amount as readily as a count', () => {
     render(<PosSummaryCard label="Total taken" value="₱350.00" />)
     expect(screen.getByText('₱350.00')).toBeTruthy()
+  })
+
+  // Two tones, and only two: a count and an amount of money. A third would be
+  // decoration, and the money tone is the same teal the till uses for change
+  // due rather than a colour introduced for this card.
+  it('marks an amount of money differently from a count', () => {
+    const { container: counted } = render(<PosSummaryCard label="Items sold" value={8} icon={Package} />)
+    const { container: money } = render(
+      <PosSummaryCard label="Total taken" value="₱560.00" icon={Package} tone="money" />
+    )
+
+    expect(counted.querySelector('.text-primary')).toBeTruthy()
+    expect(counted.querySelector('.text-accent')).toBeNull()
+
+    expect(money.querySelector('.text-accent')).toBeTruthy()
+    expect(money.querySelector('.text-primary')).toBeNull()
+  })
+
+  it('defaults to the count tone, so a caller cannot make a count look like money', () => {
+    const { container } = render(<PosSummaryCard label="Sales" value={6} icon={Package} />)
+    expect(container.querySelector('.text-accent')).toBeNull()
   })
 })

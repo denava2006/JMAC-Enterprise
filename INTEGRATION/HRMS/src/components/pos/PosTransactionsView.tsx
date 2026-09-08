@@ -203,7 +203,12 @@ export function PosTransactionsView({
               icon={ReceiptIcon}
             />
             <PosSummaryCard label="Items sold" value={stats.units} icon={Package} />
-            <PosSummaryCard label="Total taken" value={peso(stats.taken)} icon={Wallet} />
+            <PosSummaryCard
+              label="Total taken"
+              value={peso(stats.taken)}
+              icon={Wallet}
+              tone="money"
+            />
           </div>
 
           {/* Scrolls sideways before it gives up a column: a register with the
