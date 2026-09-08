@@ -456,7 +456,10 @@ export default function PosTillPage() {
         )}
       </div>
 
-      <div className="grid min-h-0 grid-cols-1 gap-4 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_390px]">
+      {/* 360, not 390: the settle block only needs room for three payment tiles
+          across, and the 30px back is what lets the product cards be wider at
+          the 1366 the tills actually run at. */}
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* ------------------------------------------------------- catalogue */}
         <div className="flex min-h-0 flex-col gap-3">
           {/* Search is the strongest control on the page and the one a cashier
@@ -498,12 +501,20 @@ export default function PosTillPage() {
             // auto-rows-fr does the work -- without it one two-line name makes
             // its whole row taller and the grid stops being a grid.
             <div className="min-h-0 lg:overflow-y-auto lg:pb-2 lg:pr-1">
-              {/* Four columns only from 2xl. The cart takes a fixed 390px, so
-                  at 1366 an xl:grid-cols-4 left 150px cards -- narrow enough
-                  that "120 in stock" wrapped under the price and the row
-                  stopped lining up across the grid. Three columns there is
-                  roomier and still scans as a grid. */}
-              <div className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+              {/* Column counts measured against the real layout rather than
+                  guessed from the viewport: the cart takes a fixed width, so
+                  the grid's share is roughly (viewport − 256 sidebar − 48
+                  padding − cart). That gives ~686px at 1366 and ~1240px at
+                  1920, which is why the steps are at 1280 and 1800 rather than
+                  at Tailwind's defaults.
+                  A minimum width with auto-fill was tried first and cannot do
+                  this: any floor low enough to keep three columns at 1366 packs
+                  five into 1920 and makes the cards narrower there, not wider. */}
+              {/* Both steps are arbitrary min-[] rather than one named and one
+                  arbitrary: mixing them let `xl:` be emitted after
+                  `min-[1800px]:`, so at 1920 both matched and the narrower rule
+                  won. Same form for both means they sort by width. */}
+              <div className="grid auto-rows-fr grid-cols-2 gap-3 min-[1280px]:grid-cols-3 min-[1800px]:grid-cols-4">
                 {visible.map((p) => (
                   <PosProductCard
                     key={p.product_id}

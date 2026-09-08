@@ -12,8 +12,12 @@ import { ALL_CATEGORIES } from '@/lib/posTill'
  * that changes what the grid below shows, which is what tabs are. That also
  * gives arrow-key movement, which a keyboard-driven till wants.
  *
- * Hidden entirely when a branch has one category or none. A filter offering a
- * single option is furniture.
+ * Shown as soon as the branch sells anything at all. It was hidden below two
+ * categories on the reasoning that a filter with one option is furniture --
+ * but a till whose controls appear and disappear as stock changes is harder to
+ * learn than one with a strip that is always in the same place, and a branch
+ * with one category today has two the week it widens its range. Only a branch
+ * offering nothing gets no strip, and that grid has its own empty state.
  */
 export function PosCategoryFilter({
   categories,
@@ -25,7 +29,7 @@ export function PosCategoryFilter({
   value: string
   onChange: (category: string) => void
 }) {
-  if (categories.length < 2) return null
+  if (categories.length === 0) return null
 
   const options = [ALL_CATEGORIES, ...categories]
 

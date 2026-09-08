@@ -196,10 +196,20 @@ describe('the category chips', () => {
     expect(onChange).toHaveBeenCalledWith('Snacks')
   })
 
-  // A filter with one option filters nothing.
-  it('stays out of the way when there is nothing to filter', () => {
+  // The strip stays in the same place whatever the branch stocks. Controls that
+  // appear and disappear as stock changes are harder to learn than ones that
+  // are always there, and a branch with one category today has two next week.
+  it('is shown even when the branch sells a single category', () => {
+    render(<PosCategoryFilter categories={['Drinks']} value={ALL_CATEGORIES} onChange={vi.fn()} />)
+    expect(screen.getAllByRole('tab').map((t) => (t.textContent ?? '').trim())).toEqual([
+      'All',
+      'Drinks',
+    ])
+  })
+
+  it('renders nothing only when the branch offers nothing at all', () => {
     const { container } = render(
-      <PosCategoryFilter categories={['Drinks']} value={ALL_CATEGORIES} onChange={vi.fn()} />
+      <PosCategoryFilter categories={[]} value={ALL_CATEGORIES} onChange={vi.fn()} />
     )
     expect(container.innerHTML).toBe('')
   })

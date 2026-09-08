@@ -264,12 +264,22 @@ describe('the product grid', () => {
 
   it('keeps the grid a grid when only one product exists', () => {
     // One product must not stretch across the row -- it should look like the
-    // first of several, because that is what it is.
+    // first of several, because that is what it is. A fixed column count holds
+    // that: the single card takes one track and the rest stay empty.
     state.catalogue = [row()]
     const { container } = renderTill()
     const grid = container.querySelector('.grid.auto-rows-fr')
     expect(grid).toBeTruthy()
     expect(grid!.className).toContain('grid-cols-2')
+
+    // The wider steps are arbitrary min-[] rather than Tailwind's named
+    // breakpoints, and both of them are, deliberately. Mixing one named with
+    // one arbitrary let `xl:` be emitted after `min-[1800px]:`, so at 1920 both
+    // matched and the NARROWER rule won -- four columns silently became three.
+    // Same form for both means they sort by width.
+    expect(grid!.className).toContain('min-[1280px]:grid-cols-3')
+    expect(grid!.className).toContain('min-[1800px]:grid-cols-4')
+    expect(grid!.className).not.toMatch(/\bxl:grid-cols/)
   })
 
   it('marks a low or sold-out product and refuses to add a sold-out one', () => {
@@ -366,10 +376,22 @@ describe('the category filter', () => {
     expect(screen.getByText(/No product matches that search/)).toBeTruthy()
   })
 
-  it('is not shown when a branch sells only one category', () => {
+  // The strip is in the same place whatever the branch stocks, so a cashier
+  // learns it once. A one-category branch still gets All and its category.
+  it('is shown even at a branch selling a single category', () => {
     state.catalogue = [row()]
     renderTill()
+    expect(screen.getAllByRole('tab').map((t) => (t.textContent ?? '').trim())).toEqual([
+      'All',
+      'Drinks',
+    ])
+  })
+
+  it('is absent only when the branch is offering nothing', () => {
+    state.catalogue = []
+    renderTill()
     expect(screen.queryByRole('tab')).toBeNull()
+    expect(screen.getByText(/not offering anything yet/)).toBeTruthy()
   })
 
   it('adds a product the same way whether or not a chip is active', () => {
