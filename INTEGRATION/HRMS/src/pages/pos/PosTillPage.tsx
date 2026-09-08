@@ -1,11 +1,12 @@
 import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Image as ImageIcon, Minus, Plus, Search, Trash2 } from 'lucide-react'
+import { Minus, Plus, Search, ShoppingBasket, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/MoneyInput'
 import { OnlinePaymentPanel } from '@/components/pos/OnlinePaymentPanel'
+import { PosProductCard } from '@/components/pos/PosProductCard'
+import { PosPaymentMethod } from '@/components/pos/PosPaymentMethod'
 import {
   useCreateOnlineCheckout,
   useRefreshAfterOnlineSale,
@@ -13,7 +14,6 @@ import {
 } from '@/hooks/usePosPayment'
 import { useSaleDetail } from '@/hooks/usePosTransactions'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -35,8 +35,6 @@ import { useBranches } from '@/hooks/useBranches'
 import { usePosCatalogue, useProductImageUrls } from '@/hooks/usePosCatalogue'
 import { useBranchFees, useCheckout, type Receipt } from '@/hooks/usePosTill'
 import {
-  TILL_METHODS,
-  TILL_METHOD_LABEL,
   saleMethodLabel,
   isOnlineMethod,
   addToCart,
@@ -412,7 +410,14 @@ export default function PosTillPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    // The till fills the shell and manages its own scrolling, so the settle
+    // block below never leaves the screen. min-h-0 on the descendants is what
+    // lets an inner column scroll instead of stretching its parent.
+    //
+    // h-full, not a calc against the viewport: PosLayout's <main> already has a
+    // definite height, and subtracting a guessed chrome height from 100dvh put
+    // the pay button a few pixels below the fold at 768.
+    <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-xl font-semibold text-foreground">Till</h2>
@@ -422,7 +427,7 @@ export default function PosTillPage() {
         </div>
         {myBranches.length > 1 && (
           <Select value={branchId} onValueChange={setBranchId}>
-            <SelectTrigger className="w-52" aria-label="Branch">
+            <SelectTrigger className="h-11 w-52" aria-label="Branch">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -436,17 +441,23 @@ export default function PosTillPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_390px]">
         {/* ------------------------------------------------------- catalogue */}
-        <div className="flex flex-col gap-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex min-h-0 flex-col gap-3">
+          {/* Search is the strongest control on the page and the one a cashier
+              reaches for by muscle memory, so it stays put while the grid
+              scrolls underneath it. */}
+          <div className="relative shrink-0">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search products..."
               aria-label="Search products"
-              className="pl-9"
+              className="h-12 rounded-xl pl-11 text-base"
             />
           </div>
 
@@ -466,156 +477,127 @@ export default function PosTillPage() {
             // the price in the same corner, however long the product's name.
             // auto-rows-fr does the work -- without it one two-line name makes
             // its whole row taller and the grid stops being a grid.
-            <div className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              {visible.map((p) => {
-                const url = p.image_path ? imageUrls?.[p.image_path] : undefined
-                const taken = inCart(p.product_id)
-                const soldOut = p.available_quantity === 0
-                const maxed = taken >= p.available_quantity
-                const unavailable = soldOut || maxed
-                return (
-                  <button
+            <div className="min-h-0 lg:overflow-y-auto lg:pb-2 lg:pr-1">
+              {/* Four columns only from 2xl. The cart takes a fixed 390px, so
+                  at 1366 an xl:grid-cols-4 left 150px cards -- narrow enough
+                  that "120 in stock" wrapped under the price and the row
+                  stopped lining up across the grid. Three columns there is
+                  roomier and still scans as a grid. */}
+              <div className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+                {visible.map((p) => (
+                  <PosProductCard
                     key={p.product_id}
-                    type="button"
-                    disabled={unavailable}
-                    aria-label={`Add ${p.name}`}
-                    onClick={() => setCart((c) => addToCart(c, p))}
-                    className={cn(
-                      'group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-all',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                      unavailable
-                        ? // Dimmed enough to read as unavailable, not so far that
-                          // the cashier cannot tell what it is or how many are left.
-                          'cursor-not-allowed opacity-70'
-                        : 'hover:border-secondary/60 hover:shadow-sm active:scale-[0.99]'
-                    )}
-                  >
-                    {/* Fixed ratio, so the image area is identical on every card
-                        whatever the source picture happens to measure. */}
-                    <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-muted/40">
-                      {url ? (
-                        <img
-                          src={url}
-                          alt=""
-                          loading="lazy"
-                          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
-                        />
-                      ) : (
-                        // Same box, never a collapsed one: a product without a
-                        // picture must not change the shape of the grid.
-                        <div className="flex h-full w-full items-center justify-center">
-                          <ImageIcon className="h-7 w-7 text-muted-foreground/60" />
-                        </div>
-                      )}
-                      {soldOut && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-                          <Badge variant="destructive">Out of stock</Badge>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-1 flex-col gap-0.5 p-3">
-                      {/* Two lines, always. A short name leaves the space empty
-                          rather than pulling the price up to meet it. */}
-                      <p className="line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-tight text-foreground">
-                        {p.name}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">{p.category_name}</p>
-
-                      {/* mt-auto pins this to the bottom, so price and stock sit
-                          on one line across the whole grid. */}
-                      <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                        <span className="text-base font-semibold tabular-nums text-foreground">
-                          {peso(p.selling_price)}
-                        </span>
-                        {soldOut ? null : p.is_low_stock ? (
-                          <Badge variant="warning">{p.available_quantity} left</Badge>
-                        ) : maxed ? (
-                          <Badge variant="muted">All in cart</Badge>
-                        ) : (
-                          <span className="text-xs tabular-nums text-muted-foreground">
-                            {p.available_quantity} in stock
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
+                    product={p}
+                    imageUrl={p.image_path ? imageUrls?.[p.image_path] : undefined}
+                    inCart={inCart(p.product_id)}
+                    onAdd={() => setCart((c) => addToCart(c, p))}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
 
         {/* ------------------------------------------------------------ cart */}
-        <Card className="self-start">
-          <CardContent className="flex flex-col gap-3 py-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium text-foreground">Cart</h3>
+        {/* Three bands: a header that names the sale, lines that scroll, and a
+            settle block pinned to the bottom. The cashier's two jobs -- build
+            the sale, take the money -- never fight each other for the same
+            space, and Take payment cannot be scrolled out of reach. */}
+        <Card className="flex min-h-0 flex-col overflow-hidden lg:h-full">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+            <h3 className="font-display font-semibold text-foreground">
+              Cart{' '}
               {cart.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setCart([])}>
-                  Clear
-                </Button>
+                <span className="tabular-nums text-muted-foreground">({totals.units})</span>
               )}
-            </div>
+            </h3>
+            {cart.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setCart([])}>
+                Clear
+              </Button>
+            )}
+          </div>
 
-            {cart.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Tap a product to start a sale.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {cart.map((line) => (
-                  <div key={line.product.product_id} className="flex items-center gap-2">
+          {cart.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+              <ShoppingBasket className="h-7 w-7 text-muted-foreground/40" aria-hidden="true" />
+              <p className="text-sm text-muted-foreground">Tap a product to start a sale.</p>
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
+              {cart.map((line) => (
+                <div
+                  key={line.product.product_id}
+                  className="rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+                >
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-foreground">{line.product.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {line.product.name}
+                      </p>
+                      <p className="text-xs tabular-nums text-muted-foreground">
                         {peso(line.product.selling_price)} each
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        aria-label={`One less ${line.product.name}`}
-                        onClick={() =>
-                          setCart((c) => setLineQuantity(c, line.product.product_id, line.quantity - 1))
-                        }
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-6 text-center text-sm tabular-nums">{line.quantity}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        aria-label={`One more ${line.product.name}`}
-                        disabled={line.quantity >= line.product.available_quantity}
-                        onClick={() =>
-                          setCart((c) => setLineQuantity(c, line.product.product_id, line.quantity + 1))
-                        }
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        aria-label={`Remove ${line.product.name}`}
-                        onClick={() => setCart((c) => setLineQuantity(c, line.product.product_id, 0))}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <span className="w-20 text-right text-sm tabular-nums text-foreground">
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                       {peso(line.product.selling_price * line.quantity)}
                     </span>
                   </div>
-                ))}
-              </div>
-            )}
 
-            <div className="flex flex-col gap-1 border-t border-border pt-2 text-sm">
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    {/* One stepper, kept together, with 36px targets. Loose
+                        icon buttons at 28px were the smallest things on a
+                        screen meant to be used with a thumb. */}
+                    <div className="flex items-center rounded-lg border border-border bg-card">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-r-none"
+                        aria-label={`One less ${line.product.name}`}
+                        onClick={() =>
+                          setCart((c) =>
+                            setLineQuantity(c, line.product.product_id, line.quantity - 1)
+                          )
+                        }
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="w-9 text-center text-sm font-medium tabular-nums text-foreground">
+                        {line.quantity}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-l-none"
+                        aria-label={`One more ${line.product.name}`}
+                        disabled={line.quantity >= line.product.available_quantity}
+                        onClick={() =>
+                          setCart((c) =>
+                            setLineQuantity(c, line.product.product_id, line.quantity + 1)
+                          )
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                      aria-label={`Remove ${line.product.name}`}
+                      onClick={() => setCart((c) => setLineQuantity(c, line.product.product_id, 0))}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ---- settle. Everything below this line is about money. ---- */}
+          <div className="shrink-0 border-t border-border bg-muted/30 px-4 py-3">
+            <div className="flex flex-col gap-1 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal ({totals.units} items)</span>
                 <span className="tabular-nums">{peso(totals.subtotal)}</span>
@@ -628,63 +610,64 @@ export default function PosTillPage() {
                   <span className="tabular-nums">{peso(fee.amount)}</span>
                 </div>
               ))}
-              <div className="flex justify-between border-t border-border pt-1 text-base font-semibold text-foreground">
-                <span>Total</span>
-                <span className="tabular-nums">{peso(totals.total)}</span>
+              {/* The number the cashier says out loud. It is the largest thing
+                  in the panel because it is the only one that has to be right
+                  before money changes hands. */}
+              <div className="mt-1 flex items-baseline justify-between border-t border-border pt-2">
+                <span className="text-sm font-medium text-foreground">Total</span>
+                <span className="font-display text-2xl font-bold leading-none tabular-nums text-foreground">
+                  {peso(totals.total)}
+                </span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Payment</Label>
-              <Select value={method} onValueChange={(value) => setMethod(value as TillMethod)}>
-                <SelectTrigger aria-label="Payment method">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* Five, flat, no groups. Every non-cash method here is
-                      settled by PayMongo, so there is nothing left to
-                      disambiguate with a heading. */}
-                  {TILL_METHODS.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {TILL_METHOD_LABEL[m]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="mt-3 flex flex-col gap-1.5">
+              <Label id="till_payment_label" className="text-xs text-muted-foreground">
+                Payment
+              </Label>
+              <PosPaymentMethod value={method} onChange={setMethod} />
             </div>
 
             {isOnlineMethod(method) ? (
               onlinePayment ? (
-                <OnlinePaymentPanel
-                  // On a recovered attempt the locally created values are gone
-                  // -- the page reloaded -- so the stored row supplies them.
-                  // Showing a payment of PHP 0.00 because the browser navigated
-                  // would be alarming and wrong.
-                  checkoutKey={onlinePayment.checkoutKey}
-                  checkoutUrl={onlinePayment.checkoutUrl ?? recoveredAttempt.data?.checkout_url ?? null}
-                  amountCentavos={
-                    onlinePayment.amountCentavos || recoveredAttempt.data?.amount_centavos || 0
-                  }
-                  reference={onlinePayment.reference ?? recoveredAttempt.data?.reference_number ?? null}
-                  onPaid={setPaidSaleId}
-                  onDismiss={() => {
-                    // A fresh key, or the retry is a dead end. The key is
-                    // derived from the cart, so an unchanged cart would reuse
-                    // the key of the attempt that just failed and the server
-                    // would refuse it as already terminal, forever.
-                    attemptRef.current = null
-                    setOnlinePayment(null)
-                  }}
-                />
+                <div className="mt-3">
+                  <OnlinePaymentPanel
+                    // On a recovered attempt the locally created values are gone
+                    // -- the page reloaded -- so the stored row supplies them.
+                    // Showing a payment of PHP 0.00 because the browser navigated
+                    // would be alarming and wrong.
+                    checkoutKey={onlinePayment.checkoutKey}
+                    checkoutUrl={
+                      onlinePayment.checkoutUrl ?? recoveredAttempt.data?.checkout_url ?? null
+                    }
+                    amountCentavos={
+                      onlinePayment.amountCentavos || recoveredAttempt.data?.amount_centavos || 0
+                    }
+                    reference={
+                      onlinePayment.reference ?? recoveredAttempt.data?.reference_number ?? null
+                    }
+                    onPaid={setPaidSaleId}
+                    onDismiss={() => {
+                      // A fresh key, or the retry is a dead end. The key is
+                      // derived from the cart, so an unchanged cart would reuse
+                      // the key of the attempt that just failed and the server
+                      // would refuse it as already terminal, forever.
+                      attemptRef.current = null
+                      setOnlinePayment(null)
+                    }}
+                  />
+                </div>
               ) : (
-                <p className="rounded-lg border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+                <p className="mt-3 rounded-lg border border-border bg-card p-2.5 text-xs text-muted-foreground">
                   The customer pays on a PayMongo page. The sale is recorded only once PayMongo
                   confirms the payment, and nothing is deducted from stock before then.
                 </p>
               )
             ) : method === 'cash' ? (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="till_tendered">Cash received</Label>
+              <div className="mt-3 flex flex-col gap-1.5">
+                <Label htmlFor="till_tendered" className="text-xs text-muted-foreground">
+                  Cash received
+                </Label>
                 {/* Deliberately NOT type="number": browsers accept e, E, +
                     and - in a number field, which is how a symbol reached this
                     field before. MoneyInput sanitises to digits and at most one
@@ -694,17 +677,23 @@ export default function PosTillPage() {
                   value={tendered}
                   onValueChange={setTendered}
                   placeholder="0.00"
+                  className="h-12 text-right font-display text-lg font-semibold tabular-nums"
                 />
                 {change !== null && change >= 0 && (
-                  <p className="text-sm text-foreground">
-                    Change <strong className="tabular-nums">{peso(change)}</strong>
-                  </p>
+                  // The second number a cashier says out loud, and the one they
+                  // count into a hand. Teal, because it is the good outcome.
+                  <div className="mt-0.5 flex items-baseline justify-between rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
+                    <span className="text-xs font-medium text-accent">Change due</span>
+                    <strong className="font-display text-xl font-bold leading-none tabular-nums text-accent">
+                      {peso(change)}
+                    </strong>
+                  </div>
                 )}
               </div>
             ) : null}
 
             {cart.length > 0 && errors.length > 0 && (
-              <ul className="flex flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2">
+              <ul className="mt-3 flex flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5">
                 {errors.map((error) => (
                   <li key={error} className="text-xs text-destructive">
                     {error}
@@ -714,13 +703,13 @@ export default function PosTillPage() {
             )}
 
             {createOnline.isError && (
-              <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+              <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 text-xs text-destructive">
                 {createOnline.error.message}
               </p>
             )}
 
             {checkout.isError && (
-              <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+              <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 text-xs text-destructive">
                 {checkout.error.message}
               </p>
             )}
@@ -731,7 +720,7 @@ export default function PosTillPage() {
                 it invites the cashier to think the first attempt failed. */}
             {!onlinePayment && (
               <Button
-                className="w-full"
+                className="mt-3 h-[54px] w-full rounded-xl text-base font-semibold"
                 loading={checkout.isPending || createOnline.isPending}
                 disabled={errors.length > 0 || cart.length === 0}
                 onClick={pay}
@@ -740,7 +729,7 @@ export default function PosTillPage() {
                 {peso(totals.total)}
               </Button>
             )}
-          </CardContent>
+          </div>
         </Card>
       </div>
 

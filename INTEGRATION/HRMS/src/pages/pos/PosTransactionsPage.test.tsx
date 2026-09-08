@@ -120,6 +120,93 @@ describe('a cashier', () => {
   })
 })
 
+/**
+ * The register as it reads.
+ *
+ * Every figure here comes from the same rows the list has always used; what
+ * changed is where the eye lands. These assert the authoritative values survive
+ * the new presentation rather than that the presentation is pretty.
+ */
+describe('the register', () => {
+  it('carries every column a cashier needs to place a sale', () => {
+    state.rows = [row()]
+    render(<PosTransactionsPage />)
+
+    // The receipt reference, the branch, the count, the method and the money.
+    // Scoped to the row: "2" is also the units figure on the summary above it,
+    // which is a different number that happens to agree.
+    const cells = screen
+      .getByText('11111111')
+      .closest('tr')!
+      .querySelectorAll('td')
+    const rowText = Array.from(cells).map((c) => c.textContent?.trim())
+
+    expect(screen.getByText('Cavite Branch')).toBeTruthy()
+    expect(rowText).toContain('2')
+    expect(rowText).toContain('Cash')
+    expect(rowText).toContain('₱110.00')
+  })
+
+  it('splits the timestamp into a day and a time without changing either', () => {
+    state.rows = [row()]
+    render(<PosTransactionsPage />)
+
+    // The same instant the single dense timestamp rendered, read off the same
+    // Date -- so this stays true wherever the machine running it happens to be.
+    const when = new Date('2026-08-25T10:00:00Z')
+    const day = when.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    expect(screen.getByText(day)).toBeTruthy()
+    expect(screen.getByText(when.toLocaleTimeString())).toBeTruthy()
+  })
+
+  it('summarises the page without inventing a metric', () => {
+    state.rows = [row(), row({ sale_id: 'aaaaaaaa-2222-3333-4444-555555555555', total_count: 2 })]
+    const { container } = render(<PosTransactionsPage />)
+
+    expect(screen.getByText('Sales on this page')).toBeTruthy()
+    expect(screen.getByText('Items sold')).toBeTruthy()
+    expect(screen.getByText('Total taken')).toBeTruthy()
+    expect(screen.getByText('₱220.00')).toBeTruthy()
+
+    // The reference mock showed an average; nothing computes one, so nothing
+    // claims one.
+    expect(container.textContent).not.toMatch(/average/i)
+    expect(container.textContent).not.toMatch(/export/i)
+  })
+
+  it('keeps the receipt reachable for each row', () => {
+    state.rows = [row()]
+    render(<PosTransactionsPage />)
+    expect(screen.getByRole('button', { name: 'Receipt for 11111111' })).toBeTruthy()
+  })
+
+  it('tells cash apart from a provider settlement at a glance', () => {
+    state.rows = [
+      row(),
+      row({ sale_id: 'bbbbbbbb-2222-3333-4444-555555555555', payment_method: 'gcash' }),
+    ]
+    render(<PosTransactionsPage />)
+    expect(screen.getByText('Cash')).toBeTruthy()
+    expect(screen.getByText('GCash')).toBeTruthy()
+  })
+
+  it('still lets the dates be filtered and cleared', () => {
+    state.rows = [row()]
+    render(<PosTransactionsPage />)
+
+    const from = screen.getByLabelText('From') as HTMLInputElement
+    fireEvent.change(from, { target: { value: '2026-08-01' } })
+    expect(from.value).toBe('2026-08-01')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear dates' }))
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('')
+  })
+})
+
 describe('a POS manager', () => {
   it('gets a branch tab as well as their own', () => {
     state.assignments = [{ branchId: CAVITE, role: 'manager' }]

@@ -183,9 +183,16 @@ afterEach(() => {
   lastOnlineArgs = null
 })
 
+/**
+ * Choose how the customer is paying.
+ *
+ * The five methods are selectable tiles rather than a dropdown now: one tap
+ * instead of two, and all five readable without opening anything. The values
+ * sent to the server are unchanged -- that is what the assertions below are
+ * for -- so this helper moved and nothing else did.
+ */
 const selectMethod = (label: string) => {
-  fireEvent.click(screen.getByLabelText('Payment method'))
-  fireEvent.click(screen.getByRole('option', { name: label }))
+  fireEvent.click(screen.getByRole('radio', { name: label }))
 }
 
 describe('the product grid', () => {
@@ -242,10 +249,12 @@ describe('the product grid', () => {
       expect(card.querySelector('.mt-auto')).toBeTruthy()
     }
 
-    // A real picture fills its container rather than sitting small in the middle.
+    // The whole product is visible, never cropped to fit the box. A bottle
+    // photographed portrait would lose its top and bottom to object-cover,
+    // which is the one thing a cashier identifies it by.
     const img = container.querySelector('img')
     expect(img).toBeTruthy()
-    expect(img!.className).toContain('object-cover')
+    expect(img!.className).toContain('object-contain')
     expect(img!.className).toContain('h-full')
     expect(img!.className).toContain('w-full')
   })
@@ -653,9 +662,12 @@ describe('which engine each payment method reaches', () => {
   it('offers exactly the five methods, and nothing removed', () => {
     state.catalogue = [row()]
     renderTill()
-    fireEvent.click(screen.getByLabelText('Payment method'))
 
-    const options = screen.getAllByRole('option').map((o) => (o.textContent ?? '').trim())
+    // All five are on screen at once now, so there is nothing to open first.
+    const group = screen.getByRole('radiogroup', { name: 'Payment method' })
+    const options = Array.from(group.querySelectorAll('[role="radio"]')).map((o) =>
+      (o.textContent ?? '').trim()
+    )
     expect(options).toEqual(['Cash', 'GCash', 'Maya', 'Card', 'QR Ph'])
     expect(options.filter((o) => o === 'GCash')).toHaveLength(1)
     expect(options.filter((o) => o === 'Maya')).toHaveLength(1)
