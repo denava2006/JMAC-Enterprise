@@ -124,6 +124,51 @@ export interface CartLine {
   quantity: number
 }
 
+/** The chip that means "do not filter by category". Not a category name, so it
+ *  cannot collide with one: no category is the empty string. */
+export const ALL_CATEGORIES = ''
+
+/**
+ * The categories this branch is actually selling, in alphabetical order.
+ *
+ * Derived from the catalogue rather than fetched. That is what makes the filter
+ * keep itself up to date: a category added in Products appears here the moment
+ * a product in it is offered at the branch, and disappears when the last one
+ * stops being offered. There is no list to maintain and none to go stale.
+ *
+ * Categories with nothing in them never appear, which is the honest behaviour
+ * for a till -- a chip that filters to an empty grid is a dead end.
+ */
+export function categoriesOf(products: CatalogueProduct[]): string[] {
+  const seen = new Set<string>()
+  for (const p of products) {
+    if (p.category_name) seen.add(p.category_name)
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The products a cashier should be looking at.
+ *
+ * Category narrows first, then the search term, so searching inside a chosen
+ * category does what it looks like it does. Search still matches the category
+ * name as well as the product name -- typing "drinks" worked before this filter
+ * existed and still does.
+ */
+export function visibleProducts(
+  products: CatalogueProduct[],
+  { search, category }: { search: string; category: string }
+): CatalogueProduct[] {
+  const term = search.trim().toLowerCase()
+  return products.filter((p) => {
+    if (category !== ALL_CATEGORIES && p.category_name !== category) return false
+    if (!term) return true
+    return (
+      p.name.toLowerCase().includes(term) || p.category_name.toLowerCase().includes(term)
+    )
+  })
+}
+
 export interface CartTotals {
   subtotal: number
   appliedFees: AppliedFee[]

@@ -3,8 +3,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { PosProductCard } from '@/components/pos/PosProductCard'
 import { PosPaymentMethod } from '@/components/pos/PosPaymentMethod'
 import { PosSummaryCard } from '@/components/pos/PosSummaryCard'
+import { PosCategoryFilter } from '@/components/pos/PosCategoryFilter'
 import { Package } from 'lucide-react'
-import { TILL_METHODS } from '@/lib/posTill'
+import { ALL_CATEGORIES, TILL_METHODS } from '@/lib/posTill'
 import type { CatalogueProduct } from '@/lib/posTill'
 
 /**
@@ -162,6 +163,48 @@ describe('the payment selector', () => {
   })
 })
 
+describe('the category chips', () => {
+  const CATEGORIES = ['Drinks', 'Meals', 'Snacks']
+
+  it('offers All plus every category the branch sells', () => {
+    render(<PosCategoryFilter categories={CATEGORIES} value={ALL_CATEGORIES} onChange={vi.fn()} />)
+    const labels = screen.getAllByRole('tab').map((t) => (t.textContent ?? '').trim())
+    expect(labels).toEqual(['All', 'Drinks', 'Meals', 'Snacks'])
+  })
+
+  it('reports the category name, and the sentinel for All', () => {
+    const onChange = vi.fn()
+    render(<PosCategoryFilter categories={CATEGORIES} value={ALL_CATEGORIES} onChange={onChange} />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Snacks' }))
+    expect(onChange).toHaveBeenCalledWith('Snacks')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'All' }))
+    expect(onChange).toHaveBeenCalledWith(ALL_CATEGORIES)
+  })
+
+  it('marks the chosen chip for a screen reader, not only in colour', () => {
+    render(<PosCategoryFilter categories={CATEGORIES} value="Meals" onChange={vi.fn()} />)
+    expect(screen.getByRole('tab', { name: 'Meals' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'All' }).getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('moves with the arrow keys and wraps', () => {
+    const onChange = vi.fn()
+    render(<PosCategoryFilter categories={CATEGORIES} value={ALL_CATEGORIES} onChange={onChange} />)
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'All' }), { key: 'ArrowLeft' })
+    expect(onChange).toHaveBeenCalledWith('Snacks')
+  })
+
+  // A filter with one option filters nothing.
+  it('stays out of the way when there is nothing to filter', () => {
+    const { container } = render(
+      <PosCategoryFilter categories={['Drinks']} value={ALL_CATEGORIES} onChange={vi.fn()} />
+    )
+    expect(container.innerHTML).toBe('')
+  })
+})
+
 describe('the register summary card', () => {
   it('shows a figure and the quiet line under it', () => {
     render(<PosSummaryCard label="Sales on this page" value={5} hint="of 5 transactions" />)
@@ -175,24 +218,41 @@ describe('the register summary card', () => {
     expect(screen.getByText('₱350.00')).toBeTruthy()
   })
 
-  // Two tones, and only two: a count and an amount of money. A third would be
-  // decoration, and the money tone is the same teal the till uses for change
-  // due rather than a colour introduced for this card.
-  it('marks an amount of money differently from a count', () => {
-    const { container: counted } = render(<PosSummaryCard label="Items sold" value={8} icon={Package} />)
-    const { container: money } = render(
-      <PosSummaryCard label="Total taken" value="₱560.00" icon={Package} tone="money" />
-    )
-
-    expect(counted.querySelector('.text-primary')).toBeTruthy()
-    expect(counted.querySelector('.text-accent')).toBeNull()
-
-    expect(money.querySelector('.text-accent')).toBeTruthy()
-    expect(money.querySelector('.text-primary')).toBeNull()
+  // One tone per card, so the row reads as three figures rather than one shape
+  // repeated three times.
+  it('wears each of the three brand tones', () => {
+    for (const [tone, expected] of [
+      ['primary', '.text-primary'],
+      ['secondary', '.text-secondary'],
+      ['accent', '.text-accent'],
+    ] as const) {
+      const { container, unmount } = render(
+        <PosSummaryCard label="Figure" value={1} icon={Package} tone={tone} />
+      )
+      expect(container.querySelector(expected), tone).toBeTruthy()
+      unmount()
+    }
   })
 
-  it('defaults to the count tone, so a caller cannot make a count look like money', () => {
+  // Tinting all three figures would leave none of them standing out, so only
+  // the takings amount carries its tone past the icon.
+  it('tints the takings figure itself, and no other', () => {
+    const { container: money } = render(
+      <PosSummaryCard label="Total taken" value="₱560.00" icon={Package} tone="accent" />
+    )
+    expect(money.querySelector('p.text-accent')).toBeTruthy()
+
+    const { container: counted } = render(
+      <PosSummaryCard label="Items sold" value={8} icon={Package} tone="secondary" />
+    )
+    // The icon chip is tinted; the number stays navy.
+    expect(counted.querySelector('p.text-secondary')).toBeNull()
+    expect(counted.querySelector('p.text-foreground')).toBeTruthy()
+  })
+
+  it('defaults to the navy tone rather than an untinted grey', () => {
     const { container } = render(<PosSummaryCard label="Sales" value={6} icon={Package} />)
-    expect(container.querySelector('.text-accent')).toBeNull()
+    expect(container.querySelector('.text-primary')).toBeTruthy()
+    expect(container.querySelector('.text-muted-foreground.bg-muted')).toBeNull()
   })
 })

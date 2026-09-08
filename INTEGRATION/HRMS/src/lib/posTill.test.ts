@@ -17,6 +17,9 @@ import {
   isOnlineMethod,
   saleMethodLabel,
   LEGACY_PAYMENT_METHODS,
+  ALL_CATEGORIES,
+  categoriesOf,
+  visibleProducts,
 } from '@/lib/posTill'
 import type { Fee } from '@/lib/posFees'
 
@@ -310,5 +313,84 @@ describe('rendering a sale that used a method the till no longer offers', () => 
       expect(label).toBeTruthy()
       expect(label).not.toBe('undefined')
     }
+  })
+})
+
+/**
+ * The category filter.
+ *
+ * The list is derived from the catalogue rather than held anywhere, which is
+ * the whole reason a new category needs no wiring: these prove it appears from
+ * the products alone and disappears with them.
+ */
+describe('categoriesOf', () => {
+  const catalogue = [
+    product({ product_id: 'a', category_name: 'Snacks' }),
+    product({ product_id: 'b', category_name: 'Drinks' }),
+    product({ product_id: 'c', category_name: 'Snacks' }),
+    product({ product_id: 'd', category_name: 'Meals' }),
+  ]
+
+  it('lists each category once, alphabetically', () => {
+    expect(categoriesOf(catalogue)).toEqual(['Drinks', 'Meals', 'Snacks'])
+  })
+
+  it('picks up a category nobody registered, the moment a product carries it', () => {
+    const withNew = [...catalogue, product({ product_id: 'e', category_name: 'Frozen' })]
+    expect(categoriesOf(withNew)).toContain('Frozen')
+  })
+
+  it('drops a category the branch has stopped offering', () => {
+    const withoutMeals = catalogue.filter((p) => p.category_name !== 'Meals')
+    expect(categoriesOf(withoutMeals)).not.toContain('Meals')
+  })
+
+  it('offers nothing for an empty catalogue, and ignores a blank category', () => {
+    expect(categoriesOf([])).toEqual([])
+    expect(categoriesOf([product({ category_name: '' })])).toEqual([])
+  })
+})
+
+describe('visibleProducts', () => {
+  const catalogue = [
+    product({ product_id: 'a', name: 'Coca-Cola 1.5L', category_name: 'Drinks' }),
+    product({ product_id: 'b', name: 'Piattos Cheese', category_name: 'Snacks' }),
+    product({ product_id: 'c', name: 'Cola Gummies', category_name: 'Snacks' }),
+  ]
+  const names = (rows: CatalogueProduct[]) => rows.map((r) => r.name)
+
+  it('shows everything when nothing is chosen or typed', () => {
+    expect(visibleProducts(catalogue, { search: '', category: ALL_CATEGORIES })).toHaveLength(3)
+  })
+
+  it('narrows to one category', () => {
+    expect(names(visibleProducts(catalogue, { search: '', category: 'Snacks' }))).toEqual([
+      'Piattos Cheese',
+      'Cola Gummies',
+    ])
+  })
+
+  it('searches inside the chosen category, not across all of them', () => {
+    // "cola" matches a product in Drinks too; having chosen Snacks, that one
+    // must stay hidden -- otherwise the chip silently stops meaning anything.
+    expect(names(visibleProducts(catalogue, { search: 'cola', category: 'Snacks' }))).toEqual([
+      'Cola Gummies',
+    ])
+  })
+
+  it('still matches on the category name, as the search always did', () => {
+    expect(names(visibleProducts(catalogue, { search: 'drinks', category: ALL_CATEGORIES }))).toEqual(
+      ['Coca-Cola 1.5L']
+    )
+  })
+
+  it('ignores case and surrounding space', () => {
+    expect(visibleProducts(catalogue, { search: '  PIATTOS ', category: ALL_CATEGORIES })).toHaveLength(
+      1
+    )
+  })
+
+  it('returns nothing rather than everything when a search matches nothing', () => {
+    expect(visibleProducts(catalogue, { search: 'zzz', category: ALL_CATEGORIES })).toEqual([])
   })
 })

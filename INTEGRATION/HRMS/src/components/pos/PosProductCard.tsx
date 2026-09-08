@@ -49,8 +49,13 @@ export function PosProductCard({
       )}
     >
       {/* Fixed ratio, so the image area is identical on every card whatever the
-          source picture happens to measure. */}
-      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-muted/50">
+          source picture happens to measure.
+          Square rather than 4:3: most product shots are portrait -- a bottle, a
+          sachet, a can -- and in a landscape box `contain` fits them to the
+          short side, which left the picture floating in a band of empty grey.
+          A square box gives that same contained image most of its height back
+          without cropping anything. */}
+      <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-card">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -59,12 +64,13 @@ export function PosProductCard({
             // contain, not cover: a bottle photographed portrait must not be
             // cropped to a square. The product sits whole on a neutral ground,
             // which is how it looks on the shelf.
-            className="h-full w-full object-contain p-2 transition-transform duration-200 group-hover:scale-[1.04]"
+            className="h-full w-full object-contain p-1 transition-transform duration-200 group-hover:scale-[1.04]"
           />
         ) : (
           // Same box, never a collapsed one: a product without a picture must
-          // not change the shape of the grid.
-          <div className="flex h-full w-full items-center justify-center">
+          // not change the shape of the grid. Tinted, so the gap reads as "no
+          // photograph" rather than as a photograph of nothing.
+          <div className="flex h-full w-full items-center justify-center bg-muted/50">
             <ImageIcon className="h-7 w-7 text-muted-foreground/50" aria-hidden="true" />
           </div>
         )}

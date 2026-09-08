@@ -7,6 +7,7 @@ import { MoneyInput } from '@/components/MoneyInput'
 import { OnlinePaymentPanel } from '@/components/pos/OnlinePaymentPanel'
 import { PosProductCard } from '@/components/pos/PosProductCard'
 import { PosPaymentMethod } from '@/components/pos/PosPaymentMethod'
+import { PosCategoryFilter } from '@/components/pos/PosCategoryFilter'
 import {
   useCreateOnlineCheckout,
   useRefreshAfterOnlineSale,
@@ -35,6 +36,9 @@ import { useBranches } from '@/hooks/useBranches'
 import { usePosCatalogue, useProductImageUrls } from '@/hooks/usePosCatalogue'
 import { useBranchFees, useCheckout, type Receipt } from '@/hooks/usePosTill'
 import {
+  ALL_CATEGORIES,
+  categoriesOf,
+  visibleProducts,
   saleMethodLabel,
   isOnlineMethod,
   addToCart,
@@ -186,6 +190,7 @@ export default function PosTillPage() {
 
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [search, setSearch] = React.useState('')
+  const [category, setCategory] = React.useState<string>(ALL_CATEGORIES)
   const [method, setMethod] = React.useState<TillMethod>('cash')
   const [tendered, setTendered] = React.useState('')
   const [receipt, setReceipt] = React.useState<Receipt | null>(null)
@@ -233,13 +238,23 @@ export default function PosTillPage() {
     [catalogue]
   )
 
-  const visible = React.useMemo(() => {
-    const term = search.trim().toLowerCase()
-    if (!term) return products
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(term) || p.category_name.toLowerCase().includes(term)
-    )
-  }, [products, search])
+  // Derived from what the branch is offering, so a new category needs nothing
+  // registered here to appear.
+  const categories = React.useMemo(() => categoriesOf(products), [products])
+
+  // A chosen category that stops existing -- the last product in it sold out,
+  // or the cashier switched branch -- falls back to All rather than filtering
+  // the grid down to nothing with no clue why.
+  React.useEffect(() => {
+    if (category !== ALL_CATEGORIES && !categories.includes(category)) {
+      setCategory(ALL_CATEGORIES)
+    }
+  }, [categories, category])
+
+  const visible = React.useMemo(
+    () => visibleProducts(products, { search, category }),
+    [products, search, category]
+  )
 
   const totals = cartTotals(cart, fees)
   const errors = validateSale({ cart, method, tendered, total: totals.total })
@@ -460,6 +475,11 @@ export default function PosTillPage() {
               className="h-12 rounded-xl pl-11 text-base"
             />
           </div>
+
+          {/* Under the search, above the grid -- and it stays put while the
+              products scroll, so narrowing by category never means scrolling
+              back up first. */}
+          <PosCategoryFilter categories={categories} value={category} onChange={setCategory} />
 
           {isLoading ? (
             <Skeleton className="h-64 w-full" />

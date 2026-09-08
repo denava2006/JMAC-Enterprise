@@ -12,19 +12,21 @@ import { cn } from '@/lib/utils'
  */
 
 /**
- * Two tones, and the difference between them is real: `count` for a number of
- * things, `money` for an amount of pesos.
+ * The three JMAC brand tones, named for the tokens rather than the colours so
+ * a palette change reaches here without a rename.
  *
- * Teal is what this app already uses for money in a good state -- it is the
- * colour of Change due on the till -- so the takings card wearing it is the
- * same idea said twice rather than a third decorative colour. Three different
- * tones for three cards would be decoration; two that mean something are not.
+ * Each card gets its own, which makes the row read as three distinct figures
+ * at a glance instead of one repeated shape. They are tints, not fills: the
+ * figure beside them still has to be the loudest thing in the card.
  */
-type Tone = 'count' | 'money'
+type Tone = 'primary' | 'secondary' | 'accent'
 
+// One tint strength across all three. At 10% the navy and the ocean chips were
+// hard to tell apart, which defeated the point of giving them different hues.
 const TONE: Record<Tone, string> = {
-  count: 'bg-primary/10 text-primary',
-  money: 'bg-accent/15 text-accent',
+  primary: 'bg-primary/15 text-primary',
+  secondary: 'bg-secondary/15 text-secondary',
+  accent: 'bg-accent/15 text-accent',
 }
 
 export function PosSummaryCard({
@@ -32,7 +34,7 @@ export function PosSummaryCard({
   value,
   hint,
   icon: Icon,
-  tone = 'count',
+  tone = 'primary',
 }: {
   label: string
   value: string | number
@@ -59,9 +61,10 @@ export function PosSummaryCard({
           <p
             className={cn(
               'font-display text-xl font-bold leading-tight tabular-nums',
-              // The takings figure is the one a cashier is asked for at the end
-              // of a shift, so it carries the tone rather than only its icon.
-              tone === 'money' ? 'text-accent' : 'text-foreground'
+              // Only the takings figure is tinted. It is the number a cashier is
+              // asked for at the end of a shift, and if all three were coloured
+              // none of them would stand out.
+              tone === 'accent' ? 'text-accent' : 'text-foreground'
             )}
           >
             {value}

@@ -196,18 +196,26 @@ export function PosTransactionsView({
         <>
           {/* The same three figures, given room to be read at a glance. */}
           <div className="grid gap-3 sm:grid-cols-3">
+            {/* Navy, ocean, teal -- the JMAC ramp in its own order, so the row
+                reads as three figures rather than one shape repeated. */}
             <PosSummaryCard
               label="Sales on this page"
               value={stats.sales}
               hint={`of ${total} transaction${total === 1 ? '' : 's'}`}
               icon={ReceiptIcon}
+              tone="primary"
             />
-            <PosSummaryCard label="Items sold" value={stats.units} icon={Package} />
+            <PosSummaryCard
+              label="Items sold"
+              value={stats.units}
+              icon={Package}
+              tone="secondary"
+            />
             <PosSummaryCard
               label="Total taken"
               value={peso(stats.taken)}
               icon={Wallet}
-              tone="money"
+              tone="accent"
             />
           </div>
 

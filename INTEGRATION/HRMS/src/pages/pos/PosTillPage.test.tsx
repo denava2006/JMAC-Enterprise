@@ -230,12 +230,15 @@ describe('the product grid', () => {
       expect(card.className).toContain('h-full')
 
       // The image area is a fixed ratio on every card, with or without a
-      // picture -- a missing image must not collapse the box.
+      // picture -- a missing image must not collapse the box. Which ratio is a
+      // design decision (it is square, so portrait product shots get their
+      // height back); that it is FIXED is the invariant, so the assertion does
+      // not name a number.
       // Matched on the class string rather than a CSS selector: escaping
       // Tailwind's bracket syntax for querySelector is its own source of
       // false passes.
       const media = Array.from(card.querySelectorAll('div')).find((d) =>
-        d.className.includes('aspect-[4/3]')
+        /(^|\s)aspect-/.test(d.className)
       )
       expect(media, 'every card has a fixed-ratio image area').toBeTruthy()
 
@@ -290,6 +293,91 @@ describe('the product grid', () => {
     expect(text).not.toMatch(/margin/i)
     expect(text).not.toMatch(/COGS/i)
     expect(text).not.toMatch(/profit/i)
+  })
+})
+
+/**
+ * The category chips.
+ *
+ * They filter what is already loaded -- no new query, no new RPC -- and the
+ * list of them comes from the catalogue itself, which is what makes a new
+ * category appear without anything being registered here.
+ */
+describe('the category filter', () => {
+  const mixed = () => {
+    state.catalogue = [
+      row({ product_id: 'p1', name: 'Coca-Cola 1.5L', category_name: 'Drinks' }),
+      row({ product_id: 'p2', name: 'Piattos Cheese', category_name: 'Snacks' }),
+      row({ product_id: 'p3', name: 'Lucky Me Pancit Canton', category_name: 'Meals' }),
+    ]
+  }
+  const shownProducts = () =>
+    screen
+      .getAllByRole('button', { name: /^Add / })
+      .map((b) => (b.getAttribute('aria-label') ?? '').replace('Add ', ''))
+
+  it('builds its chips from the branch catalogue', () => {
+    mixed()
+    renderTill()
+    expect(screen.getAllByRole('tab').map((t) => (t.textContent ?? '').trim())).toEqual([
+      'All',
+      'Drinks',
+      'Meals',
+      'Snacks',
+    ])
+  })
+
+  it('picks up a category nobody registered here', () => {
+    mixed()
+    state.catalogue = [
+      ...state.catalogue,
+      row({ product_id: 'p4', name: 'Frozen Siomai', category_name: 'Frozen' }),
+    ]
+    renderTill()
+    expect(screen.getByRole('tab', { name: 'Frozen' })).toBeTruthy()
+  })
+
+  it('narrows the grid to the chosen category', () => {
+    mixed()
+    renderTill()
+    expect(shownProducts()).toHaveLength(3)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Snacks' }))
+    expect(shownProducts()).toEqual(['Piattos Cheese'])
+
+    fireEvent.click(screen.getByRole('tab', { name: 'All' }))
+    expect(shownProducts()).toHaveLength(3)
+  })
+
+  it('combines with the search rather than replacing it', () => {
+    mixed()
+    renderTill()
+    fireEvent.click(screen.getByRole('tab', { name: 'Drinks' }))
+    fireEvent.change(screen.getByLabelText('Search products'), { target: { value: 'piattos' } })
+    // Piattos is a Snack; the chosen chip still applies.
+    expect(screen.queryByRole('button', { name: 'Add Piattos Cheese' })).toBeNull()
+  })
+
+  it('says nothing matched rather than showing a blank grid', () => {
+    mixed()
+    renderTill()
+    fireEvent.click(screen.getByRole('tab', { name: 'Drinks' }))
+    fireEvent.change(screen.getByLabelText('Search products'), { target: { value: 'zzz' } })
+    expect(screen.getByText(/No product matches that search/)).toBeTruthy()
+  })
+
+  it('is not shown when a branch sells only one category', () => {
+    state.catalogue = [row()]
+    renderTill()
+    expect(screen.queryByRole('tab')).toBeNull()
+  })
+
+  it('adds a product the same way whether or not a chip is active', () => {
+    mixed()
+    renderTill()
+    fireEvent.click(screen.getByRole('tab', { name: 'Meals' }))
+    addProduct('Lucky Me Pancit Canton')
+    expect(screen.getByText('Subtotal (1 items)')).toBeTruthy()
   })
 })
 
