@@ -374,11 +374,18 @@ begin
   -- part this section actually defends, and section 8b below still proves that
   -- approving and receiving move neither reserved nor spent.
   --
-  -- What remains forbidden is what F6 was told to stop short of: journals, a
-  -- general ledger, and any second place a stock quantity could live.
+  -- journal_entries has now left this list too, for the same reason: F8 builds
+  -- the accounting layer, and this assertion noticed the moment it did. What
+  -- F8 does NOT build is still listed -- a general_ledger table (the ledger is
+  -- derived from posted lines, never stored), any second home for a stock
+  -- quantity, and bank reconciliation, which remains out of scope.
+  --
+  -- Receiving still settles nothing, which is what this section defends, and
+  -- 8b below still proves that approving and receiving move neither reserved
+  -- nor spent.
   select count(*) into n from information_schema.tables
    where table_schema = 'public'
-     and table_name in ('journal_entries', 'journal_lines', 'general_ledger',
+     and table_name in ('journal_lines', 'general_ledger',
                         'fms_stock_balance', 'finance_inventory_quantity',
                         'procurement_on_hand', 'bank_reconciliations');
   if n <> 0 then

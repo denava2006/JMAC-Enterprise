@@ -1684,6 +1684,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "finance_requests_paid_from_account_id_fkey"
+            columns: ["paid_from_account_id"]
+            isOneToOne: false
+            referencedRelation: "trial_balance"
+            referencedColumns: ["account_id"]
+          },
+          {
             foreignKeyName: "finance_requests_requester_id_fkey"
             columns: ["requester_id"]
             isOneToOne: false
@@ -2057,6 +2064,121 @@ export type Database = {
             columns: ["posted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journal_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          journal_no: string | null
+          posted_at: string
+          posting_date: string
+          source_id: string
+          source_reference: string | null
+          source_type: string
+          status: string
+          treasury_movement_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          journal_no?: string | null
+          posted_at?: string
+          posting_date: string
+          source_id: string
+          source_reference?: string | null
+          source_type: string
+          status?: string
+          treasury_movement_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          journal_no?: string | null
+          posted_at?: string
+          posting_date?: string
+          source_id?: string
+          source_reference?: string | null
+          source_type?: string
+          status?: string
+          treasury_movement_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entries_treasury_movement_id_fkey"
+            columns: ["treasury_movement_id"]
+            isOneToOne: true
+            referencedRelation: "treasury_movements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journal_entry_lines: {
+        Row: {
+          account_id: string
+          created_at: string
+          credit: number
+          debit: number
+          description: string | null
+          id: string
+          journal_entry_id: string
+          line_no: number
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          credit?: number
+          debit?: number
+          description?: string | null
+          id?: string
+          journal_entry_id: string
+          line_no: number
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          credit?: number
+          debit?: number
+          description?: string | null
+          id?: string
+          journal_entry_id?: string
+          line_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entry_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "finance_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "trial_balance"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -4536,6 +4658,13 @@ export type Database = {
             referencedRelation: "finance_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "treasury_accounts_finance_account_id_fkey"
+            columns: ["finance_account_id"]
+            isOneToOne: false
+            referencedRelation: "trial_balance"
+            referencedColumns: ["account_id"]
+          },
         ]
       }
       treasury_movements: {
@@ -4996,6 +5125,48 @@ export type Database = {
           },
         ]
       }
+      general_ledger_lines: {
+        Row: {
+          account_code: string | null
+          account_id: string | null
+          account_name: string | null
+          account_type: string | null
+          credit: number | null
+          debit: number | null
+          description: string | null
+          id: string | null
+          journal_entry_id: string | null
+          journal_no: string | null
+          line_description: string | null
+          line_no: number | null
+          posting_date: string | null
+          source_reference: string | null
+          source_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entry_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "finance_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "trial_balance"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_finance_status: {
         Row: {
           amount_paid: number | null
@@ -5346,7 +5517,25 @@ export type Database = {
             referencedRelation: "finance_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "treasury_accounts_finance_account_id_fkey"
+            columns: ["finance_account_id"]
+            isOneToOne: false
+            referencedRelation: "trial_balance"
+            referencedColumns: ["account_id"]
+          },
         ]
+      }
+      trial_balance: {
+        Row: {
+          account_code: string | null
+          account_id: string | null
+          account_name: string | null
+          account_type: string | null
+          credit_balance: number | null
+          debit_balance: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {
@@ -5636,6 +5825,10 @@ export type Database = {
           _event_type: string
           _payload?: Json
         }
+        Returns: string
+      }
+      ensure_treasury_gl_account: {
+        Args: { _treasury_account_id: string }
         Returns: string
       }
       finalize_pos_payment: {
@@ -6910,6 +7103,10 @@ export type Database = {
         Returns: number
       }
       pos_sale_receipt: { Args: { _sale_id: string }; Returns: Json }
+      post_treasury_movement_journal: {
+        Args: { _movement_id: string }
+        Returns: string
+      }
       price_pos_cart: {
         Args: { _branch_id: string; _items: Json }
         Returns: Json

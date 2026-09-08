@@ -54,6 +54,10 @@ import MyRequestsPage from '@/pages/employee-portal/MyRequestsPage'
 import VendorsPage from '@/pages/fms/VendorsPage'
 import FinanceCategoriesPage from '@/pages/fms/FinanceCategoriesPage'
 import FinanceAccountsPage from '@/pages/fms/FinanceAccountsPage'
+import JournalEntriesPage from '@/pages/fms/JournalEntriesPage'
+import GeneralLedgerPage from '@/pages/fms/GeneralLedgerPage'
+import TrialBalancePage from '@/pages/fms/TrialBalancePage'
+import AccountingReportsPage from '@/pages/fms/AccountingReportsPage'
 import PosTillPage from '@/pages/pos/PosTillPage'
 import PosTransactionsPage from '@/pages/pos/PosTransactionsPage'
 import AdminPosTransactionsPage from '@/pages/admin/PosTransactionsPage'
@@ -174,6 +178,13 @@ export default function App() {
               <Route path="vendors" element={<VendorsPage />} />
               <Route path="categories" element={<FinanceCategoriesPage />} />
               <Route path="accounts" element={<FinanceAccountsPage />} />
+              {/* Accounting. Read-only by construction: these pages record
+                  what the routes above already did, and none of them can
+                  create, edit or approve an entry. */}
+              <Route path="journal" element={<JournalEntriesPage />} />
+              <Route path="ledger" element={<GeneralLedgerPage />} />
+              <Route path="trial-balance" element={<TrialBalancePage />} />
+              <Route path="reports" element={<AccountingReportsPage />} />
             </Route>
 
             <Route

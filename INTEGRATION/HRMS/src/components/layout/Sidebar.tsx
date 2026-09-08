@@ -30,6 +30,9 @@ import {
   PackageCheck,
   TrendingUp,
   ArrowDownLeft,
+  BookOpen,
+  BookMarked,
+  Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLocation } from 'react-router-dom'
@@ -99,7 +102,21 @@ const financeNav: NavItem[] = [
   { label: 'Cash & Bank', to: '/fms/treasury', icon: Wallet },
   { label: 'Vendors', to: '/fms/vendors', icon: Store },
   { label: 'Categories', to: '/fms/categories', icon: Tags },
+]
+
+// The books. Everything above moves money; nothing here does -- these pages
+// read what those transactions already recorded. Its own section for that
+// reason, so the working queues are not diluted by four read-only reports.
+//
+// Chart of Accounts sits here rather than with the other reference data: it is
+// what the journal posts into, and it was the odd item out at the end of the
+// list above.
+const accountingNav: NavItem[] = [
   { label: 'Chart of Accounts', to: '/fms/accounts', icon: Landmark },
+  { label: 'Journal Entries', to: '/fms/journal', icon: BookOpen },
+  { label: 'General Ledger', to: '/fms/ledger', icon: BookMarked },
+  { label: 'Trial Balance', to: '/fms/trial-balance', icon: Scale },
+  { label: 'Reports', to: '/fms/reports', icon: FileBarChart },
 ]
 
 // Genuinely Administrator-only.
@@ -208,6 +225,17 @@ export function Sidebar() {
         {visibleMainNav.map((item) => (
           <NavRow key={item.to} item={item} />
         ))}
+
+        {inFinance && (
+          <>
+            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Accounting
+            </p>
+            {accountingNav.map((item) => (
+              <NavRow key={item.to} item={item} />
+            ))}
+          </>
+        )}
 
         {!inSelfService && !inFinance && (
           <>
