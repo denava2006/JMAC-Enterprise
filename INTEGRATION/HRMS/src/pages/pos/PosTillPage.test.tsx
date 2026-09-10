@@ -39,6 +39,24 @@ const branches: Branch[] = [
   { id: BRANCH_A, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
 ]
 
+/** A finished online sale, for the cases that need the receipt to open. */
+const PAID_RECEIPT = {
+  sale_id: 'S1',
+  receipt_number: 'OR-2026-0001',
+  branch_name: 'Cavite Branch',
+  cashier_name: 'ZZ Cashier',
+  subtotal: 100,
+  fees_total: 10,
+  total_amount: 110,
+  payment_method: 'gcash',
+  payment_reference: 'JMAC-POS-ABCDEF012345',
+  amount_tendered: null,
+  change_given: null,
+  fees: [],
+  items: [{ product_name: 'Cola 1.5L', quantity: 1, unit_price: 100, line_total: 100 }],
+  created_at: '2026-09-02T10:00:00Z',
+} as unknown as Receipt
+
 const state: {
   role: UserRole
   branchIds: string[]
@@ -622,7 +640,11 @@ describe('online payments', () => {
     expect(screen.getByText(/only once PayMongo\s+confirms the payment/)).toBeTruthy()
   })
 
-  it('marks a live payment as test mode', () => {
+  it('shows the amount plainly, with no TEST mark beside it', () => {
+    // Which environment this is belongs to the build, not to the transaction.
+    // BuildStamp says it at the foot of the sidebar on every screen and warns
+    // outright when the build is not production; putting it next to the figure
+    // read as a qualifier on the money.
     state.onlineResult = {
       attemptId: 'a1', checkoutUrl: 'https://checkout.test/abc',
       amountCentavos: 11000, reference: 'JMAC-POS-ABCDEF012345',
@@ -631,9 +653,48 @@ describe('online payments', () => {
     startOnline()
     fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
 
-    // A mark beside the amount now, rather than a panel above it. The claim
-    // it makes is the same one.
-    expect(screen.getByText('Test')).toBeTruthy()
+    const amount = screen.getByText('Amount')
+    expect(amount.textContent).toBe('Amount')
+    expect(amount.parentElement?.textContent).toBe('Amount₱110.00')
+    expect(screen.queryByText('Test')).toBeNull()
+    expect(screen.queryByText(/^TEST$/i)).toBeNull()
+  })
+
+  it.each(['pending', 'cancelled', 'failed', 'expired', 'paid_unfulfilled'] as const)(
+    'shows the amount with no TEST mark while the attempt is %s',
+    (status) => {
+      // The amount row is unconditional, so one badge left behind on any
+      // branch would be a badge on all of them. Walking every non-terminal
+      // presentation is what catches a conditional creeping back in.
+      state.onlineResult = {
+        attemptId: 'a1', checkoutUrl: 'https://checkout.test/abc',
+        amountCentavos: 11000, reference: 'JMAC-POS-ABCDEF012345',
+      }
+      state.attempt = { id: 'a1', status, sale_id: null }
+      startOnline()
+      fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
+
+      // Everything the panel is meant to keep is still there.
+      expect(screen.getByText('Amount')).toBeTruthy()
+      expect(screen.getByText('₱110.00')).toBeTruthy()
+      expect(screen.getByText('Reference')).toBeTruthy()
+      expect(screen.getByText('JMAC-POS-ABCDEF012345')).toBeTruthy()
+
+      expect(screen.queryByText('Test')).toBeNull()
+    }
+  )
+
+  it('shows no TEST mark on the receipt of a completed payment either', () => {
+    // A paid attempt swaps the panel for the receipt, so this comes in through
+    // the return-from-provider path the way a real completed payment does.
+    state.catalogue = [row()]
+    state.attempt = { id: 'a1', status: 'paid', sale_id: 'S1', method: 'gcash' }
+    state.saleDetail = PAID_RECEIPT
+    renderTill('/pos/till?attempt=key-1')
+
+    expect(screen.getByText('Sale complete')).toBeTruthy()
+    expect(screen.getByText('OR-2026-0001')).toBeTruthy()
+    expect(screen.queryByText('Test')).toBeNull()
   })
 
   it('offers no way to mark a payment paid from the till', () => {
@@ -819,12 +880,15 @@ describe('which engine each payment method reaches', () => {
       expect(screen.queryByLabelText('Cash received')).toBeNull()
     })
 
-    it(`marks ${label} as test mode once it is under way`, () => {
+    it(`shows ${label}'s amount with no TEST mark`, () => {
+      // Every method reaches the same panel, so the removal has to hold for
+      // each of them and not only the one that happened to be tested.
       state.attempt = { id: 'a1', status: 'pending', sale_id: null }
       start(label)
       fireEvent.click(screen.getByRole('button', { name: /Start payment/ }))
 
-      expect(screen.getByText('Test')).toBeTruthy()
+      expect(screen.getByText('Amount')).toBeTruthy()
+      expect(screen.queryByText('Test')).toBeNull()
     })
   }
 })
@@ -874,7 +938,9 @@ describe('coming back from the payment page', () => {
     renderTill('/pos/till?attempt=key-1')
 
     // Still watching the payment it came back to, not reset to an empty till.
-    expect(screen.getByText(/Test/)).toBeTruthy()
+    // Proved by a control only the live panel renders -- this used to lean on
+    // the TEST badge, which was never what it was really asserting.
+    expect(screen.getByRole('button', { name: 'Check status' })).toBeTruthy()
   })
 
   it('keeps the key in the URL while the payment is still pending', () => {
@@ -886,7 +952,7 @@ describe('coming back from the payment page', () => {
 
     expect(window.location.search === '?attempt=key-1' || true).toBe(true)
     // The panel is still up, which is the observable proof the key survived.
-    expect(screen.getByText(/Test/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check status' })).toBeTruthy()
   })
 
   it('opens the receipt when the attempt is already paid on arrival', () => {
