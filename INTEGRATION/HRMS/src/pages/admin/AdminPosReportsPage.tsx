@@ -60,17 +60,19 @@ function FinancialFigure({
 }) {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-1 p-5">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Icon className="h-4 w-4" />
+      {/* Matches the manager's POS Reports figure exactly. This is the same
+          module seen by another role, so the two must not drift -- and they
+          would have, because the sentence-case pass landed on the manager's
+          copy first. */}
+      <CardContent className="flex flex-col gap-1 p-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Icon className="h-4 w-4" aria-hidden="true" />
           {label}
         </div>
         {loading ? (
-          <Skeleton className="mt-1 h-8 w-28" />
+          <Skeleton className="mt-1 h-7 w-24" />
         ) : (
-          <div className="font-display text-2xl font-semibold tabular-nums text-foreground">
-            {value}
-          </div>
+          <div className="font-display text-xl font-bold tabular-nums text-foreground">{value}</div>
         )}
         <p className="text-xs text-muted-foreground">{hint}</p>
       </CardContent>
@@ -160,21 +162,21 @@ export default function AdminPosReportsPage() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <FinancialFigure
-              label="Sales Collected"
+              label="Sales collected"
               value={formatPosReportMoney(stats?.sales_collected ?? 0)}
               hint="Product Sales plus Customer Fees"
               icon={Wallet}
               loading={reportsLoading}
             />
             <FinancialFigure
-              label="Product Sales"
+              label="Product sales"
               value={formatPosReportMoney(stats?.product_sales ?? 0)}
               hint="Historical product line totals before fees"
               icon={Receipt}
               loading={reportsLoading}
             />
             <FinancialFigure
-              label="Customer Fees"
+              label="Customer fees"
               value={formatPosReportMoney(stats?.fees_collected ?? 0)}
               hint="Customer-paid fees, reported separately"
               icon={Calculator}
@@ -188,14 +190,14 @@ export default function AdminPosReportsPage() {
               loading={reportsLoading}
             />
             <FinancialFigure
-              label="Gross Product Profit"
+              label="Gross product profit"
               value={formatPosReportMoney(stats?.gross_product_profit ?? 0)}
               hint="Product Sales minus COGS"
               icon={CircleDollarSign}
               loading={reportsLoading}
             />
             <FinancialFigure
-              label="Gross Product Margin %"
+              label="Gross product margin %"
               value={formatPosReportPercent(stats?.gross_product_margin)}
               hint="Gross Product Profit divided by Product Sales"
               icon={Percent}
@@ -209,14 +211,14 @@ export default function AdminPosReportsPage() {
               loading={reportsLoading}
             />
             <FinancialFigure
-              label="Items Sold"
+              label="Items sold"
               value={formatPosReportCount(stats?.items_sold ?? 0)}
               hint="Units sold, not line-item rows"
               icon={PackageCheck}
               loading={reportsLoading}
             />
             <FinancialFigure
-              label="Average Sale"
+              label="Average sale"
               value={formatNullablePosReportMoney(stats?.average_sale)}
               hint="Sales Collected divided by completed transactions"
               icon={ShoppingBasket}

@@ -161,12 +161,15 @@ describe('administrator financial definitions', () => {
 
     await screen.findByText(/Showing completed sales for Aug 1, 2026 to Aug 25, 2026/)
 
-    expect(figureText('Sales Collected')).toContain('330.00')
-    expect(figureText('Product Sales')).toContain('300.00')
-    expect(figureText('Customer Fees')).toContain('30.00')
+    // Card labels are sentence case, matching the manager's POS Reports. The
+    // prose definitions below still name the measures in Title Case, because
+    // there they are terms in a sentence rather than labels on a card.
+    expect(figureText('Sales collected')).toContain('330.00')
+    expect(figureText('Product sales')).toContain('300.00')
+    expect(figureText('Customer fees')).toContain('30.00')
     expect(figureText('COGS')).toContain('180.00')
-    expect(figureText('Gross Product Profit')).toContain('120.00')
-    expect(figureText('Gross Product Margin %')).toContain('40.00%')
+    expect(figureText('Gross product profit')).toContain('120.00')
+    expect(figureText('Gross product margin %')).toContain('40.00%')
     expect(container.textContent).toContain(
       'Gross Product Margin % = ((Product Sales - COGS) / Product Sales) × 100.'
     )
@@ -183,7 +186,7 @@ describe('administrator financial definitions', () => {
     })
     show()
 
-    await waitFor(() => expect(figureText('Gross Product Margin %')).toContain('—'))
+    await waitFor(() => expect(figureText('Gross product margin %')).toContain('—'))
     expect(screen.getByText(/shown as — when Product Sales is zero/i)).toBeTruthy()
   })
 })
