@@ -14,6 +14,7 @@ import {
 function row(overrides: Partial<TransactionRow> = {}): TransactionRow {
   return {
     sale_id: 's1',
+    receipt_number: 'OR-2026-0001',
     created_at: '2026-08-25T10:00:00Z',
     status: 'completed',
     branch_id: 'b1',

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -23,7 +25,12 @@ import type { TransactionRow } from '@/lib/posTransactions'
  */
 
 const BRANCH = 'b1'
+/** The internal key, which never reaches a customer. */
 const SALE = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
+/** The receipt as the customer holds it — persisted on the sale, not derived
+ *  from the uuid above. Deliberately unrelated to it, so a test cannot pass by
+ *  accident if the old slice-the-uuid behaviour came back. */
+const RECEIPT_NO = 'OR-2026-0042'
 
 const branches: Branch[] = [
   { id: BRANCH, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
@@ -46,6 +53,7 @@ const catalogue: CatalogueRow[] = [
 function receipt(overrides: Partial<Receipt> = {}): Receipt {
   return {
     sale_id: SALE,
+    receipt_number: RECEIPT_NO,
     created_at: '2026-09-04T10:15:44.000Z',
     status: 'completed',
     company_name: 'JMAC Enterprise',
@@ -102,7 +110,8 @@ vi.mock('@/hooks/usePosPayment', () => ({
 }))
 
 const listRow = (): TransactionRow => ({
-  sale_id: SALE, created_at: state.receipt.created_at, status: 'completed',
+  sale_id: SALE, receipt_number: state.receipt.receipt_number,
+  created_at: state.receipt.created_at, status: 'completed',
   branch_id: BRANCH, branch_name: 'Cavite Branch', cashier_name: 'Liza Fernandez',
   item_count: 2, subtotal: 140, fees_total: 7, total_amount: 147,
   payment_method: state.receipt.payment_method, payment_reference: state.receipt.payment_reference,
@@ -141,7 +150,9 @@ function reprintFromHistory() {
       <PosTransactionsView scope="mine" showCashier showBranch emptyMessage="none" />
     </MemoryRouter>
   )
-  fireEvent.click(screen.getByRole('button', { name: /^Receipt for / }))
+  // The register names the row by its receipt number too, so this locator only
+  // resolves if the list is showing the same reference the receipt does.
+  fireEvent.click(screen.getByRole('button', { name: `Receipt for ${RECEIPT_NO}` }))
 }
 
 const printed = () => document.querySelector('#printable-receipt')?.textContent ?? ''
@@ -199,7 +210,7 @@ describe('the same sale, from either door', () => {
   })
 
   it.each([
-    ['receipt number', '7C9E6679'],
+    ['receipt number', RECEIPT_NO],
     ['branch', 'Cavite Branch'],
     ['branch address', '123 Aguinaldo Highway, Imus'],
     ['item and quantity', 'Coca-Cola 1.5L'],
@@ -219,15 +230,20 @@ describe('the same sale, from either door', () => {
     expect(printed(), 'history').toContain(expected)
   })
 
-  // The receipt reference is the sale id's first eight characters because the
-  // POS has no business receipt number -- there is no such column, and the
-  // transaction register shows the same eight. What matters is that a whole
-  // uuid is never put in front of anyone.
-  it('never prints a raw uuid', () => {
+  // The receipt reference is the sale's own persisted number. It used to be
+  // the first eight characters of the uuid, computed in the browser -- so this
+  // asserts both that the real number appears AND that no part of the internal
+  // key does.
+  it('prints the persisted receipt number and no part of the uuid', () => {
     sellForCash()
-    expect(printed()).not.toMatch(
+    const text = printed()
+
+    expect(text).toContain(RECEIPT_NO)
+    expect(text).not.toMatch(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
     )
+    // The old behaviour, named so it cannot creep back unnoticed.
+    expect(text).not.toContain(SALE.slice(0, 8).toUpperCase())
   })
 })
 
@@ -285,6 +301,88 @@ describe('a receipt is read-only', () => {
     for (const button of screen.getAllByRole('button')) {
       expect(button.textContent ?? '').not.toMatch(/confirm|finish|record|save sale|submit|retry/i)
     }
+  })
+})
+
+/**
+ * What comes out of the printer.
+ *
+ * Layout is CSS, which jsdom does not compute, so these assert the two things
+ * that decide the outcome and that jsdom CAN see: exactly one print target in
+ * the document, with the screen-only controls outside it — plus the stylesheet
+ * rule that isolates it, read from disk.
+ */
+describe('printing', () => {
+  const printCss = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
+    .match(/@media print\s*\{[\s\S]*$/)?.[0] ?? ''
+
+  it('puts exactly one print target in the document', () => {
+    sellForCash()
+    expect(document.querySelectorAll('#printable-receipt')).toHaveLength(1)
+    cleanup()
+
+    reprintFromHistory()
+    expect(document.querySelectorAll('#printable-receipt')).toHaveLength(1)
+  })
+
+  it('keeps Close and Print outside the printed region', () => {
+    sellForCash()
+    const target = document.querySelector('#printable-receipt')!
+    for (const label of [/print/i, /close/i]) {
+      for (const button of screen.getAllByRole('button', { name: label })) {
+        expect(target.contains(button), `${button.textContent} is inside the receipt`).toBe(false)
+      }
+    }
+  })
+
+  it('keeps the receipt content inside it', () => {
+    sellForCash()
+    const target = document.querySelector('#printable-receipt')!
+    // The things that must survive onto paper.
+    for (const expected of [RECEIPT_NO, 'Cavite Branch', 'Coca-Cola 1.5L', '₱147.00', 'Liza Fernandez']) {
+      expect(target.textContent, expected).toContain(expected)
+    }
+  })
+
+  // The stylesheet is what excludes the sidebar, the header and the modal
+  // frame. Subtractive on purpose: hide everything, then un-hide the receipt,
+  // so a control added to the dialog later is excluded by default.
+  it('hides the page and un-hides only the receipt', () => {
+    expect(printCss).toMatch(/body\s*\*\s*\{[^}]*visibility:\s*hidden/)
+    expect(printCss).toMatch(/#printable-receipt[\s\S]{0,80}visibility:\s*visible/)
+  })
+
+  it('prints dark on white rather than relying on background colours', () => {
+    // Browsers omit backgrounds from print by default, so a receipt that
+    // depended on them would come out as pale text on nothing.
+    expect(printCss).toMatch(/color:\s*#000/)
+    expect(printCss).toMatch(/background:\s*(#fff|transparent)/)
+  })
+
+  it('is one receipt, not a screen copy and a print copy', () => {
+    // The failure this guards: someone adds ReceiptForPrint alongside the
+    // shared one and the two drift, which is the whole defect this work fixed.
+    const dialog = readFileSync(
+      resolve(process.cwd(), 'src/components/pos/PosReceiptDialog.tsx'),
+      'utf8'
+    )
+    expect(dialog.match(/<SaleReceipt/g) ?? []).toHaveLength(1)
+    expect(dialog).not.toMatch(/ReceiptForPrint|PrintableReceipt|ReceiptForScreen/)
+  })
+
+  it('is reached the same way from both doors', () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+
+    sellForCash()
+    fireEvent.click(screen.getByRole('button', { name: /print/i }))
+    expect(print).toHaveBeenCalledTimes(1)
+    cleanup()
+
+    reprintFromHistory()
+    fireEvent.click(screen.getByRole('button', { name: /print/i }))
+    expect(print).toHaveBeenCalledTimes(2)
+
+    print.mockRestore()
   })
 })
 

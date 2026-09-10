@@ -27,6 +27,7 @@ const queries: { scope: TransactionScope; branchId?: string }[] = []
 function row(overrides: Partial<TransactionRow> = {}): TransactionRow {
   return {
     sale_id: '11111111-2222-3333-4444-555555555555',
+    receipt_number: 'OR-2026-0001',
     created_at: '2026-08-25T10:00:00Z',
     status: 'completed',
     branch_id: CAVITE,
@@ -107,7 +108,7 @@ describe('the Administrator transaction module', () => {
   it('offers a receipt for each sale, addressed by the sale it belongs to', () => {
     state.rows = [row()]
     render(<AdminPosTransactionsPage />)
-    expect(screen.getByRole('button', { name: 'Receipt for 11111111' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Receipt for OR-2026-0001' })).toBeTruthy()
   })
 
   it('explains an empty history rather than showing a bare grid', () => {

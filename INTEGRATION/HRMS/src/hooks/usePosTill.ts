@@ -18,6 +18,14 @@ import { describeCheckoutError, type StoredPaymentMethod } from '@/lib/posTill'
 
 export interface Receipt {
   sale_id: string
+  /**
+   * The customer-facing reference, e.g. OR-2026-0001.
+   *
+   * Persisted on the sale and assigned by the database in the same transaction
+   * that creates it. Distinct from sale_id, which stays internal: what used to
+   * be shown was the first eight characters of that uuid, computed here.
+   */
+  receipt_number: string
   created_at: string
   status: string
   company_name: string | null

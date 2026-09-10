@@ -24,6 +24,9 @@ export type TransactionScope = 'mine' | 'branch' | 'admin'
 
 export interface TransactionRow {
   sale_id: string
+  /** The receipt as the customer holds it, e.g. OR-2026-0001. The register
+   *  shows this; sale_id stays the internal key and is never displayed. */
+  receipt_number: string
   created_at: string
   status: SaleStatus
   branch_id: string

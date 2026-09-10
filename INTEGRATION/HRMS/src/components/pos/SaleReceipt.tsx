@@ -30,7 +30,9 @@ export function SaleReceipt({ receipt }: { receipt: Receipt }) {
       <div className="flex flex-col gap-0.5 border-t border-border pt-2 text-xs text-muted-foreground">
         <div className="flex justify-between">
           <span>Receipt</span>
-          <span className="font-mono">{receipt.sale_id.slice(0, 8).toUpperCase()}</span>
+          {/* The sale's own number, not a slice of its uuid. The internal id
+              is never printed. */}
+          <span className="font-mono">{receipt.receipt_number}</span>
         </div>
         <div className="flex justify-between">
           <span>Date</span>

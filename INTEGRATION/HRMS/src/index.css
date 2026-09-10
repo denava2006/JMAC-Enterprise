@@ -179,3 +179,70 @@
   from { transform: translateX(0); }
   to { transform: translateX(100%); }
 }
+
+/* ===========================================================================
+   Printing a receipt
+   ===========================================================================
+   The receipt dialog carries #printable-receipt, and both the till and the
+   register render it -- one target, so Print produces the same document from
+   either. The id had existed for a while with nothing selecting it, so Print
+   emitted the whole page: the modal, the dialog's own buttons, and whatever
+   the cashier had been looking at behind it.
+
+   The approach is subtractive rather than a second component. Hide everything,
+   then un-hide the chain from <body> down to the receipt and everything
+   inside it. That keeps ONE receipt in the markup -- there is no print-only
+   copy to drift from the screen one -- and anything added to the dialog later
+   is excluded by default rather than accidentally printed.
+
+   `visibility` rather than `display`, because collapsing ancestors would take
+   the receipt down with them. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible;
+  }
+
+  /* Lifted out of the dialog and onto the page. Without this the receipt
+     prints wherever the centred modal happened to sit, which on A4 is a
+     third of the way down with the rest of the sheet blank. */
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 80mm;
+    margin: 0;
+    padding: 0;
+    /* Black on white and nothing else: background colours are off by default
+       in every browser's print dialog, so a receipt that relied on them would
+       come out as unreadable pale text. */
+    color: #000;
+    background: #fff;
+  }
+
+  /* Borders drawn as rules rather than tints, for the same reason. */
+  #printable-receipt * {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #999 !important;
+    box-shadow: none !important;
+  }
+
+  /* The dialog's own frame is not part of the receipt. */
+  [data-slot='dialog-overlay'],
+  [role='dialog'] {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  @page {
+    margin: 8mm;
+  }
+}

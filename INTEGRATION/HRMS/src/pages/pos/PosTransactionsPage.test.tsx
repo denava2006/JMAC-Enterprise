@@ -30,6 +30,7 @@ const queries: { scope: TransactionScope; branchId?: string }[] = []
 function row(overrides: Partial<TransactionRow> = {}): TransactionRow {
   return {
     sale_id: '11111111-2222-3333-4444-555555555555',
+    receipt_number: 'OR-2026-0001',
     created_at: '2026-08-25T10:00:00Z',
     status: 'completed',
     branch_id: CAVITE,
@@ -136,7 +137,7 @@ describe('the register', () => {
     // Scoped to the row: "2" is also the units figure on the summary above it,
     // which is a different number that happens to agree.
     const cells = screen
-      .getByText('11111111')
+      .getByText('OR-2026-0001')
       .closest('tr')!
       .querySelectorAll('td')
     const rowText = Array.from(cells).map((c) => c.textContent?.trim())
@@ -181,7 +182,7 @@ describe('the register', () => {
   it('keeps the receipt reachable for each row', () => {
     state.rows = [row()]
     render(<PosTransactionsPage />)
-    expect(screen.getByRole('button', { name: 'Receipt for 11111111' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Receipt for OR-2026-0001' })).toBeTruthy()
   })
 
   it('tells cash apart from a provider settlement at a glance', () => {

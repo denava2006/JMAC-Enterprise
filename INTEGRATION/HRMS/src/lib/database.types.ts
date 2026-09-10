@@ -3540,6 +3540,7 @@ export type Database = {
           id: string
           payment_method: string
           payment_reference: string | null
+          receipt_number: string
           request_fingerprint: string
           status: Database["public"]["Enums"]["pos_sale_status"]
           subtotal: number
@@ -3563,6 +3564,7 @@ export type Database = {
           id?: string
           payment_method: string
           payment_reference?: string | null
+          receipt_number: string
           request_fingerprint: string
           status?: Database["public"]["Enums"]["pos_sale_status"]
           subtotal: number
@@ -3586,6 +3588,7 @@ export type Database = {
           id?: string
           payment_method?: string
           payment_reference?: string | null
+          receipt_number?: string
           request_fingerprint?: string
           status?: Database["public"]["Enums"]["pos_sale_status"]
           subtotal?: number
@@ -5956,6 +5959,7 @@ export type Database = {
           item_count: number
           payment_method: string
           payment_reference: string
+          receipt_number: string
           sale_id: string
           status: Database["public"]["Enums"]["pos_sale_status"]
           subtotal: number
@@ -6101,6 +6105,7 @@ export type Database = {
           item_count: number
           payment_method: string
           payment_reference: string
+          receipt_number: string
           sale_id: string
           status: Database["public"]["Enums"]["pos_sale_status"]
           subtotal: number
@@ -6321,6 +6326,7 @@ export type Database = {
           item_count: number
           payment_method: string
           payment_reference: string
+          receipt_number: string
           sale_id: string
           status: Database["public"]["Enums"]["pos_sale_status"]
           subtotal: number

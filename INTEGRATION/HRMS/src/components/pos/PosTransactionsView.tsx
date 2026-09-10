@@ -250,7 +250,7 @@ export function PosTransactionsView({
                           </span>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
-                          {row.sale_id.slice(0, 8).toUpperCase()}
+                          {row.receipt_number}
                         </TableCell>
                         {showBranch && (
                           <TableCell className="whitespace-nowrap text-sm">
@@ -284,7 +284,7 @@ export function PosTransactionsView({
                             <Button
                               variant="outline"
                               size="sm"
-                              aria-label={`Receipt for ${row.sale_id.slice(0, 8).toUpperCase()}`}
+                              aria-label={`Receipt for ${row.receipt_number}`}
                               onClick={() => setOpenSale(row.sale_id)}
                             >
                               <ReceiptIcon className="h-4 w-4" />
