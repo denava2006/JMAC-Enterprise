@@ -3,7 +3,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  Printer,
   Receipt as ReceiptIcon,
   Wallet,
 } from 'lucide-react'
@@ -15,20 +14,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { SaleReceipt } from '@/components/pos/SaleReceipt'
+import { PosReceiptDialog } from '@/components/pos/PosReceiptDialog'
 import { PosSummaryCard } from '@/components/pos/PosSummaryCard'
 import { usePosTransactions, useSaleDetail } from '@/hooks/usePosTransactions'
 import {
   PAGE_SIZE,
-  SALE_STATUS_LABEL,
   describeTransactionError,
   pageCount,
   paymentLabel,
@@ -340,41 +330,16 @@ export function PosTransactionsView({
         </>
       )}
 
-      <Dialog open={!!openSale} onOpenChange={(open) => !open && setOpenSale(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Receipt</DialogTitle>
-            <DialogDescription>
-              Printed as it was on the day — from the sale's own snapshots, not today's prices.
-            </DialogDescription>
-          </DialogHeader>
-
-          {receiptLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : receiptError ? (
-            <p className="py-8 text-center text-sm text-destructive">
-              {describeTransactionError(receiptErr)}
-            </p>
-          ) : receipt ? (
-            <div id="printable-receipt">
-              <SaleReceipt receipt={receipt} />
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                {SALE_STATUS_LABEL[receipt.status as 'completed'] ?? receipt.status}
-              </p>
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenSale(null)}>
-              Close
-            </Button>
-            <Button disabled={!receipt} onClick={() => window.print()}>
-              <Printer className="h-4 w-4" />
-              Print
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* The same dialog the till opens the moment a sale is taken. */}
+      <PosReceiptDialog
+        open={!!openSale}
+        onOpenChange={(open) => !open && setOpenSale(null)}
+        receipt={receipt}
+        isLoading={receiptLoading}
+        isError={receiptError}
+        error={receiptErr}
+        description="Printed as it was on the day — from the sale's own snapshots, not today's prices."
+      />
     </div>
   )
 }

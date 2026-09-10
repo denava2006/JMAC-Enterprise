@@ -918,14 +918,15 @@ describe('coming back from the payment page', () => {
   })
 
   it('keeps a way to dismiss the receipt', () => {
-    // Removing the footer button must not leave the cashier trapped: the
-    // dialog's own close control is the one that stays.
+    // Two now, and that is the shared dialog arriving: the dialog's own X, and
+    // an explicit Close beside Print in the footer. A cashier must not be
+    // trapped in front of a receipt whatever they reach for.
     state.catalogue = [row()]
     state.attempt = { id: 'a1', status: 'paid', sale_id: 'S1', method: 'gcash' }
     state.saleDetail = RECEIPT
     renderTill('/pos/till?attempt=key-1')
 
-    expect(screen.getByRole('button', { name: /close/i })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /close/i }).length).toBeGreaterThan(0)
   })
 
   it('dismissing the receipt sends nothing to the server', () => {
@@ -937,7 +938,9 @@ describe('coming back from the payment page', () => {
     renderTill('/pos/till?attempt=key-1')
 
     checkoutMutate.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+    for (const close of screen.getAllByRole('button', { name: /close/i })) {
+      fireEvent.click(close)
+    }
 
     expect(checkoutMutate).not.toHaveBeenCalled()
     expect(onlineMutate).not.toHaveBeenCalled()

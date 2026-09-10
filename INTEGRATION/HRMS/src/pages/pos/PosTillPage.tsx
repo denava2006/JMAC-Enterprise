@@ -24,13 +24,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
+import { PosReceiptDialog } from '@/components/pos/PosReceiptDialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranches } from '@/hooks/useBranches'
 import { usePosCatalogue, useProductImageUrls } from '@/hooks/usePosCatalogue'
@@ -39,7 +33,6 @@ import {
   ALL_CATEGORIES,
   categoriesOf,
   visibleProducts,
-  saleMethodLabel,
   isOnlineMethod,
   addToCart,
   attemptFingerprint,
@@ -69,96 +62,6 @@ import {
  * key, so a second send returns the sale that already exists instead of
  * charging again. It changes the moment anything about the sale changes.
  */
-
-/**
- * The receipt for a sale that has already happened.
- *
- * There is no confirm button here, and that is the point. By the time this
- * renders, checkout_pos_sale has committed: the sale exists, stock has moved,
- * and Finance can already see it. A button reading "New sale" sat in the footer
- * and did exactly what the X does -- close the dialog -- but a footer button on
- * a dialog is where a cashier expects the action that finishes the job, and
- * this one finished nothing. Dismissing the receipt is housekeeping, so the X
- * is the whole control.
- */
-function ReceiptDialog({ receipt, onClose }: { receipt: Receipt | null; onClose: () => void }) {
-  if (!receipt) return null
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Sale complete</DialogTitle>
-          <DialogDescription>
-            {receipt.company_name ? `${receipt.company_name} · ` : ''}
-            {receipt.branch_name} · {new Date(receipt.created_at).toLocaleString()}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            {receipt.items.map((item) => (
-              <div key={item.product_name} className="flex justify-between text-sm">
-                <span className="text-foreground">
-                  {item.product_name} <span className="text-muted-foreground">× {item.quantity}</span>
-                </span>
-                <span className="tabular-nums text-foreground">{peso(item.line_total)}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-1 border-t border-border pt-2 text-sm">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Subtotal</span>
-              <span className="tabular-nums">{peso(receipt.subtotal)}</span>
-            </div>
-            {receipt.fees.map((fee) => (
-              <div key={fee.name} className="flex justify-between text-muted-foreground">
-                <span>
-                  {fee.name} {fee.type === 'percent' ? `(${fee.value}%)` : ''}
-                </span>
-                <span className="tabular-nums">{peso(fee.amount)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between border-t border-border pt-1 font-medium text-foreground">
-              <span>Total</span>
-              <span className="tabular-nums">{peso(receipt.total_amount)}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 border-t border-border pt-2 text-sm text-muted-foreground">
-            <div className="flex justify-between">
-              <span>Paid by</span>
-              <span>{saleMethodLabel(receipt.payment_method)}</span>
-            </div>
-            {receipt.payment_reference && (
-              <div className="flex justify-between">
-                <span>Reference</span>
-                <span className="tabular-nums">{receipt.payment_reference}</span>
-              </div>
-            )}
-            {receipt.amount_tendered !== null && (
-              <>
-                <div className="flex justify-between">
-                  <span>Cash received</span>
-                  <span className="tabular-nums">{peso(receipt.amount_tendered)}</span>
-                </div>
-                <div className="flex justify-between font-medium text-foreground">
-                  <span>Change</span>
-                  <span className="tabular-nums">{peso(receipt.change_given ?? 0)}</span>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between pt-1">
-              <span>Served by</span>
-              <span>{receipt.cashier_name}</span>
-            </div>
-          </div>
-        </div>
-
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 export default function PosTillPage() {
   const { profile, posAccess } = useAuth()
@@ -764,7 +667,17 @@ export default function PosTillPage() {
         </Card>
       </div>
 
-      <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} />
+      {/* The same dialog transaction history opens, holding the same receipt
+          from the same builder -- so what the cashier prints now and what they
+          reprint next year are one document, and Print is here rather than two
+          screens away. */}
+      <PosReceiptDialog
+        open={!!receipt}
+        onOpenChange={(next) => !next && setReceipt(null)}
+        receipt={receipt}
+        title="Sale complete"
+        description="Paid and recorded. Print it now, or reprint it any time from Transactions."
+      />
     </div>
   )
 }
