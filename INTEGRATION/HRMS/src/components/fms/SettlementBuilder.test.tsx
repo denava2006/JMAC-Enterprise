@@ -50,6 +50,7 @@ vi.mock('@/hooks/useTreasury', () => ({
     // that null-means-all behaviour is exactly what the UI has to represent.
     const cavite = {
       sale_id: 's1',
+      receipt_number: 'OR-2026-0009',
       sold_at: '2026-09-04T02:30:00Z',
       branch_id: 'b1',
       branch_name: 'Cavite Branch',
@@ -60,6 +61,7 @@ vi.mock('@/hooks/useTreasury', () => ({
     }
     const mainOffice = {
       sale_id: 's2',
+      receipt_number: 'OR-2026-0010',
       sold_at: '2026-09-04T03:30:00Z',
       branch_id: 'b2',
       branch_name: 'Main Office',
@@ -254,6 +256,30 @@ describe('what the Branch control says in provider mode', () => {
   it('names the provider list for what it holds', async () => {
     await inProviderMode()
     expect(screen.getByText('Unsettled provider collections')).toBeTruthy()
+  })
+
+  /**
+   * A row in the picker is a SALE, so it is named the way the sale's receipt
+   * names it. It used to show the provider's payment reference, falling back
+   * to eight characters of the sale uuid -- so an Accountant choosing what to
+   * settle saw a reference that appeared nowhere on the receipt.
+   */
+  it('identifies each collection by its receipt number', async () => {
+    await inProviderMode()
+    await pick('Branch', 'Cavite Branch')
+    const list = collectionsList()
+
+    expect(within(list).getByText('OR-2026-0009')).toBeTruthy()
+    expect(within(list).queryByText('S1')).toBeNull()
+    expect(list.textContent).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+    )
+  })
+
+  it('addresses its checkbox by the receipt number too', async () => {
+    await inProviderMode()
+    await pick('Branch', 'Cavite Branch')
+    expect(screen.getByRole('checkbox', { name: 'Include OR-2026-0009' })).toBeTruthy()
   })
 
   it('starts the branch over when the kind changes', async () => {

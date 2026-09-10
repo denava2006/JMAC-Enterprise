@@ -27,6 +27,9 @@ function collection(method: string, amount: number): FinanceSalesCollection {
 function transaction(over: Partial<FinanceSalesTransaction> = {}): FinanceSalesTransaction {
   return {
     sale_id: 'ab12cd34-0000-0000-0000-000000000000',
+    // Deliberately bearing no resemblance to the uuid above, so a test cannot
+    // pass by accident if the slice-the-uuid behaviour ever came back.
+    receipt_number: 'OR-2026-0009',
     sold_at: '2026-09-04T02:30:00Z',
     branch_id: 'b1',
     branch_name: 'Cavite',
@@ -97,16 +100,36 @@ describe('what the page will not claim', () => {
 })
 
 describe('reconciling a row back to its receipt', () => {
-  it('shows the provider reference when there is one', () => {
-    expect(saleReference(transaction({ payment_reference: '09171234567' }))).toBe('09171234567')
+  // The column is headed "Receipt", so it shows the receipt's number. It used
+  // to prefer the provider's payment reference and fall back to eight
+  // characters of the sale uuid -- which meant the same sale appeared here as
+  // 09171234567 or AB12CD34 while its printed receipt said OR-2026-0009.
+  it('shows the sale receipt number', () => {
+    expect(saleReference(transaction())).toBe('OR-2026-0009')
   })
 
-  it('falls back to the sale id, which is the POS primary key', () => {
-    expect(saleReference(transaction())).toBe('AB12CD34')
+  it('shows it even when the payment carries a provider reference', () => {
+    // Both facts exist; they are not alternatives to each other. The provider
+    // reference is rendered under Method, not here.
+    expect(saleReference(transaction({ payment_reference: '09171234567' }))).toBe('OR-2026-0009')
   })
 
-  it('ignores a blank reference rather than showing an empty cell', () => {
-    expect(saleReference(transaction({ payment_reference: '   ' }))).toBe('AB12CD34')
+  it('never falls back to the sale uuid', () => {
+    for (const row of [
+      transaction(),
+      transaction({ payment_reference: null }),
+      transaction({ payment_reference: '   ' }),
+    ]) {
+      expect(saleReference(row)).toBe('OR-2026-0009')
+      expect(saleReference(row)).not.toContain('AB12CD34')
+    }
+  })
+
+  it('leaves payment_reference untouched on the row', () => {
+    // The patch must not overwrite one field with the other.
+    const row = transaction({ payment_reference: '09171234567' })
+    expect(row.payment_reference).toBe('09171234567')
+    expect(row.receipt_number).toBe('OR-2026-0009')
   })
 })
 

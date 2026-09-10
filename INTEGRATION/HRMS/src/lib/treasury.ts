@@ -94,6 +94,10 @@ export interface CollectionSettlement {
 
 export interface UnsettledCollection {
   sale_id: string
+  /** The sale's own reference, e.g. OR-2026-0009 — what identifies this row to
+   *  a person. payment_reference below is the provider's, and is what a payout
+   *  report is matched against. */
+  receipt_number: string
   sold_at: string
   branch_id: string
   branch_name: string

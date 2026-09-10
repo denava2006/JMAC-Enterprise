@@ -63,6 +63,10 @@ export interface FinanceSalesCollection {
 
 export interface FinanceSalesTransaction {
   sale_id: string
+  /** The sale's own reference, e.g. OR-2026-0009 — the same one printed on the
+   *  customer's receipt. Distinct from payment_reference below, which is what
+   *  the payment provider called the payment. */
+  receipt_number: string
   sold_at: string
   branch_id: string
   branch_name: string
@@ -176,9 +180,21 @@ export function formatSaleTimestamp(iso: string | null | undefined): string {
   }).format(at)
 }
 
-/** The short reference a Finance user reconciles against a receipt. */
+/**
+ * The reference a Finance user reconciles against a receipt.
+ *
+ * The sale's own receipt number, and only that. It used to prefer
+ * payment_reference and fall back to the first eight characters of the sale's
+ * uuid, which conflated two different facts under one "Receipt" column: what
+ * JMAC called the sale, and what the payment provider called the payment. The
+ * same sale therefore appeared here as 09171234567 or AB12CD34 while its
+ * printed receipt said OR-2026-0009.
+ *
+ * payment_reference has not gone anywhere -- it is still returned, and the
+ * sales table now shows it under Method, where it belongs.
+ */
 export function saleReference(row: FinanceSalesTransaction): string {
-  return row.payment_reference?.trim() || row.sale_id.slice(0, 8).toUpperCase()
+  return row.receipt_number
 }
 
 export function describeFinanceSalesError(error: unknown): string {

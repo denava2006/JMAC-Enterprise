@@ -333,8 +333,11 @@ export default function PosDashboardPage() {
                         minute: '2-digit',
                       })}
                     </TableCell>
+                    {/* The sale's own receipt number, so a manager reading
+                        this list and a customer holding the paper are looking
+                        at the same reference. */}
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {sale.sale_id.slice(0, 8).toUpperCase()}
+                      {sale.receipt_number}
                     </TableCell>
                     <TableCell>{sale.cashier_name}</TableCell>
                     <TableCell className="tabular-nums">{sale.item_count}</TableCell>

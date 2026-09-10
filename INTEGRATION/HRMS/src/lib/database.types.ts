@@ -6251,6 +6251,7 @@ export type Database = {
           net_sales: number
           payment_method: string
           payment_reference: string
+          receipt_number: string
           refunds: number
           sale_id: string
           sold_at: string
@@ -6915,6 +6916,7 @@ export type Database = {
           cashier_name: string
           payment_method: string
           payment_reference: string
+          receipt_number: string
           sale_id: string
           sold_at: string
         }[]

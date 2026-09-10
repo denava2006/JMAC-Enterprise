@@ -326,14 +326,18 @@ export function SettlementBuilder({
                         className="h-4 w-4 shrink-0 accent-[--color-accent] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         checked={picked.has(r.sale_id)}
                         onChange={() => toggle(r.sale_id)}
-                        aria-label={`Include ${r.payment_reference ?? r.sale_id.slice(0, 8)}`}
+                        aria-label={`Include ${r.receipt_number}`}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-foreground">
-                          {r.payment_reference ?? r.sale_id.slice(0, 8).toUpperCase()}
-                        </p>
+                        {/* The sale, named the way the receipt names it. The
+                            provider's reference moves to the line below: it
+                            identifies the PAYMENT, and an Accountant matching a
+                            payout still needs it — but it is not what this row
+                            is. */}
+                        <p className="truncate text-sm text-foreground">{r.receipt_number}</p>
                         <p className="truncate text-xs text-muted-foreground">
                           {formatSaleTimestamp(r.sold_at)} · {r.branch_name} · {r.cashier_name}
+                          {r.payment_reference ? ` · ${r.payment_reference}` : ''}
                         </p>
                       </div>
                       <span className="shrink-0 text-sm tabular-nums text-foreground">

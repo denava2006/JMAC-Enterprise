@@ -137,10 +137,20 @@ export default function FinanceSalesPage() {
       {
         accessorKey: 'payment_method',
         header: 'Method',
+        // The provider's reference sits here, under the payment, rather than
+        // in the Receipt column where it used to stand in for the sale's own
+        // number. Same arrangement the POS transaction register uses.
         cell: ({ row }) => (
-          <Badge variant="secondary" className="font-normal">
-            {financeSalesMethodLabel(row.original.payment_method)}
-          </Badge>
+          <div className="flex flex-col items-start">
+            <Badge variant="secondary" className="font-normal">
+              {financeSalesMethodLabel(row.original.payment_method)}
+            </Badge>
+            {row.original.payment_reference && (
+              <span className="mt-1 font-mono text-[11px] text-muted-foreground">
+                {row.original.payment_reference}
+              </span>
+            )}
+          </div>
         ),
       },
       {

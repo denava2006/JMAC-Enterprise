@@ -187,6 +187,47 @@ describe('what a manager sees', () => {
     show()
     expect(screen.getByText(/not a confirmation that the payment settled/)).toBeTruthy()
   })
+
+  /**
+   * The recent-sales list names a sale the way its receipt does.
+   *
+   * It used to print the first eight characters of the sale's uuid, so a
+   * manager reading this panel saw BA2F5555 for the sale whose printed receipt
+   * said OR-2026-0009 -- two unrelated-looking references for one sale, with
+   * nothing on either screen connecting them.
+   */
+  it('identifies a recent sale by its receipt number', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary()
+    state.recent = [
+      {
+        sale_id: 'ba2f5555-1111-2222-3333-444444444444',
+        receipt_number: 'OR-2026-0009',
+        created_at: '2026-09-04T02:30:00Z',
+        status: 'completed',
+        branch_id: CAVITE,
+        branch_name: 'Cavite Branch',
+        cashier_name: 'Ana Cruz',
+        item_count: 2,
+        subtotal: 100,
+        fees_total: 0,
+        total_amount: 100,
+        payment_method: 'cash',
+        payment_reference: null,
+        amount_tendered: 200,
+        change_given: 100,
+        total_count: 1,
+      },
+    ]
+    const { container } = show()
+
+    expect(screen.getByText('OR-2026-0009')).toBeTruthy()
+    // The old value, named so it cannot creep back unnoticed.
+    expect(container.textContent).not.toContain('BA2F5555')
+    expect(container.textContent).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+    )
+  })
 })
 
 describe('branch scoping', () => {

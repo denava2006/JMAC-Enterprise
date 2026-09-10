@@ -77,6 +77,7 @@ beforeEach(() => {
   state.transactions = [
     {
       sale_id: 'ab12cd34-0000-0000-0000-000000000000',
+      receipt_number: 'OR-2026-0009',
       sold_at: '2026-09-04T02:30:00Z',
       branch_id: 'b1',
       branch_name: 'Cavite',
@@ -148,8 +149,10 @@ describe('reading a figure back to its source', () => {
     expect(within(table).getByText('Cavite')).toBeTruthy()
     expect(within(table).getByText('Ana Cruz')).toBeTruthy()
     expect(within(table).getAllByText(/1,000\.00/).length).toBeGreaterThan(0)
-    // Cash carries no provider reference, so the POS sale id identifies the row.
-    expect(within(table).getByText('AB12CD34')).toBeTruthy()
+    // The Receipt column shows the sale's own receipt number -- the same one
+    // printed for the customer -- rather than a slice of its uuid.
+    expect(within(table).getByText('OR-2026-0009')).toBeTruthy()
+    expect(within(table).queryByText('AB12CD34')).toBeNull()
   })
 
   it('shows the sale time on the Manila clock the branch used', () => {
