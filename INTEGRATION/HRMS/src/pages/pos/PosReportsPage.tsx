@@ -5,6 +5,7 @@ import { PosReportRange } from '@/components/pos/PosReportRange'
 import { ReportChartCard } from '@/components/reports/ReportChartCard'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -49,17 +50,18 @@ function ReportFigure({
 }) {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-1 p-5">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Icon className="h-4 w-4" />
+      {/* Sentence case, matching the dashboard. Six tracked-out uppercase
+          labels in a grid give a reader no idea which figure matters, and this
+          page has six. */}
+      <CardContent className="flex flex-col gap-1 p-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Icon className="h-4 w-4" aria-hidden="true" />
           {label}
         </div>
         {loading ? (
-          <Skeleton className="mt-1 h-8 w-28" />
+          <Skeleton className="mt-1 h-7 w-24" />
         ) : (
-          <div className="font-display text-2xl font-semibold tabular-nums text-foreground">
-            {value}
-          </div>
+          <div className="font-display text-xl font-bold tabular-nums text-foreground">{value}</div>
         )}
         <p className="text-xs text-muted-foreground">{hint}</p>
       </CardContent>
@@ -127,15 +129,13 @@ export default function PosReportsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">POS Reports</h2>
-          <p className="text-sm text-muted-foreground">
-            Operational completed-sales reporting for {branchName || 'your managed branch'}.
-          </p>
-        </div>
-        <ManagerBranchPicker branchId={branchId} onChange={setBranchId} branches={managed} />
-      </div>
+      <PageHeader
+        title="POS Reports"
+        description={`Operational completed-sales reporting for ${branchName || 'your managed branch'}.`}
+        action={
+          <ManagerBranchPicker branchId={branchId} onChange={setBranchId} branches={managed} />
+        }
+      />
 
       <PosReportRange
         presets={presets.data ?? []}
@@ -167,21 +167,21 @@ export default function PosReportsPage() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <ReportFigure
-              label="Sales Collected"
+              label="Sales collected"
               value={formatPosReportMoney(stats?.sales_collected ?? 0)}
               hint="Total amount collected, including customer fees"
               icon={Wallet}
               loading={reportsLoading}
             />
             <ReportFigure
-              label="Product Sales"
+              label="Product sales"
               value={formatPosReportMoney(stats?.product_sales ?? 0)}
               hint="Historical product line totals before fees"
               icon={Receipt}
               loading={reportsLoading}
             />
             <ReportFigure
-              label="Customer Fees"
+              label="Customer fees"
               value={formatPosReportMoney(stats?.fees_collected ?? 0)}
               hint="Fees customers paid on top of product sales"
               icon={Calculator}
@@ -195,14 +195,14 @@ export default function PosReportsPage() {
               loading={reportsLoading}
             />
             <ReportFigure
-              label="Items Sold"
+              label="Items sold"
               value={formatPosReportCount(stats?.items_sold ?? 0)}
               hint="Units sold, not line-item rows"
               icon={PackageCheck}
               loading={reportsLoading}
             />
             <ReportFigure
-              label="Average Sale"
+              label="Average sale"
               value={formatNullablePosReportMoney(stats?.average_sale)}
               hint="Sales Collected divided by completed transactions"
               icon={ShoppingBasket}

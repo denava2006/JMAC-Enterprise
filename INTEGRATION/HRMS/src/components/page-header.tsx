@@ -19,8 +19,12 @@ export function PageHeader({
   action?: ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
+    // flex-wrap so a long description and a branch picker drop onto separate
+    // rows instead of squeezing each other. The POS pages that hand-rolled
+    // this markup all had it; adopting the shared component must not cost
+    // them the behaviour.
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
         <h2 className="font-display text-xl font-semibold text-foreground">{title}</h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>

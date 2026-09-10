@@ -186,13 +186,15 @@ describe('manager operational reporting', () => {
 
     await screen.findByText(/Showing completed sales for Aug 1, 2026 to Aug 25, 2026/)
 
+    // Sentence case, matching the dashboard. Six tracked-out uppercase labels
+    // in one grid told a reader nothing about which figure mattered.
     for (const label of [
-      'Sales Collected',
-      'Product Sales',
-      'Customer Fees',
+      'Sales collected',
+      'Product sales',
+      'Customer fees',
       'Transactions',
-      'Items Sold',
-      'Average Sale',
+      'Items sold',
+      'Average sale',
     ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }

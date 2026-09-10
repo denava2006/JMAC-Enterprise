@@ -7,7 +7,9 @@ import {
   formatBusinessDate,
   moneyReconciles,
   paymentMethodLabel,
+  paymentShares,
   peso,
+  stockAlerts,
   type DashboardSummary,
 } from '@/lib/posDashboard'
 
@@ -153,5 +155,68 @@ describe('describeDashboardError', () => {
 
   it('never returns an empty string', () => {
     expect(describeDashboardError(null)).toBe("Today's figures could not be loaded.")
+  })
+})
+
+describe('how the day was paid', () => {
+  const method = (payment_method: string, amount_collected: number, transaction_count = 1) => ({
+    payment_method,
+    transaction_count,
+    amount_collected,
+  })
+
+  it('gives each method its share of the takings', () => {
+    const shares = paymentShares([method('cash', 750), method('gcash', 250)])
+    expect(shares.map((s) => Math.round(s.share))).toEqual([75, 25])
+  })
+
+  it('puts the biggest first, whatever order it arrived in', () => {
+    const shares = paymentShares([method('gcash', 50), method('cash', 900), method('qrph', 300)])
+    expect(shares.map((s) => s.payment_method)).toEqual(['cash', 'qrph', 'gcash'])
+  })
+
+  it('divides by nothing on a day that took nothing', () => {
+    const shares = paymentShares([method('cash', 0), method('gcash', 0)])
+    expect(shares.every((s) => s.share === 0)).toBe(true)
+    expect(shares.every((s) => Number.isFinite(s.share))).toBe(true)
+  })
+
+  it('leaves the amounts and counts exactly as they arrived', () => {
+    const [cash] = paymentShares([method('cash', 750, 12)])
+    expect(cash.amount_collected).toBe(750)
+    expect(cash.transaction_count).toBe(12)
+  })
+
+  it('has nothing to say about an empty list', () => {
+    expect(paymentShares([])).toEqual([])
+  })
+})
+
+describe('what needs attention', () => {
+  const withStock = (out: number, low: number) => ({ ...emptySummary(), out_of_stock_count: out, low_stock_count: low })
+
+  // Out of stock first: a product offered and unavailable is costing sales
+  // now, where a low one is a warning about later.
+  it('puts the shortage that is already costing sales first', () => {
+    expect(stockAlerts(withStock(2, 5)).map((a) => a.kind)).toEqual(['out', 'low'])
+  })
+
+  it('mentions only what is actually wrong', () => {
+    expect(stockAlerts(withStock(0, 5)).map((a) => a.kind)).toEqual(['low'])
+    expect(stockAlerts(withStock(3, 0)).map((a) => a.kind)).toEqual(['out'])
+  })
+
+  // A dashboard that reports two zeroes every day teaches a manager to ignore
+  // the panel, which is the opposite of what it is for.
+  it('says nothing at all when nothing is wrong', () => {
+    expect(stockAlerts(withStock(0, 0))).toEqual([])
+  })
+
+  it('carries the count through untouched', () => {
+    expect(stockAlerts(withStock(4, 0))[0].count).toBe(4)
+  })
+
+  it('has nothing to say before the figures arrive', () => {
+    expect(stockAlerts(undefined)).toEqual([])
   })
 })

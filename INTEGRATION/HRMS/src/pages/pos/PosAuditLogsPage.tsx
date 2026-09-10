@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/page-header'
 import { Label } from '@/components/ui/label'
 import { ManagerBranchPicker, useManagerBranch } from '@/components/pos/ManagerBranchPicker'
 import { PosAuditLogsView } from '@/components/pos/PosAuditLogsView'
@@ -60,14 +61,10 @@ export default function PosAuditLogsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">Audit Logs</h2>
-          <p className="text-sm text-muted-foreground">
-            What changed at {branchName || 'this branch'}, who changed it, and when.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Audit Logs"
+        description={`What changed at ${branchName || 'this branch'}, who changed it, and when.`}
+      />
 
       <PosAuditLogsView
         surface="manager"

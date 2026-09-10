@@ -1,10 +1,11 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Info, PackageX, Receipt, Trophy, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Receipt, TrendingUp, Trophy, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -25,8 +26,12 @@ import {
   describeDashboardError,
   formatAverageSale,
   formatBusinessDate,
+  moneyReconciles,
   paymentMethodLabel,
+  paymentShares,
   peso,
+  stockAlerts,
+  type DashboardSummary,
 } from '@/lib/posDashboard'
 
 /**
@@ -47,6 +52,13 @@ import {
  * clock; the day here is resolved by `pos_day_bounds()` in Asia/Manila.
  */
 
+/**
+ * One of the day's figures.
+ *
+ * Sentence case, not the tracked-out uppercase this page used to set every
+ * label in: six shouted labels give a manager no idea which figure matters,
+ * and the one that does is decided below by size and tone instead.
+ */
 function Figure({
   label,
   value,
@@ -62,21 +74,160 @@ function Figure({
 }) {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-1 p-5">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Icon className="h-4 w-4" />
+      <CardContent className="flex flex-col gap-1 p-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Icon className="h-4 w-4" aria-hidden="true" />
           {label}
         </div>
         {loading ? (
-          <Skeleton className="mt-1 h-8 w-28" />
+          <Skeleton className="mt-1 h-7 w-24" />
         ) : (
-          <div className="font-display text-2xl font-semibold tabular-nums text-foreground">
-            {value}
-          </div>
+          <div className="font-display text-xl font-bold tabular-nums text-foreground">{value}</div>
         )}
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * The day's takings, and what they are made of.
+ *
+ * The one figure a manager comes to this page for, so it is the only one set
+ * large and the only one in teal -- the same teal the till uses for change due
+ * and the register for total taken, so money reads the same colour everywhere.
+ *
+ * Its two components sit inside the same card rather than beside it as equals.
+ * Sales Collected = Product Sales + Customer Fees was previously three cards of
+ * identical weight and a paragraph underneath explaining the relationship; the
+ * arithmetic is structural now, and the paragraph is gone.
+ */
+function TakingsCard({
+  summary,
+  loading,
+}: {
+  summary: DashboardSummary | undefined
+  loading: boolean
+}) {
+  const reconciles = summary ? moneyReconciles(summary) : true
+
+  return (
+    <Card className="lg:col-span-2">
+      {/* h-full, or the mt-auto below has no spare height to push into: the
+          Card stretches to the grid row, the content box does not follow it
+          on its own. */}
+      <CardContent className="flex h-full flex-col gap-4 p-5">
+        <div>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Wallet className="h-4 w-4" aria-hidden="true" />
+            Sales collected today
+          </p>
+          {loading ? (
+            <Skeleton className="mt-2 h-10 w-48" />
+          ) : (
+            <p className="mt-1 font-display text-4xl font-bold leading-none tabular-nums text-accent">
+              {peso(summary?.sales_collected ?? 0)}
+            </p>
+          )}
+        </div>
+
+        {/* mt-auto, because the row is as tall as the two stacked cards beside
+            it and the difference has to go somewhere. Pooled under the last
+            line it reads as an unfinished card; pushed between the headline and
+            its components it reads as spacing. */}
+        <div className="mt-auto grid grid-cols-2 gap-3 border-t border-border pt-3">
+          <div>
+            <p className="text-xs text-muted-foreground">Product sales</p>
+            <p className="font-display text-lg font-semibold tabular-nums text-foreground">
+              {loading ? '—' : peso(summary?.product_sales ?? 0)}
+            </p>
+            <p className="text-xs text-muted-foreground">What the goods came to</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Customer fees</p>
+            <p className="font-display text-lg font-semibold tabular-nums text-foreground">
+              {loading ? '—' : peso(summary?.fees_collected ?? 0)}
+            </p>
+            <p className="text-xs text-muted-foreground">Paid by the customer on top</p>
+          </div>
+        </div>
+
+        {/* The lib has always been able to check that the three add up, and
+            said the page should say so. It never did. Silence is right while
+            they reconcile; if they ever stop, that is not a rounding curiosity
+            -- it means the RPC and these labels have drifted apart. */}
+        {!loading && !reconciles && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 text-xs text-destructive"
+          >
+            These figures do not add up: product sales plus customer fees should equal what was
+            collected. Raise it before relying on today's numbers.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * What is running out, as work rather than as a number.
+ *
+ * This was two half-width cards each holding a single count and no way to act
+ * on it. A manager reading "3 out of stock" wants to go to Inventory, so the
+ * rows are links; and when nothing is wrong the card says that in one line
+ * rather than presenting two zeroes as though they were findings.
+ */
+function StockPanel({
+  summary,
+  loading,
+}: {
+  summary: DashboardSummary | undefined
+  loading: boolean
+}) {
+  const alerts = stockAlerts(summary)
+
+  return (
+    <Panel title="Needs attention" icon={AlertTriangle}>
+      {loading ? (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+        </div>
+      ) : alerts.length === 0 ? (
+        <Empty>Everything on the shelf is in stock.</Empty>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {alerts.map((alert) => (
+            <Link
+              key={alert.kind}
+              to="/pos/stock"
+              className={cn(
+                'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                alert.kind === 'out'
+                  ? 'border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
+                  : 'border-warning/30 bg-warning/5 hover:bg-warning/10'
+              )}
+            >
+              <span
+                className={cn(
+                  'font-display text-2xl font-bold leading-none tabular-nums',
+                  alert.kind === 'out' ? 'text-destructive' : 'text-warning'
+                )}
+              >
+                {alert.count}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-foreground">{alert.label}</span>
+                <span className="block text-xs text-muted-foreground">{alert.hint}</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      )}
+    </Panel>
   )
 }
 
@@ -159,62 +310,29 @@ export default function PosDashboardPage() {
         <ManagerBranchPicker branchId={branchId} onChange={setBranchId} branches={managed} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Figure
-          label="Sales Collected"
-          value={peso(stats?.sales_collected ?? 0)}
-          hint="What the till took, fees included"
-          icon={Wallet}
-          loading={loading}
-        />
-        <Figure
-          label="Product Sales"
-          value={peso(stats?.product_sales ?? 0)}
-          hint="What the goods came to"
-          icon={Receipt}
-          loading={loading}
-        />
-        <Figure
-          label="Customer Fees"
-          value={peso(stats?.fees_collected ?? 0)}
-          hint="Paid by the customer on top"
-          icon={Receipt}
-          loading={loading}
-        />
-        <Figure
-          label="Transactions"
-          value={String(stats?.transaction_count ?? 0)}
-          hint={`${stats?.items_sold ?? 0} items sold · ${formatAverageSale(
-            stats?.average_sale
-          )} average`}
-          icon={Trophy}
-          loading={loading}
-        />
-      </div>
+      {/* The day, in the order a manager asks about it: what came in, how much
+          trading it took, and what needs dealing with. */}
+      <div className="grid gap-4 lg:grid-cols-4">
+        <TakingsCard summary={stats} loading={loading} />
 
-      <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <p className="text-xs text-muted-foreground">
-          Sales Collected = Product Sales + Customer Fees. These are operational figures for your
-          branch; cost and profit are not part of this view.
-        </p>
-      </div>
+        <div className="flex flex-col gap-4">
+          <Figure
+            label="Transactions"
+            value={String(stats?.transaction_count ?? 0)}
+            hint={`${stats?.items_sold ?? 0} items sold`}
+            icon={Receipt}
+            loading={loading}
+          />
+          <Figure
+            label="Average sale"
+            value={formatAverageSale(stats?.average_sale)}
+            hint="Across today's transactions"
+            icon={TrendingUp}
+            loading={loading}
+          />
+        </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Figure
-          label="Low stock"
-          value={String(stats?.low_stock_count ?? 0)}
-          hint="Some left, but at or under the branch's low-stock level"
-          icon={AlertTriangle}
-          loading={loading}
-        />
-        <Figure
-          label="Out of stock"
-          value={String(stats?.out_of_stock_count ?? 0)}
-          hint="Offered here, but nothing on hand"
-          icon={PackageX}
-          loading={loading}
-        />
+        <StockPanel summary={stats} loading={loading} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -263,26 +381,38 @@ export default function PosDashboardPage() {
             <Empty>No payments taken yet today.</Empty>
           ) : (
             <>
-              <div className="flex flex-col gap-2">
-                {(payments.data ?? []).map((row) => (
-                  <div
-                    key={row.payment_method}
-                    className="flex items-center gap-3 rounded-lg border border-border p-3"
-                  >
-                    <span className="min-w-0 flex-1 text-sm font-medium">
-                      {paymentMethodLabel(row.payment_method)}
-                    </span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {row.transaction_count}{' '}
-                      {row.transaction_count === 1 ? 'sale' : 'sales'}
-                    </span>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {peso(row.amount_collected)}
-                    </span>
+              {/* Ordered by size, with each method's share of the day drawn
+                  rather than left as arithmetic. "Is the drawer carrying the
+                  day or is it the terminal" is the question this panel exists
+                  to answer, and a column of amounts does not answer it. */}
+              <div className="flex flex-col gap-3">
+                {paymentShares(payments.data ?? []).map((row) => (
+                  <div key={row.payment_method} className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline gap-3">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                        {paymentMethodLabel(row.payment_method)}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {row.transaction_count} {row.transaction_count === 1 ? 'sale' : 'sales'}
+                      </span>
+                      <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-foreground">
+                        {peso(row.amount_collected)}
+                      </span>
+                    </div>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full bg-muted"
+                      role="img"
+                      aria-label={`${Math.round(row.share)}% of today's takings`}
+                    >
+                      <div
+                        className="h-full rounded-full bg-secondary"
+                        style={{ width: `${Math.max(row.share, 1.5)}%` }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-4 text-xs text-muted-foreground">
                 {/* A typed GCash or Maya number is what the cashier entered, not
                     money anyone has confirmed arrived. */}
                 What customers paid with. An electronic reference recorded at the till is not a

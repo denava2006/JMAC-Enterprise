@@ -102,6 +102,65 @@ export function moneyReconciles(summary: DashboardSummary): boolean {
   return Math.abs(collected - parts) < 0.005
 }
 
+/**
+ * Each payment method's share of the day's takings.
+ *
+ * A manager reads this list to answer a practical question -- is there enough
+ * cash in the drawer, is the card terminal carrying the day -- and a column of
+ * amounts makes that a mental arithmetic problem. The proportion is the
+ * answer, so the proportion is what gets drawn.
+ *
+ * Computed from the same amounts the rows already carry; nothing new is
+ * fetched and no total is invented. A day that has taken nothing gives every
+ * method a share of zero rather than dividing by it.
+ */
+export function paymentShares(
+  rows: PaymentTotal[]
+): (PaymentTotal & { share: number })[] {
+  const total = rows.reduce((sum, r) => sum + Number(r.amount_collected ?? 0), 0)
+  return rows
+    .map((row) => ({
+      ...row,
+      share: total > 0 ? (Number(row.amount_collected ?? 0) / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.amount_collected - a.amount_collected)
+}
+
+/**
+ * What is running out, as things to go and deal with.
+ *
+ * Out of stock first: a product that is offered and unavailable is costing
+ * sales right now, where a low one is a warning about later. Both are omitted
+ * when the count is zero -- a manager does not need to be told twice a day
+ * that nothing is wrong.
+ */
+export function stockAlerts(
+  summary: DashboardSummary | undefined
+): { kind: 'out' | 'low'; count: number; label: string; hint: string }[] {
+  if (!summary) return []
+  const alerts: { kind: 'out' | 'low'; count: number; label: string; hint: string }[] = []
+  if (Number(summary.out_of_stock_count) > 0) {
+    alerts.push({
+      kind: 'out',
+      count: Number(summary.out_of_stock_count),
+      label: 'Out of stock',
+      // Short enough to hold one line in a quarter-width card. The longer
+      // wording wrapped, which on an alert reads as a paragraph to read
+      // rather than a number to act on.
+      hint: 'Offered here, none on hand',
+    })
+  }
+  if (Number(summary.low_stock_count) > 0) {
+    alerts.push({
+      kind: 'low',
+      count: Number(summary.low_stock_count),
+      label: 'Low stock',
+      hint: 'At or under the branch level',
+    })
+  }
+  return alerts
+}
+
 /** A business date as the page should title it. The string arrives from the
  * database as a plain `YYYY-MM-DD` calendar date with no timezone attached, so
  * it is parsed as local calendar fields -- `new Date('2026-08-25')` would be

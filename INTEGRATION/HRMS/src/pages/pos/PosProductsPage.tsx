@@ -4,6 +4,7 @@ import { Package, Plus, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/page-header'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
@@ -531,37 +532,34 @@ export default function PosProductsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">Products</h2>
-          <p className="text-sm text-muted-foreground">
-            What this branch sells, and whether the till is offering it. Prices and the
-            enterprise catalogue are set by an Administrator.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {myBranches.length > 1 && (
-            <Select value={branchId} onValueChange={setBranchId}>
-              <SelectTrigger className="w-52" aria-label="Branch">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {myBranches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {managesThisBranch && (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" />
-              Add Product
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Products"
+        description="What this branch sells, and whether the till is offering it. Prices and the enterprise catalogue are set by an Administrator."
+        action={
+          <div className="flex items-center gap-2">
+            {myBranches.length > 1 && (
+              <Select value={branchId} onValueChange={setBranchId}>
+                <SelectTrigger className="w-52" aria-label="Branch">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {myBranches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {managesThisBranch && (
+              <Button onClick={() => setAdding(true)}>
+                <Plus className="h-4 w-4" />
+                Add Product
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {adding && branchId && (
         <AddProductDialog branchId={branchId} onClose={() => setAdding(false)} />

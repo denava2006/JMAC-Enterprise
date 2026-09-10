@@ -116,12 +116,47 @@ describe('what a manager sees', () => {
     state.summary = summary()
     show()
 
-    expect(screen.getByText('Sales Collected')).toBeTruthy()
-    expect(screen.getByText('Product Sales')).toBeTruthy()
-    expect(screen.getByText('Customer Fees')).toBeTruthy()
+    expect(screen.getByText('Sales collected today')).toBeTruthy()
+    expect(screen.getByText('Product sales')).toBeTruthy()
+    expect(screen.getByText('Customer fees')).toBeTruthy()
     expect(screen.getByText('₱330.00')).toBeTruthy()
     expect(screen.getByText('₱300.00')).toBeTruthy()
     expect(screen.getByText('₱30.00')).toBeTruthy()
+  })
+
+  // The relationship the three figures have is now shown by where they sit --
+  // the components inside the takings card -- rather than explained in a
+  // paragraph underneath it.
+  it('shows the parts inside the total they add up to', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary()
+    show()
+
+    const takings = screen.getByText('Sales collected today').closest('div[class*="p-5"]')!
+    expect(takings.textContent).toContain('₱330.00')
+    expect(takings.textContent).toContain('Product sales')
+    expect(takings.textContent).toContain('₱300.00')
+    expect(takings.textContent).toContain('Customer fees')
+    expect(takings.textContent).toContain('₱30.00')
+  })
+
+  it('says so loudly when the three do not add up', () => {
+    // The lib could always check this and the comment said the page should say
+    // so out loud. It never did. A mismatch is not a rounding curiosity -- it
+    // means the RPC and these labels have drifted apart.
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary({ sales_collected: 999 })
+    show()
+
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toMatch(/do not add up/i)
+  })
+
+  it('stays quiet while they do add up', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary()
+    show()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('never calls anything "Net Sales"', () => {
@@ -178,6 +213,70 @@ describe('what a manager sees', () => {
     show()
     expect(screen.getByText('Nothing has sold yet today.')).toBeTruthy()
     expect(screen.getByText('No sales have been rung up yet today.')).toBeTruthy()
+  })
+
+  /**
+   * What is running out, as work rather than as a number.
+   *
+   * Two half-width cards each held a single count and offered no way to act on
+   * it. A manager reading "3 out of stock" wants to go to Inventory.
+   */
+  it('turns a stock shortage into somewhere to go', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary({ out_of_stock_count: 3, low_stock_count: 2 })
+    show()
+
+    const out = screen.getByText('Out of stock').closest('a')!
+    expect(out.getAttribute('href')).toBe('/pos/stock')
+    expect(out.textContent).toContain('3')
+
+    const low = screen.getByText('Low stock').closest('a')!
+    expect(low.getAttribute('href')).toBe('/pos/stock')
+    expect(low.textContent).toContain('2')
+  })
+
+  it('mentions only the shortage that exists', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary({ out_of_stock_count: 0, low_stock_count: 4 })
+    show()
+    expect(screen.getByText('Low stock')).toBeTruthy()
+    expect(screen.queryByText('Out of stock')).toBeNull()
+  })
+
+  it('says nothing is wrong rather than showing two zeroes', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary({ out_of_stock_count: 0, low_stock_count: 0 })
+    show()
+    expect(screen.getByText('Everything on the shelf is in stock.')).toBeTruthy()
+    expect(screen.queryByText('Out of stock')).toBeNull()
+    expect(screen.queryByText('Low stock')).toBeNull()
+  })
+
+  it('draws each payment method as a share of the day', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary()
+    state.payments = [
+      { payment_method: 'cash', transaction_count: 3, amount_collected: 300 },
+      { payment_method: 'gcash', transaction_count: 1, amount_collected: 100 },
+    ]
+    show()
+
+    // 300 of 400 is 75%, 100 of 400 is 25% -- announced, not just drawn, so a
+    // screen reader gets the proportion too.
+    expect(screen.getByLabelText("75% of today's takings")).toBeTruthy()
+    expect(screen.getByLabelText("25% of today's takings")).toBeTruthy()
+  })
+
+  it('lists the biggest payment method first', () => {
+    state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+    state.summary = summary()
+    state.payments = [
+      { payment_method: 'gcash', transaction_count: 1, amount_collected: 50 },
+      { payment_method: 'cash', transaction_count: 9, amount_collected: 900 },
+    ]
+    const { container } = show()
+    const text = container.textContent ?? ''
+    expect(text.indexOf('Cash')).toBeLessThan(text.indexOf('GCash'))
   })
 
   it('does not present a manual e-wallet reference as settled money', () => {

@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -61,28 +62,26 @@ export default function PosSettingsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">POS Settings</h2>
-          <p className="text-sm text-muted-foreground">
-            What this branch's till adds to a sale.
-          </p>
-        </div>
-        {myBranches.length > 1 && (
-          <Select value={branchId} onValueChange={setBranchId}>
-            <SelectTrigger className="w-52" aria-label="Branch">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {myBranches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+      <PageHeader
+        title="POS Settings"
+        description="What this branch's till adds to a sale."
+        action={
+          myBranches.length > 1 ? (
+            <Select value={branchId} onValueChange={setBranchId}>
+              <SelectTrigger className="w-52" aria-label="Branch">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {myBranches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
+      />
 
       <Card>
         <CardContent className="flex items-start gap-3 p-4">

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -61,15 +62,13 @@ export default function PosCategoriesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">Categories</h2>
-          <p className="text-sm text-muted-foreground">
-            How {branchName || 'this branch'}&apos;s catalogue is filed, and where the gaps are.
-          </p>
-        </div>
-        <ManagerBranchPicker branchId={branchId} onChange={setBranchId} branches={managed} />
-      </div>
+      <PageHeader
+        title="Categories"
+        description={`How ${branchName || 'this branch'}'s catalogue is filed, and where the gaps are.`}
+        action={
+          <ManagerBranchPicker branchId={branchId} onChange={setBranchId} branches={managed} />
+        }
+      />
 
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
