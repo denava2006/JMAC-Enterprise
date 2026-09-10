@@ -173,6 +173,22 @@ describe('the category dialog', () => {
     expect(save).toHaveBeenCalledTimes(1)
   })
 
+  it('does not greet an empty new-category form with an error', () => {
+    // "A category needs a name." before they have typed one is an error about
+    // something they have not done yet. Submit is still refused.
+    state.categories = [general]
+    render(<PosCategoriesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'New category' }))
+
+    expect(screen.queryByText('A category needs a name.')).toBeNull()
+    expect((screen.getByRole('button', { name: 'Add category' }) as HTMLButtonElement).disabled).toBe(true)
+
+    // And it appears the moment they type something and clear it again.
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: '' } })
+    expect(screen.getByText('A category needs a name.')).toBeTruthy()
+  })
+
   it('says renaming affects every branch', () => {
     state.categories = [general]
     render(<PosCategoriesPage />)

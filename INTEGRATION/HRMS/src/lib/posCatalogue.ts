@@ -57,16 +57,29 @@ export interface BranchProduct {
   selling_price_override: number | null
 }
 
+/** What the database's unique(normalized_name) index compares. The column is
+ * `generated always as (lower(btrim(name)))`, so this is the same answer. */
+export function normalizeName(name: string): string {
+  return name.trim().toLowerCase()
+}
+
 /** The General category is permanent -- delete_pos_category() reassigns
  * orphaned products to it, so the UI must never offer to rename, archive or
  * delete it. Matches protect_general_pos_category(). */
 export function isGeneralCategory(category: Pick<Category, 'normalized_name'>): boolean {
-  return category.normalized_name === 'general'
+  return isGeneralCategoryName(category.normalized_name)
 }
 
-/** What the database's unique(normalized_name) index compares. */
-export function normalizeName(name: string): string {
-  return name.trim().toLowerCase()
+/**
+ * The same question asked of a bare name.
+ *
+ * get_branch_category_summary does not return normalized_name, so the POS
+ * Manager's page has only the display name to go on. Normalising it here gives
+ * the identical answer rather than a second, looser rule -- the column is
+ * lower(btrim(name)) and so is this.
+ */
+export function isGeneralCategoryName(name: string): boolean {
+  return normalizeName(name) === 'general'
 }
 
 /**
