@@ -37,6 +37,8 @@ const { ProtectedRoute } = await import('@/components/ProtectedRoute')
 const { PortalRedirect } = await import('@/components/PortalRedirect')
 // Imported after the AuthContext mock, like the two above: it reads posAccess.
 const { PosIndexRedirect } = await import('@/components/pos/PosIndexRedirect')
+// Likewise: it decides from posAccess whether the account manages anything.
+const { PosManagerRoute } = await import('@/components/pos/PosManagerRoute')
 
 /** `employeeId` is what makes an account an employee. Self-service follows the
  *  employment record rather than the role, so a test that wants self-service
@@ -95,11 +97,16 @@ function renderApp(initialPath: string) {
             </ProtectedRoute>
           }
         />
+        {/* Mirrors App.tsx: POS-gated AND manager-gated. The inner guard is
+            new -- the route used to be POS-gated only, so a cashier who typed
+            the URL got the page and an empty table rather than a refusal. */}
         <Route
           path="/pos/categories"
           element={
             <ProtectedRoute requirePos blockRoles={['admin']}>
-              <p>manager categories</p>
+              <PosManagerRoute>
+                <p>manager categories</p>
+              </PosManagerRoute>
             </ProtectedRoute>
           }
         />
@@ -429,6 +436,62 @@ describe('product administration is Administrator-only', () => {
       expect(screen.queryByText(/pos (products|categories) page/)).toBeNull()
     })
   }
+})
+
+describe('the POS Categories page is the POS Manager’s, not the Cashier’s', () => {
+  // Product Categories, not Finance Categories -- a different module in a
+  // different portal, and nothing here touches it.
+  it('admits a POS manager who types the URL', () => {
+    signIn('employee', pos(['branch-1'], 'manager'))
+    renderApp('/pos/categories')
+    expect(screen.getByText('manager categories')).toBeTruthy()
+  })
+
+  it('refuses a cashier and puts them back on the till', () => {
+    // Refused, not merely empty. get_branch_category_summary already returned
+    // a cashier nothing, but an empty table reads as "there is nothing here"
+    // rather than "this is not yours".
+    signIn('employee', pos(['branch-1']))
+    renderApp('/pos/categories')
+    expect(screen.queryByText('manager categories')).toBeNull()
+    expect(screen.getByText('the till')).toBeTruthy()
+  })
+
+  it('still refuses a cashier who manages nowhere but cashiers at two branches', () => {
+    signIn('employee', pos(['branch-1', 'branch-2']))
+    renderApp('/pos/categories')
+    expect(screen.queryByText('manager categories')).toBeNull()
+  })
+
+  it('admits someone who manages one branch even while cashiering at another', () => {
+    // Manager anywhere is enough for the route. Which branch's counts they see
+    // is decided by the page, and by the database after that.
+    signIn('employee', {
+      hasAccess: true,
+      branchIds: ['branch-1', 'branch-2'],
+      assignments: [
+        { branchId: 'branch-1', role: 'manager' },
+        { branchId: 'branch-2', role: 'cashier' },
+      ],
+    })
+    renderApp('/pos/categories')
+    expect(screen.getByText('manager categories')).toBeTruthy()
+  })
+
+  it('refuses an employee with no POS assignment at all', () => {
+    signIn('employee')
+    renderApp('/pos/categories')
+    expect(screen.queryByText('manager categories')).toBeNull()
+  })
+
+  it('sends an Administrator to their own copy in the back office, as every /pos route does', () => {
+    // Unchanged by this work: /dashboard/admin/pos-categories is the
+    // Administrator's editor and it stays where it is.
+    signIn('admin', pos())
+    renderApp('/pos/categories')
+    expect(screen.queryByText('manager categories')).toBeNull()
+    expect(screen.getByText('back office')).toBeTruthy()
+  })
 })
 
 describe('inventory administration is Administrator-only', () => {

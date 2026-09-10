@@ -330,11 +330,25 @@ export default function App() {
                   the database per branch -- the RPCs behind it check
                   has_pos_role(branch, ['manager']) and declare no cost column. */}
               <Route path="dashboard" element={<PosDashboardPage />} />
-              {/* The enterprise taxonomy, read-only, with this branch's own
-                  counts against it. Categories are global: an Administrator
-                  defines them, and RLS on pos_product_categories is is_admin()
-                  whatever any screen chooses to render. */}
-              <Route path="categories" element={<PosCategoriesPage />} />
+              {/* The enterprise taxonomy, with this branch's own counts against
+                  it. Manager-only at the route now: it was reachable by a
+                  Cashier who typed the URL, who then saw an empty state because
+                  get_branch_category_summary returns them nothing. An empty
+                  page is not a refusal, and Categories is management.
+
+                  Categories are GLOBAL -- pos_product_categories has no
+                  branch_id. A manager may create and rename, which is what
+                  create_pos_category and rename_pos_category authorise; RLS on
+                  the table itself stays is_admin(), so reordering, archiving
+                  and deleting remain the Administrator's. */}
+              <Route
+                path="categories"
+                element={
+                  <PosManagerRoute>
+                    <PosCategoriesPage />
+                  </PosManagerRoute>
+                }
+              />
               {/* The branch's own catalogue. Read-only for a cashier; a POS
                   Manager may pause or resume what their branch carries. Neither
                   can reach the product master -- RLS on pos_products is

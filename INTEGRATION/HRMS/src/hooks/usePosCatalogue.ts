@@ -603,6 +603,42 @@ export function useCreatePosCategory() {
 }
 
 /**
+ * Renaming a category, as a POS Manager may.
+ *
+ * The RPC beside create_pos_category, with the same guard --
+ * `is_admin() or has_pos_role(null, ['manager'])` -- and until now nothing in
+ * the app called it. A manager could already create a category from the Add
+ * Product flow and then had no way to correct a typo in it.
+ *
+ * GLOBAL, like the taxonomy it edits. pos_product_categories carries no
+ * branch_id: renaming "Drinks" renames it at every branch and on the
+ * Administrator's own catalogue screen. The RPC sanctions that for a manager;
+ * the dialog says so before they confirm, the way the product-rename flow
+ * already does.
+ *
+ * Writing through the RPC rather than the table is what makes it work at all:
+ * RLS on pos_product_categories is is_admin(), so useSaveCategory() -- the
+ * Administrator's editor hook -- would return 42501 for a manager.
+ */
+export function useRenamePosCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.rpc('rename_pos_category', {
+        _category_id: id,
+        _name: name,
+      })
+      if (error) throw new Error(posCatalogueMessage(error.message))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: POS_CATALOGUE_KEY })
+      toast.success('Category renamed everywhere it appears.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+/**
  * Renaming or recategorising a product.
  *
  * GLOBAL. The catalogue is company-wide, so this changes the product for every

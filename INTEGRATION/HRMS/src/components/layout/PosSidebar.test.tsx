@@ -127,6 +127,18 @@ describe('a POS manager', () => {
     )
   })
 
+  it('points Categories at the one POS Categories route, not a second copy', () => {
+    // Product Categories, not Finance Categories. There is exactly one page
+    // for it in this portal; the Administrator's editor lives in the back
+    // office at /dashboard/admin/pos-categories and is a different module for
+    // a different job, not a second implementation of this one.
+    state.assignments = [{ branchId: 'b1', role: 'manager' }]
+    show()
+    expect(screen.getByRole('link', { name: 'Categories' }).getAttribute('href')).toBe(
+      '/pos/categories'
+    )
+  })
+
   it('lands its Dashboard entry on the manager dashboard', () => {
     state.assignments = [{ branchId: 'b1', role: 'manager' }]
     show()

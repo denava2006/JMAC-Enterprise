@@ -289,6 +289,57 @@ begin
     raise notice 'PASS  7b a cashier may not create a product';
   end;
 
+  perform pg_temp.acts_as(cash_uid);
+  set local role authenticated;
+  begin
+    perform public.rename_pos_category(cat, 'ZZ Cashier Rename ' || tag);
+    reset role;
+    raise exception 'FAIL  7c a cashier renamed a category';
+  exception when others then
+    reset role;
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'PASS  7c a cashier may not rename a category';
+  end;
+
+  -- The table itself, not the function in front of it. rename_pos_category is
+  -- SECURITY DEFINER, so if its own guard were the only thing standing there,
+  -- a cashier could still reach the row directly.
+  perform pg_temp.acts_as(cash_uid);
+  set local role authenticated;
+  update public.pos_product_categories set name = 'ZZ Direct ' || tag where id = cat;
+  get diagnostics n = row_count;
+  reset role;
+  if n <> 0 then raise exception 'FAIL  7d a cashier wrote pos_product_categories directly'; end if;
+  raise notice 'PASS  7d RLS refuses a cashier the category table itself';
+
+  -- ======================================================================
+  -- 7e-7f. What a cashier must KEEP: reading categories to work the till
+  -- ======================================================================
+  --
+  -- Managing Product Categories and reading them are different things. The
+  -- till filters its product grid by category, so closing the manage path must
+  -- not close the read path -- get_pos_categories() gates on has_pos_access(),
+  -- which a cashier has, and get_pos_catalogue() carries category_name on every
+  -- row it returns. Neither checks pos_role, deliberately.
+  perform pg_temp.acts_as(cash_uid);
+  set local role authenticated;
+  select count(*) into n from public.get_pos_categories();
+  reset role;
+  if n = 0 then raise exception 'FAIL  7e a cashier can no longer read categories for the till'; end if;
+  raise notice 'PASS  7e a cashier still reads categories (% rows) for till filtering', n;
+
+  -- categoriesOf() in the till builds its filter chips from category_name on
+  -- these rows, so a null there would empty the chip strip without emptying
+  -- the grid. Counted as "rows missing a category", which must be none.
+  perform pg_temp.acts_as(cash_uid);
+  set local role authenticated;
+  select count(*) into n from public.get_pos_catalogue(branch_a) c where c.category_name is null;
+  reset role;
+  if n <> 0 then
+    raise exception 'FAIL  7f % catalogue rows reached the till with no category', n;
+  end if;
+  raise notice 'PASS  7f every till catalogue row still carries its category name';
+
   -- ======================================================================
   -- 8. Stock is still not something anyone types
   -- ======================================================================
