@@ -111,10 +111,15 @@ function renderApp(initialPath: string) {
             </ProtectedRoute>
           }
         />
+        {/* Mirrors App.tsx exactly. The blockRoles={['admin']} that used to sit
+            here is gone from the app, and had to go from here too: a harness
+            that keeps a guard the real route dropped would let a test assert
+            an Administrator is refused Finance while the shipped app admits
+            them. */}
         <Route
           path="/fms"
           element={
-            <ProtectedRoute requireFinance blockRoles={['admin']}>
+            <ProtectedRoute requireFinance>
               <p>finance portal</p>
             </ProtectedRoute>
           }
@@ -547,6 +552,31 @@ describe('the HR dashboard shell is not a lobby', () => {
     renderApp('/dashboard')
     expect(screen.getByText('back office')).toBeTruthy()
   })
+
+  // Oversight, added deliberately: the account answerable for the whole system
+  // can open the part of it that handles money. It opens no operation --
+  // has_finance_privilege() requires the profile's role to EQUAL the granted
+  // finance role, which 'admin' never does.
+  it('an Administrator may now enter Finance', () => {
+    signIn('admin', NO_POS_ACCESS, null)
+    renderApp('/fms')
+    expect(screen.getByText('finance portal')).toBeTruthy()
+  })
+
+  it('but still lands in the back office, not in Finance', () => {
+    signIn('admin', NO_POS_ACCESS, null)
+    renderApp('/dashboard')
+    expect(screen.getByText('back office')).toBeTruthy()
+  })
+
+  it.each(['hr_manager', 'hr_staff', 'employee'] as const)(
+    '%s is still refused Finance',
+    (role) => {
+      signIn(role, NO_POS_ACCESS, 'e1')
+      renderApp('/fms')
+      expect(screen.queryByText('finance portal')).toBeNull()
+    }
+  )
 
   it('a cashier opening /dashboard lands at the till, not in HR', () => {
     signIn('employee', pos(['b1']), 'e1')
