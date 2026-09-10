@@ -140,18 +140,25 @@ export default function App() {
                 responsible for them. Their POS modules -- including the till
                 itself, the same PosTillPage rendered at
                 /dashboard/admin/pos -- live in the back office instead. */}
-            {/* Finance. The route exists and is guarded; what finance people
-                do is built in the phases after this one.
+            {/* Finance.
 
                 requireFinance rather than a role list, so the guard asks the
                 same question the database does -- an active grant, not a role
-                somebody's profile happens to claim. Administrators are blocked
-                deliberately: they grant finance access and read its audit
-                trail, and are not one of the three operational finance roles. */}
+                somebody's profile happens to claim.
+
+                Administrators are admitted. They were blocked here originally,
+                on the reasoning that they are not one of the three operational
+                finance roles -- still true, and still the reason they get no
+                buttons. But the person answerable for the whole system has to
+                be able to look at the part of it that handles money, and being
+                unable to open the ledger is a blind spot rather than a
+                separation of duties. What they may DO is unchanged: every
+                finance write is gated on has_finance_privilege(), which an
+                'admin' profile can never satisfy. */}
             <Route
               path="/fms"
               element={
-                <ProtectedRoute requireFinance blockRoles={['admin']}>
+                <ProtectedRoute requireFinance>
                   <DashboardLayout />
                 </ProtectedRoute>
               }

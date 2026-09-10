@@ -91,6 +91,44 @@ describe('the Finance sidebar', () => {
     expect(shown).not.toContain('Categories')
   })
 
+  it('gives the Administrator the whole of Finance, grouped for oversight', () => {
+    renderAt('/fms', 'admin')
+    expect(links()).toEqual([
+      'Overview',
+      'Requests',
+      'Procurement',
+      'Supplier Invoices',
+      'Reimbursements',
+      'Sales & Collections',
+      'Settlements',
+      'Budgets',
+      'Vendors',
+      'Categories',
+      'Payroll Finance',
+      'Cash & Bank',
+      'Chart of Accounts',
+      'Journal Entries',
+      'General Ledger',
+      'Trial Balance',
+      'Reports',
+    ])
+    expect(screen.getByText('Operations')).toBeTruthy()
+    expect(screen.getByText('Finance Control')).toBeTruthy()
+    expect(screen.getByText('Accounting')).toBeTruthy()
+  })
+
+  // Standing in Finance, an Administrator gets Finance. The back office and
+  // POS management stay where they belong -- otherwise the oversight menu
+  // becomes the whole application again.
+  it('does not drag the back office into Finance for an Administrator', () => {
+    renderAt('/fms', 'admin')
+    expect(links()).not.toContain('HR Accounts')
+    expect(links()).not.toContain('POS Reports')
+    expect(screen.queryByText('Administration')).toBeNull()
+    expect(screen.queryByText('POS Management')).toBeNull()
+    expect(screen.getByText('Finance')).toBeTruthy()
+  })
+
   // The same component, mounted for a different account: what changed is the
   // menu, not the application.
   it('follows the role on reload rather than remembering the last one', () => {

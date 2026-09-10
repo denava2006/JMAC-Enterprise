@@ -38,6 +38,14 @@ import type { UserRole } from '@/lib/enums'
  * Nor does it decide what a role may DO on a page it can open -- that is
  * financeCan() in financeAuthority.ts, and the two are deliberately separate:
  * every role that reaches Reimbursements sees a different set of buttons there.
+ *
+ * The Administrator holds every module, and that separation is exactly why it
+ * costs nothing: opening a page is not authority to act on it. Every write in
+ * FMS is gated either on financeCan(), whose matrix gives 'admin' read and
+ * nothing else, or on a `role === '<finance role>'` check that 'admin' does
+ * not match -- and underneath both, on has_finance_privilege(), which requires
+ * the profile's role to EQUAL the granted finance role. An Administrator
+ * therefore sees every page and no button, in that order of guarantee.
  */
 
 export type FinanceGroup =
@@ -46,6 +54,7 @@ export type FinanceGroup =
   | 'Review & Approval'
   | 'Monitoring'
   | 'Payments & Treasury'
+  | 'Finance Control'
   | 'Accounting'
 
 /** The order groups appear in a sidebar. Overview sits above all of them. */
@@ -53,6 +62,7 @@ export const FINANCE_GROUP_ORDER: FinanceGroup[] = [
   'Operations',
   'Review & Approval',
   'Payments & Treasury',
+  'Finance Control',
   'Monitoring',
   'Reference',
   'Accounting',
@@ -86,7 +96,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     label: 'Overview',
     route: '/fms',
     icon: LayoutDashboard,
-    placement: { finance_staff: 'top', finance_manager: 'top', accountant: 'top' },
+    placement: { finance_staff: 'top', finance_manager: 'top', accountant: 'top', admin: 'top' },
   },
 
   // ---------------------------------------------------------------- making
@@ -95,7 +105,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     label: 'Requests',
     route: '/fms/requests',
     icon: ReceiptText,
-    placement: { finance_staff: 'Operations', finance_manager: 'Review & Approval' },
+    placement: { finance_staff: 'Operations', finance_manager: 'Review & Approval', admin: 'Operations' },
   },
   {
     id: 'procurement',
@@ -104,7 +114,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     icon: PackageCheck,
     // Staff build the order, the Manager approves it. The Accountant picks the
     // chain up at the invoice, and create_purchase_order refuses them outright.
-    placement: { finance_staff: 'Operations', finance_manager: 'Review & Approval' },
+    placement: { finance_staff: 'Operations', finance_manager: 'Review & Approval', admin: 'Operations' },
   },
   {
     id: 'budgets',
@@ -112,7 +122,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     route: '/fms/budgets',
     icon: PiggyBank,
     blurb: 'Approved ceilings, and the allocations drawn against them.',
-    placement: { finance_staff: 'Operations', finance_manager: 'Monitoring' },
+    placement: { finance_staff: 'Operations', finance_manager: 'Monitoring', admin: 'Finance Control' },
   },
   {
     id: 'invoices',
@@ -126,6 +136,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
       finance_staff: 'Operations',
       finance_manager: 'Review & Approval',
       accountant: 'Payments & Treasury',
+      admin: 'Operations',
     },
   },
   {
@@ -137,6 +148,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
       finance_staff: 'Operations',
       finance_manager: 'Review & Approval',
       accountant: 'Payments & Treasury',
+      admin: 'Operations',
     },
   },
 
@@ -154,7 +166,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     //
     // The Accountant is not: they need a supplier's NAME on an invoice, which
     // the invoice already carries, not a vendor-management workspace.
-    placement: { finance_staff: 'Reference', finance_manager: 'Review & Approval' },
+    placement: { finance_staff: 'Reference', finance_manager: 'Review & Approval', admin: 'Finance Control' },
   },
   {
     id: 'categories',
@@ -163,7 +175,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     icon: Tags,
     blurb: 'How money is classified — separate from POS product categories.',
     // Same reason as vendors: Staff propose, the Manager approves.
-    placement: { finance_staff: 'Reference', finance_manager: 'Review & Approval' },
+    placement: { finance_staff: 'Reference', finance_manager: 'Review & Approval', admin: 'Finance Control' },
   },
 
   // -------------------------------------------------------- money in and out
@@ -176,7 +188,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     // none: this page is read-only over POS sales, and everything downstream
     // of it -- settlement, banking, the fee -- is accountant-only in RLS. It
     // was in their sidebar because it was in everyone's.
-    placement: { finance_manager: 'Monitoring', accountant: 'Payments & Treasury' },
+    placement: { finance_manager: 'Monitoring', accountant: 'Payments & Treasury', admin: 'Operations' },
   },
   {
     id: 'settlements',
@@ -184,7 +196,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     route: '/fms/settlements',
     icon: ArrowDownLeft,
     blurb: 'Collections banked, and the fees taken out of them.',
-    placement: { finance_manager: 'Monitoring', accountant: 'Payments & Treasury' },
+    placement: { finance_manager: 'Monitoring', accountant: 'Payments & Treasury', admin: 'Operations' },
   },
   {
     id: 'payroll',
@@ -194,7 +206,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
     // Finance Staff are absent here in the database too: payroll_finance_items
     // admits only accountant and finance_manager, so this is the one module
     // where hiding it and refusing it agree with RLS exactly.
-    placement: { finance_manager: 'Review & Approval', accountant: 'Payments & Treasury' },
+    placement: { finance_manager: 'Review & Approval', accountant: 'Payments & Treasury', admin: 'Finance Control' },
   },
   {
     id: 'treasury',
@@ -202,7 +214,13 @@ export const FINANCE_MODULES: FinanceModule[] = [
     route: '/fms/treasury',
     icon: Wallet,
     blurb: 'Where the money is, and every movement through it.',
-    placement: { finance_manager: 'Monitoring', accountant: 'Payments & Treasury' },
+    // Finance Control for the Administrator: where the money sits is a
+    // standing position to oversee, not a day's work to get through.
+    placement: {
+      finance_manager: 'Monitoring',
+      accountant: 'Payments & Treasury',
+      admin: 'Finance Control',
+    },
   },
 
   // ------------------------------------------------------------- the books
@@ -214,35 +232,35 @@ export const FINANCE_MODULES: FinanceModule[] = [
     blurb: 'The accounts money moves through, and what it is posted against.',
     // The Manager reads it; only the Accountant gets New account, which
     // financeCan already decides on the page itself.
-    placement: { finance_manager: 'Accounting', accountant: 'Accounting' },
+    placement: { finance_manager: 'Accounting', accountant: 'Accounting', admin: 'Accounting' },
   },
   {
     id: 'journal',
     label: 'Journal Entries',
     route: '/fms/journal',
     icon: BookOpen,
-    placement: { finance_manager: 'Accounting', accountant: 'Accounting' },
+    placement: { finance_manager: 'Accounting', accountant: 'Accounting', admin: 'Accounting' },
   },
   {
     id: 'ledger',
     label: 'General Ledger',
     route: '/fms/ledger',
     icon: BookMarked,
-    placement: { finance_manager: 'Accounting', accountant: 'Accounting' },
+    placement: { finance_manager: 'Accounting', accountant: 'Accounting', admin: 'Accounting' },
   },
   {
     id: 'trial-balance',
     label: 'Trial Balance',
     route: '/fms/trial-balance',
     icon: Scale,
-    placement: { finance_manager: 'Accounting', accountant: 'Accounting' },
+    placement: { finance_manager: 'Accounting', accountant: 'Accounting', admin: 'Accounting' },
   },
   {
     id: 'reports',
     label: 'Reports',
     route: '/fms/reports',
     icon: FileBarChart,
-    placement: { finance_manager: 'Accounting', accountant: 'Accounting' },
+    placement: { finance_manager: 'Accounting', accountant: 'Accounting', admin: 'Accounting' },
   },
 ]
 

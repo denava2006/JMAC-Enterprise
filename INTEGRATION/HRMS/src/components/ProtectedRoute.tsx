@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/lib/enums'
 import { needsPasswordSetup } from '@/lib/passwordSetup'
-import { isFinanceRole, portalsFor } from '@/lib/portals'
+import { canAccessFinancePortal, portalsFor } from '@/lib/portals'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -24,12 +24,17 @@ interface ProtectedRouteProps {
    * role is what removed self-service from HR staff, who are employees too, and
    * would have handed it to an Administrator with no employee record to read. */
   requireEmployee?: boolean
-  /** Require an active finance privilege.
+  /** Require a reason to be standing in /fms.
    *
+   * The three operational finance roles, or an Administrator overseeing them.
    * A role list would admit anyone whose profile claims a finance role; the
    * database refuses to authorize a role without a grant behind it, so the
    * guard asks the same question rather than a looser one. The server is still
-   * the authority -- this only decides what is worth rendering. */
+   * the authority -- this only decides what is worth rendering.
+   *
+   * Admitting an Administrator opens no operation: every write in FMS is gated
+   * on has_finance_privilege(), which requires the profile's role to EQUAL the
+   * granted finance role, and 'admin' equals none of them. */
   requireFinance?: boolean
   /** Require the back office itself -- the HR dashboard home and its shell.
    *
@@ -87,7 +92,7 @@ export function ProtectedRoute({
   // Refusals land on /home rather than /dashboard so the redirect resolves to
   // whichever portal this account actually holds -- sending a cashier who
   // guessed an HR URL to /dashboard would only bounce them again.
-  if (requireFinance && !isFinanceRole(profile.role)) {
+  if (requireFinance && !canAccessFinancePortal(profile.role)) {
     return <Navigate to="/home" replace />
   }
 

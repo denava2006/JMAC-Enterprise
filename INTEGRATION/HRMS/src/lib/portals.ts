@@ -124,6 +124,27 @@ export function isFinanceRole(role: UserRole | undefined): boolean {
   return !!role && FINANCE_ROLES.includes(role)
 }
 
+/**
+ * Who may stand inside /fms.
+ *
+ * The three operational finance roles, and the Administrator.
+ *
+ * Administrators were kept out originally on the reasoning that they are not
+ * one of the three roles that do finance work. That is still true and nothing
+ * about it has changed -- what changed is the requirement: the person
+ * responsible for the whole system has to be able to look at the part of it
+ * that handles money. Being unable to open the ledger is not a separation of
+ * duties, it is a blind spot.
+ *
+ * Deliberately NOT folded into isFinanceRole(). That answers "does this
+ * account do finance work", which decides operational authority in several
+ * places and must keep saying no for an Administrator. This answers the much
+ * smaller question of who may open the door.
+ */
+export function canAccessFinancePortal(role: UserRole | undefined): boolean {
+  return isFinanceRole(role) || role === 'admin'
+}
+
 export function portalsFor(
   role: UserRole | undefined,
   pos: PosAccess,
@@ -136,6 +157,10 @@ export function portalsFor(
 
   if (role === 'admin') {
     held.push('admin')
+    // Finance too, for oversight. It sits after the back office, so the
+    // switcher still opens an Administrator where they work and the landing
+    // route is unchanged -- this adds a place they can go, not a new home.
+    held.push('finance')
     // Administrators are usually not employees, and the ESS pages would have
     // no record to read. One who IS an employee keeps their own self-service
     // rather than being the single role that cannot see its own payslip.

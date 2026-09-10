@@ -45,18 +45,22 @@ describe('portalsFor', () => {
     expect(portalsFor('hr_staff', withPos('branch-1'))).toContain('pos')
   })
 
-  it('gives an administrator the back office and nothing else', () => {
-    // has_pos_access() is still true for them, and the POS modules they need
-    // are in their own sidebar. Handing them a second workspace would hide HR
-    // from the person who administers it, so the parent system keeps them.
-    expect(portalsFor('admin', adminPos)).toEqual(['admin'])
+  it('gives an administrator the back office and Finance oversight', () => {
+    // Finance was added deliberately: the person answerable for the whole
+    // system has to be able to look at the part of it that handles money.
+    // It opens no operation -- every finance write is gated on
+    // has_finance_privilege(), which an 'admin' profile can never satisfy.
+    expect(portalsFor('admin', adminPos)).toEqual(['admin', 'finance'])
   })
 
-  it('keeps an administrator out of the POS even with a stray assignment', () => {
-    // A historical or mistaken pos_branch_assignments row must not bring the
-    // workspace switcher back. The rule is stated on the role, not inferred
-    // from the absence of data.
-    expect(portalsFor('admin', withPos('branch-1'))).toEqual(['admin'])
+  it('still keeps an administrator out of the POS, stray assignment or not', () => {
+    // has_pos_access() is true for them and the POS modules they need are in
+    // their own sidebar; a historical or mistaken pos_branch_assignments row
+    // must not bring a till workspace back. The rule is stated on the role,
+    // not inferred from the absence of data -- and gaining Finance did not
+    // loosen it.
+    expect(portalsFor('admin', withPos('branch-1'))).toEqual(['admin', 'finance'])
+    expect(portalsFor('admin', withPos('branch-1'))).not.toContain('pos')
   })
 
   it('gives a cashier the POS and self-service, and no HR modules', () => {
@@ -131,10 +135,13 @@ describe('availablePortals', () => {
     expect(availablePortals('employee', NO_POS_ACCESS, true)).toHaveLength(1)
   })
 
-  it('offers an administrator a single workspace, so no switcher appears', () => {
-    // The Navbar renders the switcher only when more than one portal is held,
-    // so one entry is what removes it.
-    expect(availablePortals('admin', adminPos).map((p) => p.key)).toEqual(['admin'])
+  it('offers an administrator the back office and Finance, in that order', () => {
+    // The Navbar renders the switcher when more than one portal is held, so an
+    // Administrator now gets one -- which is how they reach Finance at all.
+    // The back office stays first, so signing in still lands them where they
+    // work rather than in the ledger.
+    expect(availablePortals('admin', adminPos).map((p) => p.key)).toEqual(['admin', 'finance'])
+    expect(defaultPortalPath('admin', adminPos)).toBe('/dashboard')
   })
 
   it('offers the till before self-service to a cashier', () => {

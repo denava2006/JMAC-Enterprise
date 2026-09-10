@@ -104,6 +104,31 @@ describe('a Finance module reached by URL', () => {
     },
   )
 
+  // Oversight: every module opens, including the ones no finance role holds
+  // in full. What an Administrator may DO on them is decided elsewhere and is
+  // unchanged.
+  it.each([
+    ['/fms/requests'],
+    ['/fms/procurement'],
+    ['/fms/budgets'],
+    ['/fms/invoices'],
+    ['/fms/reimbursements'],
+    ['/fms/vendors'],
+    ['/fms/categories'],
+    ['/fms/sales'],
+    ['/fms/settlements'],
+    ['/fms/payroll'],
+    ['/fms/treasury'],
+    ['/fms/accounts'],
+    ['/fms/journal'],
+    ['/fms/ledger'],
+    ['/fms/trial-balance'],
+    ['/fms/reports'],
+  ])('lets an Administrator open %s', (route) => {
+    visit(route, 'admin')
+    expect(rendered()).toBe(true)
+  })
+
   it('refuses an account with no role at all', () => {
     visit('/fms/ledger', null)
     expect(rendered()).toBe(false)

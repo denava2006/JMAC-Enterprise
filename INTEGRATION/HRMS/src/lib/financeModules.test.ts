@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { UserRole } from '@/lib/enums'
 import {
   FINANCE_MODULES,
   canAccessFinanceModule,
   financeNavFor,
   financeOverviewTiles,
 } from '@/lib/financeModules'
+import { canWriteAnyFinanceModule, financeCan } from '@/lib/financeAuthority'
 import { waitingWork } from '@/components/fms/WaitingOnYou'
 
 /**
@@ -21,14 +23,40 @@ const ROLES = ['finance_staff', 'finance_manager', 'accountant'] as const
 /** Every module route, so a new one cannot be added without a decision here. */
 const ALL_ROUTES = FINANCE_MODULES.map((m) => m.route)
 
-function labelsFor(role: (typeof ROLES)[number]): string[] {
+function labelsFor(role: UserRole): string[] {
   return financeNavFor(role).flatMap((s) => s.modules.map((m) => m.label))
 }
 
-function groupsFor(role: (typeof ROLES)[number]): string[] {
+function groupsFor(role: UserRole): string[] {
   return financeNavFor(role)
     .map((s) => s.group)
     .filter((g): g is NonNullable<typeof g> => !!g)
+}
+
+/** Every queue at once, so every row a role could be handed is produced. */
+const EVERY_COUNT = {
+  vendorsPending: 1,
+  categoriesPending: 1,
+  budgetsDraft: 1,
+  ordersToApprove: 1,
+  requestsToValidate: 1,
+  demandToAccept: 1,
+  ordersReturned: 1,
+  draftsInProgress: 1,
+  vendorsReturned: 1,
+  categoriesReturned: 1,
+  invoicesToReview: 1,
+  invoiceDrafts: 1,
+  invoicesReturned: 1,
+  ordersToInvoice: 1,
+  reimbursementsToReview: 1,
+  reimbursementsToApprove: 1,
+  reimbursementsToPay: 1,
+  reimbursementPaymentsToApprove: 1,
+  reimbursementPaymentsToRecord: 1,
+  payrollToDisburse: 1,
+  payrollDisbursementsToApprove: 1,
+  payrollDisbursementsToRecord: 1,
 }
 
 describe('Finance Staff', () => {
@@ -180,6 +208,99 @@ describe('Accountant', () => {
   })
 })
 
+/**
+ * The Administrator.
+ *
+ * Oversight, not a fourth finance job. They hold every module and no action:
+ * financeCan()'s matrix gives 'admin' read and nothing else, the pages that
+ * gate on `role === '<finance role>'` never match, and underneath both,
+ * has_finance_privilege() requires the profile's role to EQUAL the granted
+ * finance role -- which 'admin' cannot.
+ */
+describe('the Administrator', () => {
+  it('may open every Finance module', () => {
+    for (const route of ALL_ROUTES) {
+      expect(canAccessFinanceModule('admin', route), route).toBe(true)
+    }
+  })
+
+  it('gets a complete, grouped workspace rather than a flat list', () => {
+    expect(groupsFor('admin')).toEqual(['Operations', 'Finance Control', 'Accounting'])
+  })
+
+  it('sees the operational modules in Operations', () => {
+    expect(financeNavFor('admin')[1].modules.map((m) => m.label)).toEqual([
+      'Requests',
+      'Procurement',
+      'Supplier Invoices',
+      'Reimbursements',
+      'Sales & Collections',
+      'Settlements',
+    ])
+  })
+
+  it('sees the control modules together', () => {
+    expect(labelsFor('admin')).toEqual(
+      expect.arrayContaining(['Budgets', 'Vendors', 'Categories', 'Payroll Finance', 'Cash & Bank']),
+    )
+  })
+
+  it('sees the whole of Accounting', () => {
+    expect(labelsFor('admin')).toEqual(
+      expect.arrayContaining([
+        'Chart of Accounts',
+        'Journal Entries',
+        'General Ledger',
+        'Trial Balance',
+        'Reports',
+      ]),
+    )
+  })
+
+  // The point of the separation: opening a page is not authority over it.
+  it('is given read and nothing else on every module financeCan governs', () => {
+    for (const moduleName of [
+      'categories',
+      'vendors',
+      'vendorCategories',
+      'accounts',
+      'budgets',
+      'allocations',
+    ] as const) {
+      expect(financeCan('admin', moduleName, 'read'), moduleName).toBe(true)
+      for (const action of ['create', 'edit', 'archive', 'approve'] as const) {
+        expect(financeCan('admin', moduleName, action), `${moduleName}.${action}`).toBe(false)
+      }
+    }
+    expect(canWriteAnyFinanceModule('admin')).toBe(false)
+  })
+
+  // Opening every module must not turn the Overview into a to-do list of other
+  // people's work. Oversight reads; it does not queue.
+  it('is handed no operational queue', () => {
+    expect(waitingWork('admin', EVERY_COUNT)).toEqual([])
+  })
+
+  it('does not disturb the three finance workspaces', () => {
+    // The whole regression surface of this change, in one assertion.
+    expect(labelsFor('finance_staff')).toEqual([
+      'Overview',
+      'Requests',
+      'Procurement',
+      'Budgets',
+      'Supplier Invoices',
+      'Reimbursements',
+      'Vendors',
+      'Categories',
+    ])
+    expect(canAccessFinanceModule('finance_staff', '/fms/ledger')).toBe(false)
+    expect(canAccessFinanceModule('finance_staff', '/fms/payroll')).toBe(false)
+    expect(canAccessFinanceModule('accountant', '/fms/procurement')).toBe(false)
+    expect(canAccessFinanceModule('accountant', '/fms/budgets')).toBe(false)
+    expect(canAccessFinanceModule('finance_manager', '/fms/journal')).toBe(true)
+  })
+})
+
 describe('the policy itself', () => {
   it('is the same answer for navigation and for a URL', () => {
     // Not two arrays that agree today: financeNavFor and canAccessFinanceModule
@@ -200,13 +321,12 @@ describe('the policy itself', () => {
     }
   })
 
-  it('refuses a signed-out or non-Finance role everything', () => {
+  it('refuses a signed-out or unrelated role everything', () => {
     for (const route of ALL_ROUTES) {
       expect(canAccessFinanceModule(undefined, route)).toBe(false)
       expect(canAccessFinanceModule('employee', route)).toBe(false)
-      // Administrators are kept out of /fms entirely by the existing portal
-      // guard; this table does not readmit them.
-      expect(canAccessFinanceModule('admin', route)).toBe(false)
+      expect(canAccessFinanceModule('hr_staff', route)).toBe(false)
+      expect(canAccessFinanceModule('hr_manager', route)).toBe(false)
     }
   })
 
@@ -251,30 +371,7 @@ describe('the Overview shortcuts', () => {
  * produced and every link is checked.
  */
 describe('Waiting on you', () => {
-  const everything = {
-    vendorsPending: 1,
-    categoriesPending: 1,
-    budgetsDraft: 1,
-    ordersToApprove: 1,
-    requestsToValidate: 1,
-    demandToAccept: 1,
-    ordersReturned: 1,
-    draftsInProgress: 1,
-    vendorsReturned: 1,
-    categoriesReturned: 1,
-    invoicesToReview: 1,
-    invoiceDrafts: 1,
-    invoicesReturned: 1,
-    ordersToInvoice: 1,
-    reimbursementsToReview: 1,
-    reimbursementsToApprove: 1,
-    reimbursementsToPay: 1,
-    reimbursementPaymentsToApprove: 1,
-    reimbursementPaymentsToRecord: 1,
-    payrollToDisburse: 1,
-    payrollDisbursementsToApprove: 1,
-    payrollDisbursementsToRecord: 1,
-  }
+  const everything = EVERY_COUNT
 
   it('never links a role to a module they would be turned away from', () => {
     for (const role of ROLES) {

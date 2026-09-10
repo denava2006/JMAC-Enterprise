@@ -298,6 +298,46 @@ begin
   end if;
   raise notice 'PASS 10b the reconciliation is reachable by no API role';
 
+  -- ======================================================================
+  -- 11. An Administrator reads Finance and acts in none of it
+  -- ======================================================================
+  -- The Administrator can now open every FMS page for oversight. This is the
+  -- claim that makes that safe, and it is a property of the schema rather than
+  -- of the interface: has_finance_privilege() requires the profile's role to
+  -- EQUAL the granted finance role, and 'admin' equals none of the three. So
+  -- an Administrator is authorised to read finance and authorised for no
+  -- finance operation, whatever a page happens to render.
+  perform pg_temp.acts_as(admin_id);
+  set local role authenticated;
+
+  if not public.can_read_finance_master() then
+    raise exception 'FAIL 11 an Administrator cannot read Finance';
+  end if;
+  raise notice 'PASS 11 an Administrator reads Finance master data';
+
+  if public.is_active_finance() then
+    raise exception 'FAIL 11 an Administrator counts as an operational finance role';
+  end if;
+  raise notice 'PASS 11b and is not one of the three operational finance roles';
+
+  if public.has_finance_privilege(array['finance_staff'])
+     or public.has_finance_privilege(array['finance_manager'])
+     or public.has_finance_privilege(array['accountant'])
+     or public.has_finance_privilege(array['finance_staff', 'finance_manager', 'accountant']) then
+    raise exception 'FAIL 11 an Administrator satisfies a finance privilege check';
+  end if;
+  raise notice 'PASS 11c so every write gated on has_finance_privilege() refuses them';
+
+  -- The one Finance table an Administrator might plausibly be handed by an
+  -- HR-shaped rule. Reading it is existing HR/Admin architecture and is left
+  -- exactly as it was; what matters is that reading is all they get.
+  if not public.is_active_staff() then
+    raise exception 'FAIL 11 an Administrator lost the staff read they already had';
+  end if;
+  raise notice 'PASS 11d payroll-finance visibility is unchanged, and read-only';
+
+  reset role;
+
   raise notice '--- all finance privilege checks passed ---';
 end $$;
 

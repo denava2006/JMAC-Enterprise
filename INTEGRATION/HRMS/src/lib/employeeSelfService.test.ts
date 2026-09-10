@@ -57,8 +57,10 @@ describe('who holds self-service', () => {
   })
 
   it('does not invent self-service for an Administrator who is not an employee', () => {
-    // The deliberate exception: no employee record, so nothing to show.
-    expect(portalsFor('admin', NO_POS_ACCESS, NOT_EMPLOYED)).toEqual(['admin'])
+    // The deliberate exception: no employee record, so nothing to show. They
+    // hold Finance for oversight, which is not an employment record either.
+    expect(portalsFor('admin', NO_POS_ACCESS, NOT_EMPLOYED)).not.toContain('employee')
+    expect(portalsFor('admin', NO_POS_ACCESS, NOT_EMPLOYED)).toEqual(['admin', 'finance'])
   })
 
   it('does give it to an Administrator who IS an employee', () => {
@@ -99,7 +101,13 @@ describe('the two contexts stay apart', () => {
   })
 
   it('a switcher is not offered to someone holding one context', () => {
-    expect(availablePortals('admin', NO_POS_ACCESS, NOT_EMPLOYED)).toHaveLength(1)
+    // HR Staff with no employee record hold the back office alone.
+    expect(availablePortals('hr_staff', NO_POS_ACCESS, NOT_EMPLOYED)).toHaveLength(1)
+  })
+
+  it('offers an Administrator the switcher, which is how they reach Finance', () => {
+    const labels = availablePortals('admin', NO_POS_ACCESS, NOT_EMPLOYED).map((p) => p.label)
+    expect(labels).toEqual(['Human Resources', 'Finance'])
   })
 
   it('tells an own-record page apart from the organization page', () => {
@@ -167,13 +175,16 @@ describe('the Finance portal', () => {
     expect(held).not.toContain('admin')
   })
 
-  it('is not held by an Administrator', () => {
-    // They grant finance access and read its audit trail. Validating, approving
-    // and paying belong to the three finance roles -- modelling the
-    // Administrator as all of them rebuilds, inside one account, the
-    // combination the one-active-role index forbids for everyone else.
-    expect(portalsFor('admin', NO_POS_ACCESS, NOT_EMPLOYED)).not.toContain('finance')
-    expect(portalsFor('admin', NO_POS_ACCESS, EMPLOYED)).not.toContain('finance')
+  it('is held by an Administrator, for oversight rather than for work', () => {
+    // They used to be excluded on the reasoning that validating, approving and
+    // paying belong to the three finance roles. That reasoning still holds and
+    // is still enforced -- but by authority, not by a locked door. An
+    // Administrator opening every page is modelled as none of the three roles:
+    // has_finance_privilege() requires the profile's role to EQUAL the granted
+    // finance role, so the combination the one-active-role index forbids for
+    // everyone else is not rebuilt here either.
+    expect(portalsFor('admin', NO_POS_ACCESS, NOT_EMPLOYED)).toContain('finance')
+    expect(portalsFor('admin', NO_POS_ACCESS, EMPLOYED)).toContain('finance')
   })
 
   it('is not held by HR or POS staff', () => {
