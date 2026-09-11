@@ -32,6 +32,22 @@ function step(index: number, by: number, count: number) {
   return (index + by + count) % count
 }
 
+/**
+ * Which way the content should arrive from.
+ *
+ * The arrows have a direction and it is worth expressing; a map pin and a jump
+ * from the progress rule do not, so they get the neutral fade rather than a
+ * guess. One value of state, set beside the selection that causes it -- not an
+ * architecture.
+ */
+type Direction = 'next' | 'previous' | 'none'
+
+const ENTER: Record<Direction, string> = {
+  next: 'motion-safe:animate-[branch-in-next_240ms_ease-out]',
+  previous: 'motion-safe:animate-[branch-in-previous_240ms_ease-out]',
+  none: 'motion-safe:animate-[branch-in_200ms_ease-out]',
+}
+
 export function BranchExplorer({
   branches,
   isLoading,
@@ -42,6 +58,13 @@ export function BranchExplorer({
   isError: boolean
 }) {
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const [direction, setDirection] = React.useState<Direction>('none')
+
+  /** Selecting from the map or the progress rule: no direction to express. */
+  const select = React.useCallback((id: string) => {
+    setDirection('none')
+    setSelectedId(id)
+  }, [])
 
   // The first branch, once there is one -- and re-anchored if the list changes
   // underneath the selection rather than leaving a pointer to a branch that is
@@ -66,6 +89,7 @@ export function BranchExplorer({
   const go = React.useCallback(
     (by: number) => {
       if (branches.length === 0) return
+      setDirection(by > 0 ? 'next' : 'previous')
       setSelectedId(branches[step(index, by, branches.length)].id)
     },
     [branches, index],
@@ -113,7 +137,7 @@ export function BranchExplorer({
           height stacked, and forcing a shared one there would only make both
           of them the wrong shape. */}
       <div className="grid gap-3 lg:h-[clamp(420px,29vw,470px)] lg:grid-cols-[1.4fr_1fr]">
-        <BranchMedia branch={selected} branches={branches} />
+        <BranchMedia branch={selected} branches={branches} direction={direction} />
 
         {/* min-h-0 so the grid track, not the content, decides. Without it a
             grid item refuses to shrink below its content and the row height
@@ -127,7 +151,7 @@ export function BranchExplorer({
             branches={branches}
             caption={false}
             selectedId={selected.id}
-            onSelect={setSelectedId}
+            onSelect={select}
             className="h-[260px] min-h-0 sm:h-[320px] lg:h-full"
           />
         </div>
@@ -138,13 +162,12 @@ export function BranchExplorer({
           full width rather than squeezed into a card. */}
       <div className="mt-6 border-t border-border pt-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <h3
-              // Keyed on the branch so the name and address cross-fade with the
-              // photograph instead of swapping under a still frame.
-              key={selected.id}
-              className="motion-safe:animate-[fade-in_320ms_ease-out] font-display text-2xl font-semibold tracking-[-0.015em] text-foreground sm:text-3xl"
-            >
+          {/* Name and address move together, keyed on the branch. One block,
+              not two animations that could drift a frame apart, and never
+              per-word, which would read as a marketing slider rather than a
+              location changing. */}
+          <div key={selected.id} className={cn('min-w-0', ENTER[direction])}>
+            <h3 className="font-display text-2xl font-semibold tracking-[-0.015em] text-foreground sm:text-3xl">
               {selected.name}
             </h3>
             {selected.address ? (
@@ -164,7 +187,7 @@ export function BranchExplorer({
               count={branches.length}
               branches={branches}
               onGo={go}
-              onSelect={setSelectedId}
+              onSelect={select}
             />
           )}
         </div>
@@ -182,12 +205,29 @@ export function BranchExplorer({
 function BranchMedia({
   branch,
   branches,
+  direction,
 }: {
   branch: PublicBranch
   branches: PublicBranch[]
+  direction: Direction
 }) {
   const url = branchImageUrl(branch.image_path)
   const index = branches.findIndex((b) => b.id === branch.id)
+
+  /**
+   * The last photograph that actually finished decoding.
+   *
+   * This is what removes the flash. Keying an image element on its src unmounts
+   * the old one and mounts a new one with nothing to paint until the bytes
+   * arrive, so the panel blinks to its background mid-transition. Holding the
+   * previous image underneath and fading the new one in over it means there is
+   * never a frame with no photograph in it.
+   *
+   * Compared by url rather than by a boolean, so a slow load that resolves
+   * after the visitor has already moved on cannot mark the wrong image ready.
+   */
+  const [painted, setPainted] = React.useState<string | null>(null)
+  const ready = painted === url
 
   // The neighbours, so an arrow press shows a photograph rather than a gap that
   // fills a moment later. Two images, not the whole set.
@@ -203,9 +243,26 @@ function BranchMedia({
     // Same radius, same border, same clipping as the map beside it: two panels
     // of one object rather than two components that happen to be adjacent.
     <figure className="relative min-h-0 overflow-hidden rounded-lg border border-border bg-muted lg:h-full">
-      <div className="aspect-[16/9] w-full lg:aspect-auto lg:h-full">
+      {/* The box never changes size, so nothing around it moves while the
+          photograph does. */}
+      <div className="relative aspect-[16/9] w-full lg:aspect-auto lg:h-full">
+        {/* The outgoing photograph, held still underneath while the incoming
+            one fades in over it. Decorative and already described by the image
+            above it, so it is hidden from assistive tech. It disappears the
+            moment `painted` catches up, by which point it is fully covered. */}
+        {painted && painted !== url && (
+          <img
+            src={painted}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+
         {url ? (
           <img
+            // Keyed so a new branch gets a fresh element to fade in, while the
+            // outgoing one is held below by `painted` until this replaces it.
             key={url}
             src={url}
             alt={`${branch.name} location`}
@@ -213,10 +270,22 @@ function BranchMedia({
             // deferred; the neighbours below are the ones that wait.
             loading="eager"
             decoding="async"
-            className="motion-safe:animate-[fade-in_420ms_ease-out] h-full w-full object-cover"
+            onLoad={() => setPainted(url)}
+            className={cn(
+              'absolute inset-0 h-full w-full object-cover',
+              // The crossfade itself, plus a scale so small it registers as
+              // settling rather than as a zoom.
+              'motion-safe:transition-[opacity,transform] motion-safe:duration-[260ms] motion-safe:ease-out',
+              ready ? 'opacity-100 motion-safe:scale-100' : 'opacity-0 motion-safe:scale-[1.01]',
+              // Reduced motion gets the swap with no transition at all -- but
+              // it must still become visible, so opacity is forced on.
+              'motion-reduce:opacity-100 motion-reduce:transition-none',
+            )}
           />
         ) : (
-          <BranchImageFallback name={branch.name} />
+          <div key={branch.id} className={cn('absolute inset-0', ENTER[direction])}>
+            <BranchImageFallback name={branch.name} />
+          </div>
         )}
       </div>
 

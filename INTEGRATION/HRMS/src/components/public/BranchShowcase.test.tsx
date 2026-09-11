@@ -223,6 +223,108 @@ describe('one selection, and everything downstream of it', () => {
   })
 })
 
+describe('moving between locations', () => {
+  /**
+   * The section used to swap instantly, and the fade meant to soften it never
+   * ran: the class named a `fade-in` keyframe that did not exist anywhere, so
+   * the browser applied an animation with nothing to animate. These pin the
+   * real keyframes by name -- a rename or a deletion fails here rather than
+   * silently going back to an abrupt cut.
+   */
+  const identity = () => screen.getByRole('heading', { level: 3 }).parentElement!
+
+  it('enters from the right when moving forward', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    next()
+    expect(identity().className).toContain('animate-[branch-in-next_240ms_ease-out]')
+  })
+
+  it('enters from the left when moving back', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    previous()
+    expect(identity().className).toContain('animate-[branch-in-previous_240ms_ease-out]')
+  })
+
+  it('uses a neutral fade for a map pin, which has no direction', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    fireEvent.click(screen.getByTestId('pin-b2'))
+    expect(identity().className).toContain('animate-[branch-in_200ms_ease-out]')
+  })
+
+  it('uses the neutral fade from the progress rule too', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    fireEvent.click(screen.getByRole('button', { name: 'Show Main Office' }))
+    expect(identity().className).toContain('animate-[branch-in_200ms_ease-out]')
+  })
+
+  it('gates every entrance behind motion-safe', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    next()
+    // A visitor who asked for reduced motion gets the swap and no animation.
+    expect(identity().className).toContain('motion-safe:animate-[')
+  })
+
+  it('holds the previous photograph until the next one has decoded', () => {
+    // The flash this prevents: keying an <img> on its src unmounts the old one
+    // and mounts a new one with nothing to paint, so the panel blinks to its
+    // background mid-transition.
+    state.branches = [branch(), MAIN]
+    const { container } = show()
+    fireEvent.load(photo())
+
+    next()
+    const layers = container.querySelectorAll('img')
+    expect(layers).toHaveLength(2)
+    // The outgoing one is the old branch, still painted, and hidden from
+    // assistive tech because the incoming image already describes the place.
+    const underlay = container.querySelector('img[aria-hidden="true"]') as HTMLImageElement
+    expect(underlay.src).toContain('cavite.webp')
+    expect(underlay.alt).toBe('')
+  })
+
+  it('drops the held photograph once the new one is painted', () => {
+    state.branches = [branch(), MAIN]
+    const { container } = show()
+    fireEvent.load(photo())
+    next()
+    fireEvent.load(photo())
+
+    expect(container.querySelectorAll('img')).toHaveLength(1)
+    expect(photo().className).toContain('opacity-100')
+  })
+
+  it('survives a visitor clicking faster than the images load', () => {
+    state.branches = [branch(), MAIN, branch({ id: 'b3', name: 'Batangas Branch', image_path: 'bat.webp' })]
+    show()
+
+    next()
+    next()
+    next()
+
+    // Three forward from the first of three lands back on the first, and the
+    // identity, the photograph and the counter all agree about it.
+    expect(screen.getByRole('heading', { name: 'Cavite Branch' })).toBeTruthy()
+    expect(photo().src).toContain('cavite.webp')
+    expect(counter()).toBe('01 / 03 locations')
+    expect(mapProps.at(-1)?.selectedId).toBe('b1')
+  })
+
+  it('does not animate the map away and back -- it is never remounted', () => {
+    // One map instance for the life of the section. A remount would flash grey
+    // tiles on every arrow press, which is the opposite of coordinated.
+    state.branches = [branch(), MAIN]
+    const { container } = show()
+    const before = container.querySelector('[data-testid="branch-map"]')
+    next()
+    expect(container.querySelector('[data-testid="branch-map"]')).toBe(before)
+  })
+})
+
 describe('one location, and none', () => {
   it('shows no arrows or counter for a single branch', () => {
     // Navigation for a set of one is furniture that does nothing.

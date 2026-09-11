@@ -175,6 +175,36 @@
   to { transform: translateX(0); }
 }
 
+/* ---------------------------------------------------------------------------
+   Moving between branches on the public explorer.
+
+   Three, because direction carries meaning: pressing Next should feel like
+   moving forward through the locations, and pressing Previous like moving
+   back. Selecting a pin on the map has no direction to express, so it gets the
+   neutral one rather than a guess.
+
+   Small and short on purpose -- 8px and a quarter of a second. This is a
+   location explorer, not a marketing slider: the motion is there to stop the
+   swap being abrupt, not to be noticed.
+
+   Every use is behind `motion-safe:`, so a visitor who asks for reduced motion
+   gets the swap with no animation at all.
+   --------------------------------------------------------------------------- */
+@keyframes branch-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes branch-in-next {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes branch-in-previous {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes sheet-out-right {
   from { transform: translateX(0); }
   to { transform: translateX(100%); }
