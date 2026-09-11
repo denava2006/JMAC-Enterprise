@@ -306,12 +306,20 @@ function BranchMedia({
  */
 function BranchImageFallback({ name }: { name: string }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-primary px-6 text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-primary px-6 py-6 text-center">
+      {/* JMAC stays set as a wordmark -- four letters, tracked, which is what
+          uppercase is for. */}
       <p className="font-display text-sm font-semibold tracking-[0.18em] text-primary-foreground">
         JMAC
       </p>
       <span aria-hidden className="h-px w-10 bg-primary-foreground/30" />
-      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-primary-foreground/70">
+      {/* The line under it is a sentence about a specific branch, not a label,
+          and it was set in caps: 36 characters with their word shapes flattened
+          at 11px. Sentence case, and the tracking that went with the caps comes
+          off too. */}
+      {/* 12px, not 11. It was 11 when it was a tracked all-caps label; as a
+          sentence it is body text and reads at body size. */}
+      <p className="font-mono text-xs text-primary-foreground/75">
         {name} · photograph to follow
       </p>
     </div>

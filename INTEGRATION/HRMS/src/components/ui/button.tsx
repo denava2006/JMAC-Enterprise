@@ -5,13 +5,28 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  // `transition`, not the catch-all variant. A button animates its colours, its
+  // shadow and its press scale; animating everything additionally puts width,
+  // height, padding and margin on the critical path, so any layout change to a
+  // button -- a label swapping to a spinner, a responsive size step -- animates
+  // geometry and thrashes layout for 150ms. Tailwind's `transition` is the same
+  // property list minus the box metrics, so nothing here looks different.
+  //
+  // The class name is deliberately not written out above: Tailwind scans
+  // comments too, and naming it in prose was enough to keep emitting the
+  // utility into the stylesheet after the last use of it had gone.
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   {
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground shadow-sm hover:bg-navy-2 active:scale-[0.98]',
         secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:opacity-90 active:scale-[0.98]',
-        accent: 'bg-accent text-accent-foreground shadow-sm hover:bg-teal-2 active:scale-[0.98]',
+        // One step darker than the brand accent, because white on #12a594 is
+        // 3.07:1 and this is a filled button carrying normal-size label text.
+        // #0c8377 carries white at 4.64:1 and the hover at 6.30:1. The accent
+        // itself is untouched and still fills icon backplates, rules and rings,
+        // where it is a shape rather than a word.
+        accent: 'bg-teal-2 text-accent-foreground shadow-sm hover:bg-teal-ink active:scale-[0.98]',
         // The filled variants already gave way under the cursor; these two did
         // not, so a secondary action felt dead next to a primary one.
         outline: 'border border-input bg-card hover:bg-muted text-foreground active:scale-[0.98]',

@@ -39,7 +39,10 @@ export function PosProductCard({
       onClick={onAdd}
       className={cn(
         'group relative flex h-full flex-col overflow-hidden rounded-xl border bg-card text-left',
-        'transition-all duration-150',
+        // Colours, shadow and the press scale -- not the tile's box metrics.
+        // A till grid redraws constantly and has no business animating width or
+        // height when a card is tapped.
+        'transition duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         unavailable
           ? // Dimmed enough to read as unavailable, not so far that the cashier

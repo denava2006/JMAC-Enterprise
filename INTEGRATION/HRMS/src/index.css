@@ -21,6 +21,14 @@
   /* Teal: the one accent spent on emphasis -- active states, focus, success */
   --teal: #12a594;
   --teal-2: #0c8377;
+  /* Teal dark enough to be read.
+     #12a594 is the brand accent and stays exactly as it is for borders, icon
+     backplates, focus rings and rules -- none of which is text. But as WORDS it
+     does not clear WCAG AA: white on it is 3.07:1 and it on mist is 2.83:1,
+     against the 4.5:1 normal text requires. #0c8377 carries white at 4.64:1,
+     and this carries white at 6.30:1 and sits on mist at 5.81:1, which is what
+     the filled accent button's hover state and small accent text need. */
+  --teal-ink: #0a6c62;
   /* Light Gray family: app background, borders, muted text */
   --mist: #f3f6f9;
   --mist-2: #e9eef3;
@@ -86,6 +94,7 @@
   --color-ocean: var(--ocean);
   --color-teal: var(--teal);
   --color-teal-2: var(--teal-2);
+  --color-teal-ink: var(--teal-ink);
   --color-mist: var(--mist);
   --color-mist-2: var(--mist-2);
   --color-slate: var(--slate);

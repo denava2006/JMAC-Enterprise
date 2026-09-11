@@ -65,7 +65,8 @@ export function PosPaymentMethod({
               onChange(next)
             }}
             className={cn(
-              'flex h-[58px] flex-col items-center justify-center gap-1 rounded-lg border text-xs font-medium transition-all',
+              // Fixed height, so there was never a box metric worth animating.
+              'flex h-[58px] flex-col items-center justify-center gap-1 rounded-lg border text-xs font-medium transition',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
               'disabled:cursor-not-allowed disabled:opacity-50',
               selected

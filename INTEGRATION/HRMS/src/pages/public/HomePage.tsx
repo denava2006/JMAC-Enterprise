@@ -362,7 +362,10 @@ function PlatformSection() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
       <Reveal className="mx-auto max-w-2xl text-center">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">The platform</p>
+        {/* Same contrast correction as the Branches label. Whether this kicker
+            survives at all is a question for the section's redesign, not for a
+            colour pass -- but while it is on the page it has to be readable. */}
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-teal-ink">The platform</p>
         <h2 className="mt-3 font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
           Four workspaces, one organisation
         </h2>
@@ -404,7 +407,10 @@ function PlatformSection() {
               <h3 className="font-display text-lg font-semibold text-foreground">
                 Multi-branch operations
               </h3>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              {/* 116 characters a line before this. The row is full-width for
+                  its icon and its action, but the prose inside it is still
+                  prose and reads at a measure, not at a container width. */}
+              <p className="mt-1 max-w-prose text-sm leading-relaxed text-muted-foreground">
                 Not a fifth module — the property the other four share. Staff are assigned to the branch
                 they work at, stock and takings belong to that branch, and what somebody may do follows
                 them from one to the next.
@@ -526,12 +532,14 @@ function AboutSection() {
           <h2 className="font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
             About JMAC Enterprise
           </h2>
-          <p className="mt-4 text-muted-foreground">
+          {/* ~90 characters a line inside max-w-3xl. The heading may have the
+              wider block; the paragraphs under it read at a measure. */}
+          <p className="mx-auto mt-4 max-w-prose text-muted-foreground">
             JMAC Enterprise is the central business platform of JMAC. It connects workforce management, branch
             operations, point-of-sale activities, and financial processes while keeping responsibilities separated
             through role-based access.
           </p>
-          <p className="mt-4 text-muted-foreground">
+          <p className="mx-auto mt-4 max-w-prose text-muted-foreground">
             The platform gives employees, managers, administrators, cashiers, HR teams, and finance personnel
             access to the tools relevant to their work through one secure system.
           </p>

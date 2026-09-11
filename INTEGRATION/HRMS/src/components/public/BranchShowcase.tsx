@@ -32,7 +32,11 @@ export function BranchShowcase() {
     <section id="branches" className="border-t border-border bg-muted/30 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Branches</p>
+          {/* The label stays -- it is JMAC's section convention across the
+              landing page. Its colour does not: the brand accent on mist is
+              2.83:1, and this is 12px text, not a rule or an icon. teal-ink is
+              the same hue at 5.81:1. */}
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-teal-ink">Branches</p>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-[-0.015em] text-foreground sm:text-4xl">
             One platform, every location
           </h2>
