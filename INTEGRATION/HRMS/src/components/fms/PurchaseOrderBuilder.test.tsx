@@ -107,6 +107,9 @@ describe('a POS stock request builds itself', () => {
     requested_quantity: 20,
     ordered_quantity: 0,
     outstanding: 20,
+    // What the destination branch charges, resolved server-side. Pre-VAT: at a
+    // 12% branch VAT fee the customer pays 33.60 for this.
+    branch_selling_price: 30,
   }
 
   it('shows the product and destination the request already named', () => {
@@ -196,6 +199,185 @@ describe('a general purchase is a different shape', () => {
   })
 })
 
+describe('the margin the order would be bought at', () => {
+  /**
+   * The business gap this closes: Finance typed a supplier cost with no idea
+   * what the destination branch charges, so JMAC could buy a 30.00 product for
+   * 35.00 and nobody would know until it was sold at a loss.
+   *
+   * The screen says what the server will. guard_purchase_order_margin reloads
+   * the price itself at submission and again at approval, so nothing here is
+   * the protection -- it is the warning that arrives before the refusal.
+   */
+  const priced = {
+    source_kind: 'pos_restock',
+    reference: 'Stock request',
+    product_name: 'Coca-Cola 5.6',
+    branch_name: 'Cavite Branch',
+    requested_quantity: 20,
+    ordered_quantity: 0,
+    outstanding: 20,
+    branch_selling_price: 30,
+  }
+
+  const typeCost = (value: string) =>
+    fireEvent.change(screen.getByLabelText(/Unit cost/), { target: { value } })
+
+  /** Vendor and budget chosen, so the only thing left deciding whether Submit
+   *  opens is the margin. Without this the button is shut for reasons that have
+   *  nothing to do with cost, and asserting on it would prove nothing. */
+  function chooseVendorAndBudget() {
+    fireEvent.click(screen.getByLabelText(/Vendor/))
+    fireEvent.click(screen.getByRole('option', { name: 'Approved Supplier' }))
+    fireEvent.click(screen.getByLabelText(/Budget/))
+    fireEvent.click(screen.getByRole('option', { name: /Operations 2026/ }))
+  }
+
+  it('shows the destination branch price, and says it is before VAT', () => {
+    state.detail = priced
+    show(POS_SOURCE)
+
+    expect(screen.getByText('Current selling price')).toBeTruthy()
+    expect(screen.getByText('₱30.00')).toBeTruthy()
+    // Which branch and which side of VAT: both are load-bearing. Another branch
+    // may charge something else, and the customer pays 33.60 for this one.
+    expect(screen.getByText(/Cavite Branch · before VAT/)).toBeTruthy()
+  })
+
+  it('reports ₱10.00 and 33.33% for a ₱20.00 cost, and allows submission', () => {
+    state.detail = priced
+    show(POS_SOURCE)
+    chooseVendorAndBudget()
+    typeCost('20')
+
+    expect(screen.getByText('Gross margin / unit')).toBeTruthy()
+    expect(screen.getByText('₱10.00')).toBeTruthy()
+    expect(screen.getByText('33.33%')).toBeTruthy()
+    // Margin, not markup: 50% would be markup and is the wrong metric.
+    expect(screen.queryByText('50.00%')).toBeNull()
+    expect(
+      (screen.getByRole('button', { name: 'Submit for approval' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+  })
+
+  it('derives the review totals without persisting them', () => {
+    state.detail = priced
+    show(POS_SOURCE)
+    typeCost('20')
+
+    // Quantity defaults to the outstanding 20.
+    expect(screen.getByText('Order cost')).toBeTruthy()
+    expect(screen.getByText('₱400.00')).toBeTruthy()
+    expect(screen.getByText('Potential retail value')).toBeTruthy()
+    expect(screen.getByText('₱600.00')).toBeTruthy()
+    expect(screen.getByText('Potential gross margin')).toBeTruthy()
+    expect(screen.getByText('₱200.00')).toBeTruthy()
+  })
+
+  it('warns at zero margin but still allows submission', () => {
+    state.detail = priced
+    show(POS_SOURCE)
+    chooseVendorAndBudget()
+    typeCost('30')
+
+    expect(screen.getByText(/Zero gross margin/)).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Submit for approval' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+  })
+
+  it('blocks submission when the cost exceeds the price, and says by how much', () => {
+    state.detail = priced
+    show(POS_SOURCE)
+    typeCost('35')
+
+    expect(screen.getByText(/exceeds the current selling price by ₱5\.00 per unit/)).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Submit for approval' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+  })
+
+  it('still lets that order be saved as a draft', () => {
+    // A draft is not a purchasing commitment, and the server agrees: the guard
+    // sits on the status transition, which a draft has not made.
+    state.detail = priced
+    show(POS_SOURCE)
+    chooseVendorAndBudget()
+    typeCost('35')
+
+    // Submit is shut and draft is open, on the same form, at the same moment.
+    // That contrast is the whole claim.
+    expect(
+      (screen.getByRole('button', { name: 'Submit for approval' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(
+      (screen.getByRole('button', { name: 'Save as draft' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+  })
+
+  it('does not treat the VAT-inclusive customer total as the basis', () => {
+    // 30.00 + 12% is 33.60 at the till. A 32.00 cost looks like a gain against
+    // that number and is a 2.00 loss a unit against the one that is revenue.
+    state.detail = priced
+    show(POS_SOURCE)
+    typeCost('32')
+
+    expect(screen.getByText(/exceeds the current selling price by ₱2\.00 per unit/)).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Submit for approval' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+  })
+
+  it('blocks submission when the branch has no price for the product', () => {
+    state.detail = { ...priced, branch_selling_price: null }
+    show(POS_SOURCE)
+    typeCost('20')
+
+    expect(screen.getByText(/does not have a valid selling price/)).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Submit for approval' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+  })
+
+  it('does not read a zero price as a price', () => {
+    // Comparing against 0.00 would report "cost exceeds price by ₱20" and send
+    // Finance to renegotiate a supplier over an unpriced product.
+    state.detail = { ...priced, branch_selling_price: 0 }
+    show(POS_SOURCE)
+    typeCost('20')
+
+    expect(screen.getByText(/does not have a valid selling price/)).toBeTruthy()
+    expect(screen.queryByText(/exceeds the current selling price/)).toBeNull()
+  })
+
+  it('offers Finance no way to change the selling price from here', () => {
+    // Price belongs to POS. A control here would let Finance edit the number
+    // that is checking them, which is no check at all.
+    state.detail = { ...priced, branch_selling_price: 30 }
+    show(POS_SOURCE)
+    typeCost('35')
+
+    expect(screen.queryByLabelText(/selling price/i)).toBeNull()
+    const labels = screen.queryAllByRole('button').map((b) => b.textContent ?? '')
+    expect(labels.some((l) => /selling price|set price|override/i.test(l))).toBe(false)
+  })
+
+  it('says nothing about margin on a general purchase', () => {
+    // Stationery has no retail price. A margin panel would imply a question
+    // that does not apply here.
+    state.detail = {
+      source_kind: 'finance_request',
+      reference: 'PR-2026-0001',
+      title: 'Office chairs',
+      branch_name: 'Main Office',
+      amount: 5000,
+      branch_selling_price: null,
+    }
+    show(GENERAL_SOURCE)
+    expect(screen.queryByText('Current selling price')).toBeNull()
+  })
+})
+
 describe('only an approved vendor can be chosen', () => {
   it('leaves a proposed vendor out of the picker', () => {
     state.detail = { source_kind: 'pos_restock', reference: 'Stock request', outstanding: 20 }
@@ -213,6 +395,9 @@ describe('a POS order names the budget that pays for it', () => {
     requested_quantity: 20,
     ordered_quantity: 0,
     outstanding: 20,
+    // What the destination branch charges, resolved server-side. Pre-VAT: at a
+    // 12% branch VAT fee the customer pays 33.60 for this.
+    branch_selling_price: 30,
   }
 
   it('asks for a budget, and marks it required', () => {

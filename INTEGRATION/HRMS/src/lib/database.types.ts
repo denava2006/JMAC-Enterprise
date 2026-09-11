@@ -3824,6 +3824,7 @@ export type Database = {
           purchase_order_id: string
           quantity_cancelled: number
           quantity_ordered: number
+          selling_price_snapshot: number | null
           unit_cost: number
           unit_of_measure: string
           updated_at: string
@@ -3838,6 +3839,7 @@ export type Database = {
           purchase_order_id: string
           quantity_cancelled?: number
           quantity_ordered: number
+          selling_price_snapshot?: number | null
           unit_cost: number
           unit_of_measure?: string
           updated_at?: string
@@ -3852,6 +3854,7 @@ export type Database = {
           purchase_order_id?: string
           quantity_cancelled?: number
           quantity_ordered?: number
+          selling_price_snapshot?: number | null
           unit_cost?: number
           unit_of_measure?: string
           updated_at?: string
@@ -6707,6 +6710,7 @@ export type Database = {
           amount: number
           branch_id: string
           branch_name: string
+          branch_selling_price: number
           ordered_quantity: number
           outstanding: number
           product_id: string
@@ -6747,6 +6751,18 @@ export type Database = {
           requirements: string
           status: string
           vacancies: number
+        }[]
+      }
+      get_purchase_order_margins: {
+        Args: { _purchase_order_id: string }
+        Returns: {
+          branch_name: string
+          current_selling_price: number
+          description: string
+          item_id: string
+          quantity_ordered: number
+          selling_price_snapshot: number
+          unit_cost: number
         }[]
       }
       get_reimbursement_payments: {
@@ -7067,6 +7083,10 @@ export type Database = {
           _safe_old?: string
         }
         Returns: undefined
+      }
+      pos_branch_selling_price: {
+        Args: { _branch_id: string; _product_id: string }
+        Returns: number
       }
       pos_business_date: { Args: never; Returns: string }
       pos_business_timezone: { Args: never; Returns: string }

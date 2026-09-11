@@ -13,18 +13,44 @@ import type { UserRole } from '@/lib/enums'
  * fails is worse than one that was never offered.
  */
 
+interface MarginRow {
+  item_id: string
+  description: string
+  quantity_ordered: number
+  unit_cost: number
+  current_selling_price: number | null
+  selling_price_snapshot: number | null
+  branch_name: string | null
+}
+
 const state: {
   role: UserRole
   status: string
   received: number
   outstanding: number
   budgetName: string | null
+  margins: MarginRow[]
 } = {
   role: 'finance_staff',
   status: 'draft',
   received: 0,
   outstanding: 20,
   budgetName: null,
+  margins: [],
+}
+
+/** One POS-sourced line, priced as the brief's example. */
+function marginRow(overrides: Partial<MarginRow> = {}): MarginRow {
+  return {
+    item_id: 'line-1',
+    description: 'ZZ Cola case',
+    quantity_ordered: 10,
+    unit_cost: 20,
+    current_selling_price: 30,
+    selling_price_snapshot: 30,
+    branch_name: 'Cavite Branch',
+    ...overrides,
+  }
 }
 
 const ORDER = {
@@ -86,6 +112,9 @@ vi.mock('@/hooks/useProcurement', () => ({
     ],
   }),
   usePurchaseOrderSources: () => ({ data: [] }),
+  // POS-sourced lines only, so most of these cases have none. The margin
+  // review's own behaviour is covered below and in procurementMargin.test.ts.
+  usePurchaseOrderMargins: () => ({ data: state.margins }),
   useRemovePurchaseOrderItem: () => ({ mutate: vi.fn(), isPending: false }),
   useSavePurchaseOrderItem: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useTransitionPurchaseOrder: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -106,6 +135,73 @@ afterEach(() => {
   state.received = 0
   state.outstanding = 20
   state.budgetName = null
+  state.margins = []
+})
+
+describe('what the approver is told about margin', () => {
+  /**
+   * The Finance Manager is the one committing the company. Recomputed on read,
+   * never replayed from what Staff typed -- and if the branch has moved its
+   * price since submission, said so plainly rather than folded into a figure.
+   */
+  it('shows the current price, the submitted cost and the margin both ways', () => {
+    state.role = 'finance_manager'
+    state.status = 'pending_approval'
+    state.margins = [marginRow()]
+    show()
+
+    expect(screen.getByText('Current selling price')).toBeTruthy()
+    expect(screen.getByText('₱30.00')).toBeTruthy()
+    expect(screen.getByText('Submitted unit cost')).toBeTruthy()
+    expect(screen.getByText('₱20.00')).toBeTruthy()
+    expect(screen.getByText('₱10.00')).toBeTruthy()
+    expect(screen.getByText('33.33%')).toBeTruthy()
+    expect(screen.getByText(/Cavite Branch · before VAT/)).toBeTruthy()
+  })
+
+  it('says when the price has moved since the order was submitted', () => {
+    // Submitted at 30 against a 28 cost; the branch has since cut to 25. The
+    // approval must not proceed as though the margin is still positive.
+    state.role = 'finance_manager'
+    state.status = 'pending_approval'
+    state.margins = [marginRow({ unit_cost: 28, current_selling_price: 25, selling_price_snapshot: 30 })]
+    show()
+
+    expect(screen.getByText(/selling price has changed since this order was submitted/)).toBeTruthy()
+    expect(screen.getByText(/it was ₱30\.00 then/)).toBeTruthy()
+    expect(screen.getByText(/exceeds the current selling price by ₱3\.00 per unit/)).toBeTruthy()
+  })
+
+  it('warns on a zero margin without calling it an error', () => {
+    state.role = 'finance_manager'
+    state.status = 'pending_approval'
+    state.margins = [marginRow({ unit_cost: 30 })]
+    show()
+    expect(screen.getByText(/Zero gross margin/)).toBeTruthy()
+  })
+
+  it('offers the approver no control over the selling price', () => {
+    // Price belongs to POS. A Finance control to edit it here would make the
+    // whole check ceremonial.
+    state.role = 'finance_manager'
+    state.status = 'pending_approval'
+    state.margins = [marginRow({ unit_cost: 35 })]
+    show()
+
+    const labels = screen.queryAllByRole('button').map((b) => b.textContent ?? '')
+    expect(labels.some((l) => /selling price|set price|edit price/i.test(l))).toBe(false)
+    expect(screen.queryByLabelText(/selling price/i)).toBeNull()
+  })
+
+  it('says nothing at all when the order has no POS lines', () => {
+    // A stationery order has no retail price and no margin. An empty panel
+    // would imply the question applies and was not answered.
+    state.role = 'finance_manager'
+    state.status = 'pending_approval'
+    state.margins = []
+    show()
+    expect(screen.queryByText('Selling price and margin')).toBeNull()
+  })
 })
 
 describe('the maker, on an order they may still work on', () => {

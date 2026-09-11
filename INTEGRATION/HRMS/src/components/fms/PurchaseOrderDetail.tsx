@@ -22,12 +22,21 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { ReasonDialog } from '@/components/fms/ReasonDialog'
 import { formatMoney } from '@/lib/currency'
+import {
+  describeMargin,
+  formatMarginPercent,
+  marginFor,
+  peso,
+  priceMoved,
+  type MarginView,
+} from '@/lib/procurementMargin'
 import { useBranches } from '@/hooks/useBranches'
 import { usePosProducts } from '@/hooks/usePosCatalogue'
 import {
   fulfillmentOf,
   fulfillmentNote,
   usePurchaseOrderItems,
+  usePurchaseOrderMargins,
   usePurchaseOrderSources,
   usePurchaseOrders,
   useRemovePurchaseOrderItem,
@@ -80,6 +89,116 @@ function actionsFor(role: string | undefined, status: string | undefined) {
     return []
   }
   return []
+}
+
+/**
+ * What this purchase is worth selling, for whoever is about to approve it.
+ *
+ * Recomputed on read, never replayed from what Staff typed. The price a branch
+ * charges can move between submission and approval, and the person committing
+ * the company is entitled to know that it did -- an approval that proceeds on a
+ * margin that stopped being true is exactly the silent bad decision this whole
+ * change exists to prevent.
+ *
+ * Read-only, and offers no control over the selling price. If the price is
+ * wrong that is a POS question; the order is returned through the workflow that
+ * already exists rather than through a new exception state invented here.
+ */
+function MarginReview({ orderId }: { orderId: string | undefined }) {
+  const { data: rows = [] } = usePurchaseOrderMargins(orderId)
+  if (rows.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-semibold text-foreground">Selling price and margin</p>
+      <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        {rows.map((row) => {
+          const view = marginFor(row.current_selling_price, row.unit_cost, row.quantity_ordered)
+          const moved = priceMoved(row.selling_price_snapshot, row.current_selling_price)
+          return (
+            <div key={row.item_id} className="flex flex-col gap-1.5 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                <p className="text-sm font-medium text-foreground">{row.description}</p>
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                  <Pair
+                    label="Current selling price"
+                    value={
+                      row.current_selling_price && row.current_selling_price > 0
+                        ? peso(row.current_selling_price)
+                        : '—'
+                    }
+                  />
+                  <Pair label="Submitted unit cost" value={peso(Number(row.unit_cost))} />
+                  <Pair
+                    label="Margin"
+                    value={view.perUnit === null ? '—' : peso(view.perUnit)}
+                    tone={view.verdict}
+                  />
+                  <Pair
+                    label="Gross margin"
+                    value={formatMarginPercent(view.percent)}
+                    tone={view.verdict}
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                {row.branch_name ?? 'Destination branch'} · before VAT
+              </p>
+
+              {moved && (
+                // Stated plainly rather than folded into the numbers: the
+                // figures Staff saw are not the figures being approved.
+                <p className="text-xs text-warning" role="alert">
+                  The selling price has changed since this order was submitted — it was{' '}
+                  {row.selling_price_snapshot === null
+                    ? 'not recorded'
+                    : peso(Number(row.selling_price_snapshot))}
+                  {' '}then.
+                </p>
+              )}
+
+              {describeMargin(view) && view.verdict !== 'positive' && (
+                <p
+                  role="alert"
+                  className={
+                    view.verdict === 'zero'
+                      ? 'text-xs font-medium text-warning'
+                      : 'text-xs font-medium text-destructive'
+                  }
+                >
+                  {describeMargin(view)}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function Pair({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone?: MarginView['verdict']
+}) {
+  const color =
+    tone === 'negative' || tone === 'no-price'
+      ? 'text-destructive'
+      : tone === 'zero'
+        ? 'text-warning'
+        : 'text-foreground'
+  return (
+    <span className="flex flex-col">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`font-medium tabular-nums ${color}`}>{value}</span>
+    </span>
+  )
 }
 
 export function PurchaseOrderDetail({
@@ -184,6 +303,8 @@ export function PurchaseOrderDetail({
               </CardContent>
             </Card>
           )}
+
+          <MarginReview orderId={orderId ?? undefined} />
 
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between">

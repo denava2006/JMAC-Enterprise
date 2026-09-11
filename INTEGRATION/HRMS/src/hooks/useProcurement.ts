@@ -424,6 +424,16 @@ export interface ProcurementSource {
   outstanding: number | null
   requested_by_name: string | null
   amount: number | null
+  /**
+   * What the DESTINATION branch charges for this product today, pre-VAT.
+   *
+   * Resolved by the server from the request's own product and branch -- never
+   * another branch's price, and never the enterprise default for a product the
+   * branch does not carry. Null when there is no usable price, which is a
+   * refusal rather than a zero. Finance reads it; Finance does not set it, and
+   * the margin guard reloads it independently at submission and approval.
+   */
+  branch_selling_price: number | null
 }
 
 /**
@@ -444,6 +454,42 @@ export function useProcurementSource(ref: ProcurementSourceRef | null) {
       })
       if (error) throw error
       return (data?.[0] ?? null) as ProcurementSource | null
+    },
+  })
+}
+
+export interface PurchaseOrderMargin {
+  item_id: string
+  description: string
+  quantity_ordered: number
+  unit_cost: number
+  /** The destination branch's price as it is NOW, recomputed on read. */
+  current_selling_price: number | null
+  /** The price the margin guard last validated this line against -- at
+   *  submission, and again at approval. Null on a line that never transitioned. */
+  selling_price_snapshot: number | null
+  branch_name: string | null
+}
+
+/**
+ * The pricing context an approver is entitled to before committing the company.
+ *
+ * Recomputed rather than replayed. A Finance Manager approving an order needs
+ * the price as it is at the moment they approve, not the one that was true when
+ * Staff typed the cost -- those can differ, and the difference is exactly what
+ * they should be told about. POS-sourced lines only; a stationery order has no
+ * retail price and no margin.
+ */
+export function usePurchaseOrderMargins(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ['procurement', 'margins', orderId ?? 'none'],
+    enabled: !!orderId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_purchase_order_margins', {
+        _purchase_order_id: orderId!,
+      })
+      if (error) throw error
+      return (data ?? []) as unknown as PurchaseOrderMargin[]
     },
   })
 }

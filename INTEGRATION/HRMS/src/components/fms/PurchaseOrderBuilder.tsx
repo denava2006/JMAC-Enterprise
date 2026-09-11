@@ -27,6 +27,14 @@ import {
   useBuildPurchaseOrder,
   type ProcurementSourceRef,
 } from '@/hooks/useProcurement'
+import {
+  blocksSubmission,
+  describeMargin,
+  formatMarginPercent,
+  marginFor,
+  peso,
+  type MarginView,
+} from '@/lib/procurementMargin'
 
 /**
  * Build a purchase order from a piece of demand.
@@ -48,6 +56,102 @@ import {
  * and locked, and the server takes them from the request rather than from
  * anything this form sends.
  */
+/**
+ * The selling price this purchase is judged against, and what the margin is.
+ *
+ * Read-only about the price, deliberately and structurally: there is no control
+ * here to change it, because a branch selling price is the POS Manager's and
+ * letting Finance edit it from the order they are trying to get approved would
+ * make the check ceremonial. If the price is wrong, the price is what gets
+ * reviewed -- in POS, by the people who own it.
+ *
+ * Restrained on purpose. Three states, one line of explanation each, and the
+ * figures Finance is already thinking about. The blocking case is the only one
+ * that raises its voice.
+ */
+function MarginPanel({
+  view,
+  sellingPrice,
+  branchName,
+  costEntered,
+}: {
+  view: MarginView
+  sellingPrice: number | null
+  branchName: string | null
+  costEntered: boolean
+}) {
+  const message = describeMargin(view)
+  const tone =
+    view.verdict === 'negative' || view.verdict === 'no-price'
+      ? 'border-destructive/40 bg-destructive/5'
+      : view.verdict === 'zero'
+        ? 'border-warning/40 bg-warning/10'
+        : 'border-border bg-muted/40'
+
+  return (
+    <div className={`flex flex-col gap-2 rounded-lg border p-3 ${tone}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <div className="flex flex-col">
+          <span className="text-xs text-muted-foreground">Current selling price</span>
+          <span className="font-medium tabular-nums text-foreground">
+            {sellingPrice === null || sellingPrice <= 0 ? '—' : peso(sellingPrice)}
+          </span>
+          {/* Which branch, and on which side of VAT. Both matter: the customer
+              pays more than this, and another branch may charge something
+              else entirely. */}
+          <span className="text-[11px] text-muted-foreground">
+            {branchName ?? 'Destination branch'} · before VAT
+          </span>
+        </div>
+
+        {costEntered && view.verdict !== 'no-price' && (
+          <>
+            <Figure label="Gross margin / unit" value={peso(view.perUnit ?? 0)} />
+            <Figure label="Gross margin" value={formatMarginPercent(view.percent)} />
+          </>
+        )}
+      </div>
+
+      {costEntered && view.verdict !== 'no-price' && (
+        // Review only. Nothing here is persisted -- all three follow from
+        // quantity, unit cost and the selling price, so storing them would only
+        // create a second set of numbers to disagree with.
+        <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border/60 pt-2">
+          <Figure label="Order cost" value={peso(view.orderCost)} small />
+          <Figure label="Potential retail value" value={peso(view.retailValue ?? 0)} small />
+          <Figure label="Potential gross margin" value={peso(view.potentialMargin ?? 0)} small />
+        </div>
+      )}
+
+      {message && (
+        <p
+          role={view.verdict === 'positive' ? undefined : 'alert'}
+          className={
+            view.verdict === 'zero'
+              ? 'text-xs font-medium text-warning'
+              : 'text-xs font-medium text-destructive'
+          }
+        >
+          {message}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function Figure({ label, value, small }: { label: string; value: string; small?: boolean }) {
+  return (
+    <div className="flex flex-col">
+      <span className={small ? 'text-[11px] text-muted-foreground' : 'text-xs text-muted-foreground'}>
+        {label}
+      </span>
+      <span className={`tabular-nums text-foreground ${small ? 'text-xs' : 'font-medium'}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
 type GeneralLine = { description: string; quantity: string; unitCost: string }
 
 const EMPTY_LINE: GeneralLine = { description: '', quantity: '1', unitCost: '' }
@@ -110,6 +214,14 @@ export function PurchaseOrderBuilder({
     (sum, l) => sum + Number(l.quantity || 0) * Number(l.unitCost || 0),
     0,
   )
+
+  // What the branch charges for this product, resolved server-side and handed
+  // over with the rest of the request. Finance sees it; Finance does not set
+  // it, and nothing here sends it back -- guard_purchase_order_margin reloads
+  // the price itself, so a number typed into this browser could not change the
+  // verdict even if it reached the RPC.
+  const margin = marginFor(detail?.branch_selling_price ?? null, Number(unitCost || 0), Number(quantity || 0))
+  const marginBlocks = isPosStock && unitCost !== '' && blocksSubmission(margin)
 
   const posIncomplete =
     !vendorId ||
@@ -345,6 +457,15 @@ export function PurchaseOrderBuilder({
                     </p>
                   )}
                 </div>
+
+                <div className="sm:col-span-2">
+                  <MarginPanel
+                    view={margin}
+                    sellingPrice={detail.branch_selling_price ?? null}
+                    branchName={detail.branch_name}
+                    costEntered={unitCost !== ''}
+                  />
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -450,6 +571,9 @@ export function PurchaseOrderBuilder({
             Cancel
           </Button>
           <div className="flex gap-2">
+            {/* A draft is not a purchasing commitment, so an unresolved margin
+                does not stop one being kept. The server agrees: the guard sits
+                on the status transition, and a draft has not made one. */}
             <Button
               variant="outline"
               disabled={incomplete || build.isPending}
@@ -457,7 +581,10 @@ export function PurchaseOrderBuilder({
             >
               Save as draft
             </Button>
-            <Button disabled={incomplete || build.isPending} onClick={() => void save(true)}>
+            <Button
+              disabled={incomplete || marginBlocks || build.isPending}
+              onClick={() => void save(true)}
+            >
               {build.isPending ? 'Saving…' : 'Submit for approval'}
             </Button>
           </div>
