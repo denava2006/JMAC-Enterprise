@@ -25,7 +25,7 @@ import {
   useImportProductImage,
   useUpdateProductDetails,
   useSetBranchSellingPrice,
-  usePosCategories,
+  usePosPortalCategories,
 } from '@/hooks/usePosCatalogue'
 import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/MoneyInput'
@@ -79,6 +79,82 @@ import { isPosManagerAt } from '@/lib/portals'
 
 const ALL = 'all'
 
+/**
+ * Choosing a category, on a POS screen.
+ *
+ * Shared by Add Product and Edit product because they had the same bug: both
+ * read usePosCategories(), which selects pos_product_categories directly under
+ * an is_admin() policy. RLS filters rows rather than raising, so for a POS
+ * Manager the query succeeded, returned nothing, and the dropdown rendered
+ * silently empty -- while the Categories page, reading a SECURITY DEFINER RPC,
+ * showed General and Drinks a click away.
+ *
+ * usePosPortalCategories() is the portal's reader. It already excludes
+ * inactive categories server-side, so there is deliberately no `.filter()`
+ * here: the Administrator's filter tests `is_active`, a field this RPC does
+ * not return, and copying it across would filter every row out again.
+ *
+ * Loading, failed and genuinely-empty are three different sentences. They used
+ * to be one blank list, which is how a permissions bug looked exactly like a
+ * business with no categories.
+ */
+function CategorySelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: string
+  onChange: (categoryId: string) => void
+}) {
+  const categories = usePosPortalCategories()
+  const rows = categories.data ?? []
+
+  return (
+    <>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id}>
+          <SelectValue placeholder={categories.isLoading ? 'Loading categories…' : 'Choose a category'} />
+        </SelectTrigger>
+        <SelectContent>
+          {categories.isLoading ? (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">Loading categories…</p>
+          ) : categories.isError ? (
+            <p className="px-2 py-1.5 text-sm text-destructive">Categories could not be loaded.</p>
+          ) : rows.length === 0 ? (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">
+              No product categories available.
+            </p>
+          ) : (
+            rows.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+
+      {/* Said outside the dropdown too: a failure the person never opens the
+          list to see is a failure they cannot act on. */}
+      {categories.isError && (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-destructive">Categories could not be loaded.</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            loading={categories.isFetching}
+            onClick={() => categories.refetch()}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+    </>
+  )
+}
+
 
 /**
  * Putting something on this branch's shelves.
@@ -104,7 +180,6 @@ function AddProductDialog({ branchId, onClose }: { branchId: string; onClose: ()
   const [image, setImage] = React.useState<ImageChoice>({ kind: 'none' })
 
   const { data: carryable, isLoading } = useCarryableCatalogue(branchId)
-  const { data: categories } = usePosCategories()
   const addToBranch = useAddProductToBranch()
   const createProduct = useCreateBranchProduct()
   const createCategory = useCreatePosCategory()
@@ -204,24 +279,17 @@ function AddProductDialog({ branchId, onClose }: { branchId: string; onClose: ()
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="new_product_category">Category</Label>
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger id="new_product_category">
-                  <SelectValue placeholder="Choose a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(categories ?? [])
-                    .filter((c) => c.is_active)
-                    .map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <CategorySelect
+                id="new_product_category"
+                value={categoryId}
+                onChange={setCategoryId}
+              />
 
-              {/* So an empty branch is never a dead end: General always exists,
-                  and a manager who needs a different shelf can name one here
-                  rather than waiting for an Administrator. */}
+              {/* Secondary, and it stays: a manager who needs a shelf that does
+                  not exist can name one here rather than waiting for an
+                  Administrator. Creating one invalidates POS_CATALOGUE_KEY,
+                  which the selector is keyed under, so the new category appears
+                  in the list and is selected without a reload. */}
               <div className="flex items-center gap-2 pt-1">
                 <Input
                   placeholder="or create a category…"
@@ -338,7 +406,6 @@ function EditProductDialog({
   const [image, setImage] = React.useState<ImageChoice>({ kind: 'none' })
   const [price, setPrice] = React.useState(String(product.selling_price))
 
-  const { data: categories } = usePosCategories()
   const updateDetails = useUpdateProductDetails()
   const setBranchPrice = useSetBranchSellingPrice()
   const setProductImage = useSetProductImage()
@@ -396,20 +463,14 @@ function EditProductDialog({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit_product_category">Category</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger id="edit_product_category">
-                <SelectValue placeholder="Choose a category" />
-              </SelectTrigger>
-              <SelectContent>
-                {(categories ?? [])
-                  .filter((c) => c.is_active)
-                  .map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            {/* The same defect lived here: a manager editing a product saw an
+                empty category list for the same reason, and could not change
+                a product's category at all. */}
+            <CategorySelect
+              id="edit_product_category"
+              value={categoryId}
+              onChange={setCategoryId}
+            />
           </div>
 
           {/* The one field on this screen that belongs to this branch alone,

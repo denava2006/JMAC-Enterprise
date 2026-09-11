@@ -341,6 +341,47 @@ begin
   raise notice 'PASS  7f every till catalogue row still carries its category name';
 
   -- ======================================================================
+  -- 7g-7i. The Add Product dropdown: two readers, two very different answers
+  -- ======================================================================
+  --
+  -- The production defect this pins. A POS Manager opening Products → Add
+  -- Product → Category saw nothing, while the Categories page one click away
+  -- listed General and Drinks. The dialog was reading pos_product_categories
+  -- directly, and RLS on it is is_admin() -- which FILTERS ROWS rather than
+  -- raising, so the query succeeded, returned zero rows, and the dropdown
+  -- rendered empty with no error to explain it.
+  perform pg_temp.acts_as(mgr_uid);
+  set local role authenticated;
+  select count(*) into n from public.pos_product_categories;
+  reset role;
+  if n <> 0 then
+    raise exception 'FAIL  7g a manager can now SELECT the category table (% rows) -- the policy was widened', n;
+  end if;
+  raise notice 'PASS  7g the table itself still returns a manager nothing, silently';
+
+  perform pg_temp.acts_as(mgr_uid);
+  set local role authenticated;
+  select count(*) into n from public.get_pos_categories();
+  reset role;
+  if n = 0 then
+    raise exception 'FAIL  7h get_pos_categories() returns a manager nothing -- the dropdown would still be empty';
+  end if;
+  raise notice 'PASS  7h get_pos_categories() gives a manager the taxonomy (% rows)', n;
+
+  -- Same ids as the Categories page reports, so the two surfaces cannot
+  -- disagree about which category is which.
+  perform pg_temp.acts_as(mgr_uid);
+  set local role authenticated;
+  select count(*) into n
+    from public.get_pos_categories() g
+    join public.get_branch_category_summary(branch_a) s on s.category_id = g.id;
+  reset role;
+  if n = 0 then
+    raise exception 'FAIL  7i the dropdown and the Categories page share no category id';
+  end if;
+  raise notice 'PASS  7i dropdown and Categories page agree on % category ids', n;
+
+  -- ======================================================================
   -- 8. Stock is still not something anyone types
   -- ======================================================================
   --

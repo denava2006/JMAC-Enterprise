@@ -54,6 +54,58 @@ export function usePosCategories() {
   })
 }
 
+/* ----------------------------------------------------------- POS portal */
+
+/**
+ * A category as the POS portal may see one.
+ *
+ * Deliberately smaller than `Category`. get_pos_categories() returns taxonomy
+ * and nothing else, and in particular returns no `is_active` -- it filters on
+ * it server-side instead, so every row that arrives is already selectable.
+ * That absence is load-bearing: a caller that copies the Administrator's
+ * `.filter(c => c.is_active)` onto these rows filters on `undefined` and
+ * silently discards all of them, which is the second half of the bug this
+ * type exists to make impossible to write.
+ */
+export interface PosPortalCategory {
+  id: string
+  name: string
+  color: string | null
+  sort_order: number
+}
+
+/**
+ * The global category list, for POS staff.
+ *
+ * This is the portal's half of the split the file docstring describes, and it
+ * had no hook until now -- so the POS Manager's Add Product dialog reached for
+ * usePosCategories() instead. That reads pos_product_categories directly,
+ * whose RLS is is_admin(), and RLS filters rows rather than raising: the query
+ * SUCCEEDED, returned zero rows, and the dropdown rendered an empty list with
+ * no error to explain it. A manager looking at General and Drinks on the
+ * Categories page was offered neither here.
+ *
+ * get_pos_categories() is the intended reader: SECURITY DEFINER, gated on
+ * has_pos_access(), ordered by sort_order then name, and already limited to
+ * active categories. It is the same taxonomy the Administrator edits -- same
+ * ids, same names -- viewed through a function POS staff are allowed to call,
+ * so the two surfaces cannot disagree about what exists.
+ *
+ * Keyed under POS_CATALOGUE_KEY on purpose: every catalogue mutation, creating
+ * a category included, already invalidates that prefix, so an inline-created
+ * category appears here without anything else being taught about it.
+ */
+export function usePosPortalCategories() {
+  return useQuery({
+    queryKey: [...POS_CATALOGUE_KEY, 'categories'],
+    queryFn: async (): Promise<PosPortalCategory[]> => {
+      const { data, error } = await supabase.rpc('get_pos_categories')
+      if (error) throw new Error(describeCatalogueError(error))
+      return (data ?? []) as unknown as PosPortalCategory[]
+    },
+  })
+}
+
 export function usePosProducts() {
   return useQuery({
     queryKey: PRODUCTS_KEY,
