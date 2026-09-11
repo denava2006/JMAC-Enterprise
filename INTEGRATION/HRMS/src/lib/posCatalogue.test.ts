@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  categorySwatchColor,
   describeCatalogueError,
   effectivePrice,
   isGeneralCategory,
@@ -131,6 +132,49 @@ describe('validateCategory', () => {
     expect(
       validateCategory({ name: 'Snacks', description: 'y'.repeat(501), color: '' }, existing).join(' ')
     ).toContain('longer than 500')
+  })
+})
+
+describe('categorySwatchColor', () => {
+  it('passes through a colour the column would accept', () => {
+    expect(categorySwatchColor('#1D6FA5')).toBe('#1D6FA5')
+    expect(categorySwatchColor('#abcdef')).toBe('#abcdef')
+    expect(categorySwatchColor('  #123456  ')).toBe('#123456')
+  })
+
+  it('returns null for no colour, which is the ordinary case', () => {
+    // Colour is an optional flourish. Creating a category never asks for one,
+    // so most rows have none -- null here means "paint the neutral token",
+    // not "something went wrong".
+    expect(categorySwatchColor(null)).toBeNull()
+    expect(categorySwatchColor(undefined)).toBeNull()
+    expect(categorySwatchColor('')).toBeNull()
+    expect(categorySwatchColor('   ')).toBeNull()
+  })
+
+  it('returns null for anything malformed, rather than handing it to the DOM', () => {
+    // The column's CHECK constraint means these cannot be stored, so this is
+    // defence in depth. It matters because the failure it prevents is silent:
+    // React drops a backgroundColor it cannot parse and the swatch renders
+    // empty, which is the exact bug the neutral fallback exists to kill.
+    for (const bad of ['blue', '#12345', '#1234567', '1D6FA5', '#GGGGGG', 'rgb(0,0,0)']) {
+      expect(categorySwatchColor(bad), bad).toBeNull()
+    }
+  })
+
+  it('agrees with validateCategory about what a colour is', () => {
+    // Both read the same pattern, so the editor cannot accept a value the
+    // card then refuses to paint.
+    const existing: Pick<Category, 'id' | 'normalized_name'>[] = []
+    for (const value of ['#1D6FA5', 'blue', '#12345', '']) {
+      const rejected = validateCategory({ name: 'Snacks', description: '', color: value }, existing)
+        .some((e) => e.includes('six-digit hex'))
+      const paintable = categorySwatchColor(value) !== null
+      // An empty colour is valid AND unpaintable; anything non-empty must be
+      // either both or neither.
+      if (value !== '') expect(paintable, value).toBe(!rejected)
+      else expect(rejected).toBe(false)
+    }
   })
 })
 

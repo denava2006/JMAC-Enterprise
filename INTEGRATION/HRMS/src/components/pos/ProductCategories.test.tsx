@@ -261,6 +261,92 @@ describe('the two Product Categories surfaces are one module', () => {
   })
 })
 
+describe('the colour indicator', () => {
+  /** The swatch on a named category's card. */
+  const swatchFor = (name: string) =>
+    cardFor(name)?.querySelector('span[aria-hidden]') as HTMLElement | null
+
+  it('paints the configured colour, on both surfaces', () => {
+    // Drinks is #3366ff in both fixtures -- the Administrator's from
+    // pos_product_categories, the manager's from get_branch_category_summary.
+    // One component, so one answer.
+    for (const surface of ['admin', 'manager'] as const) {
+      const view = show(surface)
+      expect(swatchFor('Drinks')?.style.backgroundColor).toBe('rgb(51, 102, 255)')
+      view.unmount()
+      cleanup()
+    }
+  })
+
+  it('falls back to the neutral token when no colour is set', () => {
+    // General has color: null in both fixtures, which is the ORDINARY case --
+    // colour is optional and most categories have none. It used to draw a
+    // hollow outline that read as a broken icon or an unticked checkbox.
+    for (const surface of ['admin', 'manager'] as const) {
+      const view = show(surface)
+      const swatch = swatchFor('General')
+
+      // No inline colour, so the class token decides -- and the token is a
+      // fill, not a transparent box.
+      expect(swatch?.style.backgroundColor).toBe('')
+      expect(swatch?.getAttribute('class')).toContain('bg-muted')
+      view.unmount()
+      cleanup()
+    }
+  })
+
+  it('keeps its border whatever the fill is, so a pale colour stays visible', () => {
+    // The one contrast hazard: a near-white colour on a white card. The
+    // outline is what keeps the indicator perceivable at every value the
+    // column can hold.
+    const view = show('admin')
+    for (const name of ['General', 'Drinks']) {
+      const cls = swatchFor(name)?.getAttribute('class') ?? ''
+      expect(cls).toContain('border')
+      expect(cls).toContain('border-border')
+    }
+    view.unmount()
+  })
+
+  it('is 32px and keeps the rounding it already had', () => {
+    const view = show('admin')
+    const cls = swatchFor('Drinks')?.getAttribute('class') ?? ''
+    expect(cls).toContain('h-8')
+    expect(cls).toContain('w-8')
+    expect(cls).toContain('rounded-lg')
+    view.unmount()
+  })
+
+  it('is decorative: nothing to click, nothing to select, nothing announced', () => {
+    // It must not become a checkbox or a selection affordance. A span with no
+    // handler, no role, no tabindex and aria-hidden is none of those things.
+    const view = show('admin')
+    const swatch = swatchFor('Drinks')
+
+    expect(swatch?.tagName).toBe('SPAN')
+    expect(swatch?.getAttribute('aria-hidden')).toBe('true')
+    expect(swatch?.getAttribute('role')).toBeNull()
+    expect(swatch?.getAttribute('tabindex')).toBeNull()
+    expect(swatch?.onclick).toBeFalsy()
+
+    // And no checkbox arrived anywhere on the card with it.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    view.unmount()
+  })
+
+  it('leaves the rest of the card exactly where it was', () => {
+    // The swatch shares a row with everything that matters; a change to it
+    // must not have displaced any of it.
+    const view = show('manager')
+    expect(screen.getByText('Permanent')).toBeTruthy()
+    expect(screen.getByText('Drinks')).toBeTruthy()
+    expect((cardFor('Drinks')?.textContent ?? '')).toContain('Bottled and canned')
+    expect((cardFor('Drinks')?.textContent ?? '').replace(/\s+/g, ' ')).toContain('Carried1')
+    expect(screen.getByRole('button', { name: 'Actions for Drinks' })).toBeTruthy()
+    view.unmount()
+  })
+})
+
 describe('what the shared frame must NOT equalise', () => {
   it('keeps reorder arrows on the Administrator and off the manager', () => {
     const admin = show('admin')

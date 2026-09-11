@@ -18,6 +18,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { categorySwatchColor } from '@/lib/posCatalogue'
 
 /**
  * Product Categories, seen by whoever is looking.
@@ -186,6 +187,7 @@ export function ProductCategoryCard({
   actions?: React.ReactNode
 }) {
   const { name, description, color, permanent, archived, productCount, branchUsage } = category
+  const swatch = categorySwatchColor(color)
 
   return (
     <Card>
@@ -193,9 +195,25 @@ export function ProductCategoryCard({
           of crushing it. Nothing here scrolls sideways. */}
       <CardContent className="flex flex-wrap items-start gap-3 p-4">
         <div className="flex min-w-0 flex-1 items-start gap-3">
+          {/* The category's colour. `bg-muted` is the base rather than a
+              conditional, so an uncoloured category -- most of them, since
+              colour is an optional flourish -- gets a filled neutral chip
+              instead of the hollow outline this used to draw, which read as a
+              broken icon or an unticked checkbox.
+
+              The border stays whatever the fill is: it is what keeps a pale
+              or white colour visible against the white card, so the indicator
+              is perceivable at every value the column can hold.
+
+              Decorative, deliberately. It is a span with no handler, no
+              tabindex and no role -- nothing to click and nothing to select --
+              and it is hidden from assistive tech because the category's name
+              sits immediately beside it in text. Announcing "blue square"
+              before the name would add noise, not information, and identity
+              here is carried by the name rather than by the colour. */}
           <span
-            className="mt-0.5 h-8 w-8 shrink-0 rounded-lg border border-border"
-            style={color ? { backgroundColor: color } : undefined}
+            className="mt-0.5 h-8 w-8 shrink-0 rounded-lg border border-border bg-muted"
+            style={swatch ? { backgroundColor: swatch } : undefined}
             aria-hidden
           />
           <div className="min-w-0">

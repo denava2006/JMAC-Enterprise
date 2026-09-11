@@ -114,6 +114,28 @@ export interface CategoryDraft {
   color: string
 }
 
+/** What the column's CHECK constraint accepts: `#RRGGBB`, or nothing at all. */
+export const CATEGORY_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/
+
+/**
+ * The colour to paint a category's swatch, or null to fall back to neutral.
+ *
+ * `pos_product_categories.color` is nullable and most categories have no
+ * colour set -- it is an optional flourish an Administrator may add, not
+ * something creating a category asks for. So null is the ORDINARY case here,
+ * not an error, and the card has to have something to show for it.
+ *
+ * The format check is belt to the database's braces: the column already
+ * constrains `color ~ '^#[0-9A-Fa-f]{6}$'`, so a malformed value cannot be
+ * stored. Checking again costs nothing and turns the one failure mode that
+ * would otherwise be invisible -- a value React quietly refuses to paint --
+ * into the same neutral swatch as no value at all.
+ */
+export function categorySwatchColor(color: string | null | undefined): string | null {
+  const value = (color ?? '').trim()
+  return CATEGORY_COLOR_PATTERN.test(value) ? value : null
+}
+
 /** Mirrors the CHECK constraints so the form can point at the field rather
  * than surfacing a constraint name. The database still decides. */
 export function validateCategory(
@@ -134,7 +156,7 @@ export function validateCategory(
   }
 
   const color = draft.color.trim()
-  if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+  if (color && !CATEGORY_COLOR_PATTERN.test(color)) {
     errors.push('A colour must be a six-digit hex value like #1D6FA5.')
   }
 
