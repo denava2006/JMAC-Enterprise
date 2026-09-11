@@ -103,10 +103,22 @@ export function BranchExplorer({
 
   return (
     <div className="mt-14">
-      <div className="grid gap-3 lg:grid-cols-12">
+      {/* THE ROW OWNS THE HEIGHT. Both panels are sized from here and neither
+          carries a height of its own at this breakpoint, which is the only way
+          their top and bottom edges can be the same two lines. The photograph
+          stays the wider of the two -- 1.4fr against 1fr, about 58/41 -- because
+          the image is the subject and the map is the context.
+
+          Below lg the row stops being a row: each panel takes its own sensible
+          height stacked, and forcing a shared one there would only make both
+          of them the wrong shape. */}
+      <div className="grid gap-3 lg:h-[clamp(420px,29vw,470px)] lg:grid-cols-[1.4fr_1fr]">
         <BranchMedia branch={selected} branches={branches} />
 
-        <div className="lg:col-span-5">
+        {/* min-h-0 so the grid track, not the content, decides. Without it a
+            grid item refuses to shrink below its content and the row height
+            becomes a negotiation rather than an instruction. */}
+        <div className="min-h-0 lg:h-full">
           {/* One map instance for the life of the section. Selecting a branch
               updates its state; it is never torn down and rebuilt, which is
               what makes the movement between locations continuous rather than
@@ -116,7 +128,7 @@ export function BranchExplorer({
             caption={false}
             selectedId={selected.id}
             onSelect={setSelectedId}
-            className="h-[260px] sm:h-[320px] lg:h-full lg:min-h-[420px]"
+            className="h-[260px] min-h-0 sm:h-[320px] lg:h-full"
           />
         </div>
       </div>
@@ -188,8 +200,10 @@ function BranchMedia({
   }, [branches, index, url])
 
   return (
-    <figure className="relative overflow-hidden rounded-lg border border-border bg-muted lg:col-span-7">
-      <div className="aspect-[16/9] w-full lg:aspect-auto lg:h-full lg:min-h-[420px]">
+    // Same radius, same border, same clipping as the map beside it: two panels
+    // of one object rather than two components that happen to be adjacent.
+    <figure className="relative min-h-0 overflow-hidden rounded-lg border border-border bg-muted lg:h-full">
+      <div className="aspect-[16/9] w-full lg:aspect-auto lg:h-full">
         {url ? (
           <img
             key={url}
@@ -323,9 +337,11 @@ function NavButton({
 function ExplorerSkeleton() {
   return (
     <div className="mt-14">
-      <div className="grid gap-3 lg:grid-cols-12">
-        <Skeleton className="aspect-[16/9] w-full rounded-lg lg:col-span-7 lg:aspect-auto lg:min-h-[420px]" />
-        <Skeleton className="h-[260px] w-full rounded-lg sm:h-[320px] lg:col-span-5 lg:h-auto lg:min-h-[420px]" />
+      {/* The same row, so the skeleton occupies exactly the space the content
+          will and nothing jumps when it arrives. */}
+      <div className="grid gap-3 lg:h-[clamp(420px,29vw,470px)] lg:grid-cols-[1.4fr_1fr]">
+        <Skeleton className="aspect-[16/9] w-full rounded-lg lg:aspect-auto lg:h-full" />
+        <Skeleton className="h-[260px] w-full rounded-lg sm:h-[320px] lg:h-full" />
       </div>
       <div className="mt-6 border-t border-border pt-6">
         <Skeleton className="h-8 w-56" />

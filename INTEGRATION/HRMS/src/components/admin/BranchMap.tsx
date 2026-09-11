@@ -319,7 +319,12 @@ export function BranchMap({
   const unlocated = branches.length - located.length
 
   return (
-    <div className="flex flex-col gap-2">
+    // When a caller passes `className` it is sizing this map against something
+    // else -- the explorer sets both panels from one grid row. The wrapper has
+    // to pass that height through, or the inner `h-full` resolves against an
+    // auto-height parent, collapses to its min-height, and the map ends short
+    // of the photograph beside it.
+    <div className={cn('flex flex-col gap-2', className && 'h-full min-h-0')}>
       <div
         ref={holder}
         role="region"
