@@ -36,11 +36,110 @@ import { PosInventoryHeader } from '@/components/pos/PosInventoryHeader'
 import { useAuth } from '@/contexts/AuthContext'
 import { REQUEST_PROGRESS_LABEL, useBranchRequestProgress } from '@/hooks/useProcurement'
 import { ReasonDialog } from '@/components/fms/ReasonDialog'
+
+/**
+ * Correcting a request Finance sent back.
+ *
+ * The same request, not a new one. Branch and product are not editable here and
+ * are not sent -- the server does not accept them either, so a returned request
+ * cannot quietly become a different demand. Quantity is what a return is
+ * usually about; the reason is the branch's answer to Finance's.
+ */
+function CorrectRequestDialog({
+  request,
+  pending,
+  onOpenChange,
+  onConfirm,
+}: {
+  request: { id: string; quantity: number | null; title: string } | null
+  pending: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: (quantity: number | undefined, reason: string | undefined) => void
+}) {
+  const [quantity, setQuantity] = React.useState('')
+  const [reason, setReason] = React.useState('')
+
+  React.useEffect(() => {
+    if (request) {
+      setQuantity(request.quantity === null ? '' : String(request.quantity))
+      setReason('')
+    }
+  }, [request])
+
+  if (!request) return null
+  const qty = Number(quantity)
+  const quantityOk = request.quantity === null || (Number.isFinite(qty) && qty >= 1)
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Correct and resubmit</DialogTitle>
+          <DialogDescription>
+            This goes back to Finance as the same request, with its history intact.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-medium text-foreground">{request.title}</p>
+
+          {request.quantity !== null && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="correct-quantity">Quantity</Label>
+              <Input
+                id="correct-quantity"
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {/* The server refuses a reduction below what has already been
+                    ordered. Stock on its way cannot be un-asked for. */}
+                It cannot be lowered below what has already been ordered against this request.
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="correct-reason">Reason (optional)</Label>
+            <Textarea
+              id="correct-reason"
+              rows={2}
+              maxLength={500}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reduced to what the branch can sell before the promo ends."
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!quantityOk || pending}
+            onClick={() =>
+              onConfirm(
+                request.quantity === null ? undefined : qty,
+                reason.trim() || undefined
+              )
+            }
+          >
+            Resubmit
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 import { useBranchInventory } from '@/hooks/usePosInventory'
 import {
   useCancelRequest,
   useCreateStockRequest,
   useManagerRequests,
+  useResubmitStockRequest,
 } from '@/hooks/usePosRequests'
 import {
   POS_REQUEST_MAX_REASON,
@@ -208,6 +307,14 @@ export default function PosRequestsPage() {
   // Withdrawing is a business transition -- Finance may already be sourcing
   // it -- so it asks why before it asks the server.
   const [withdrawing, setWithdrawing] = React.useState<string | null>(null)
+  // A returned request is corrected in place -- same request, same id -- so the
+  // history reads as one conversation instead of a pile of near-duplicates.
+  const [correcting, setCorrecting] = React.useState<{
+    id: string
+    quantity: number | null
+    title: string
+  } | null>(null)
+  const resubmit = useResubmitStockRequest()
   const progressByRequest = React.useMemo(
     () => new Map(progress.map((row) => [row.request_id, row])),
     [progress],
@@ -359,11 +466,30 @@ export default function PosRequestsPage() {
                         </p>
                       )}
                       {row.review_note && (
-                        <p className="text-xs text-foreground">{row.review_note}</p>
+                        <p
+                          className={
+                            row.status === 'returned'
+                              ? 'text-xs font-medium text-foreground'
+                              : 'text-xs text-foreground'
+                          }
+                        >
+                          {row.review_note}
+                        </p>
                       )}
                       {row.reviewer_name && (
                         <p className="text-xs text-muted-foreground">
-                          Reviewed by {row.reviewer_name}
+                          {/* Returned BY somebody, AT a time. A request handed
+                              back is work for this branch, and work needs a
+                              name and a date on it. */}
+                          {row.status === 'returned' ? 'Returned by ' : 'Reviewed by '}
+                          {row.reviewer_name}
+                          {row.reviewed_at
+                            ? ` · ${new Date(row.reviewed_at).toLocaleDateString('en-PH', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })}`
+                            : ''}
                         </p>
                       )}
                       {(() => {
@@ -389,6 +515,25 @@ export default function PosRequestsPage() {
                       })()}
                     </TableCell>
                     <TableCell className="text-right">
+                      {/* The one action a returned request offers. A rejected
+                          one offers none: rejection is terminal, and a branch
+                          that still needs the stock raises a new request rather
+                          than reopening a decision somebody took. */}
+                      {row.status === 'returned' && (
+                        <Button
+                          size="sm"
+                          disabled={resubmit.isPending}
+                          onClick={() =>
+                            setCorrecting({
+                              id: row.request_id,
+                              quantity: row.requested_quantity,
+                              title: row.product_name,
+                            })
+                          }
+                        >
+                          Correct and resubmit
+                        </Button>
+                      )}
                       {isCancellable(row, profile?.id) && (
                         <Button
                           variant="ghost"
@@ -440,6 +585,19 @@ export default function PosRequestsPage() {
         onConfirm={(reason) => {
           if (withdrawing) cancel.mutate({ requestId: withdrawing, reason })
           setWithdrawing(null)
+        }}
+      />
+
+      <CorrectRequestDialog
+        request={correcting}
+        pending={resubmit.isPending}
+        onOpenChange={(open) => !open && setCorrecting(null)}
+        onConfirm={(quantity, reason) => {
+          if (!correcting) return
+          resubmit.mutate(
+            { requestId: correcting.id, quantity, reason },
+            { onSuccess: () => setCorrecting(null) }
+          )
         }}
       />
 

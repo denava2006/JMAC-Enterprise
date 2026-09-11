@@ -211,6 +211,28 @@ export const DEMAND_STATE_LABEL: Record<string, string> = {
  * broken query and genuinely nothing to do all rendered as "Demand (0)". The
  * error is surfaced now: a page that cannot load its work should say so.
  */
+/**
+ * Purchase order statuses that still represent procurement against a demand.
+ *
+ * The same list pos_request_live_purchase_orders() uses, named here so the
+ * screen and the server cannot disagree about what "live" means. `closed` is
+ * finished and `cancelled`/`rejected` released the demand -- those do not stop
+ * Finance Staff resolving the underlying request.
+ *
+ * Advisory only. The server re-reads this under a row lock at the moment of the
+ * decision, so a stale screen is refused rather than believed.
+ */
+export const LIVE_PURCHASE_ORDER_STATUSES = [
+  'draft',
+  'pending_approval',
+  'approved',
+  'returned',
+] as const
+
+export function hasLivePurchaseOrder(status: string | null | undefined): boolean {
+  return !!status && (LIVE_PURCHASE_ORDER_STATUSES as readonly string[]).includes(status)
+}
+
 export function useProcurementDemand() {
   return useQuery({
     queryKey: PROCUREMENT_KEYS.demand,
@@ -246,6 +268,45 @@ export function useAcceptRestockDemand() {
   })
 }
 
+/**
+ * Finance Staff sending a stock request back to the branch to correct.
+ *
+ * NOT a rejection, and the distinction is the whole feature. The demand may be
+ * perfectly legitimate; something about it -- usually the quantity, or a
+ * selling price that makes the purchase a loss -- has to be looked at by the
+ * person who raised it. The request keeps its identity, so the branch corrects
+ * and resubmits the same request instead of raising a duplicate.
+ *
+ * The server refuses while any purchase order still claims the request, so this
+ * cannot leave a rejected demand with a live order against it.
+ */
+export function useReturnRestockDemand() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { requestId: string; reason: string }) => {
+      const { error } = await supabase.rpc('return_pos_request', {
+        _request_id: input.requestId,
+        _reason: input.reason,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement'] })
+      queryClient.invalidateQueries({ queryKey: ['pos-requests'] })
+      toast.success('Returned to the branch. They will correct it and resubmit.')
+    },
+    onError: (error) => toast.error(describeFinanceError(error)),
+  })
+}
+
+/**
+ * Finance Staff closing a stock request: this demand will not be procured.
+ *
+ * Terminal. The toast used to say "Returned to the branch with your reason",
+ * which was the wrong word for it in a workflow that now has a real return --
+ * the branch reading that would have waited for a correction they were never
+ * going to be asked for.
+ */
 export function useDeclineRestockDemand() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -258,7 +319,8 @@ export function useDeclineRestockDemand() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['procurement'] })
-      toast.success('Returned to the branch with your reason.')
+      queryClient.invalidateQueries({ queryKey: ['pos-requests'] })
+      toast.success('Request rejected. The branch can see your reason.')
     },
     onError: (error) => toast.error(describeFinanceError(error)),
   })

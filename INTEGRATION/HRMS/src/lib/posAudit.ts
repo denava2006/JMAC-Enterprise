@@ -85,7 +85,9 @@ export const POS_AUDIT_EVENT_LABEL: Record<PosAuditEventType, string> = {
   stock_request_created: 'Request submitted',
   stock_request_cancelled: 'Request withdrawn',
   stock_request_approved: 'Request approved',
-  stock_request_declined: 'Request declined',
+  stock_request_declined: 'Request rejected',
+  stock_request_returned: 'Request returned for changes',
+  stock_request_resubmitted: 'Request corrected and resubmitted',
 }
 
 export const POS_AUDIT_ENTITY_LABEL: Record<PosAuditEntityType, string> = {
@@ -118,6 +120,10 @@ export const MANAGER_VISIBLE_EVENT_TYPES: PosAuditEventType[] = [
   'stock_request_cancelled',
   'stock_request_approved',
   'stock_request_declined',
+  // The return conversation, which is the manager's to act on more than any
+  // other event here: a request they have to correct is work, not news.
+  'stock_request_returned',
+  'stock_request_resubmitted',
 ]
 
 export const ALL_EVENT_TYPES = Object.keys(POS_AUDIT_EVENT_LABEL) as PosAuditEventType[]

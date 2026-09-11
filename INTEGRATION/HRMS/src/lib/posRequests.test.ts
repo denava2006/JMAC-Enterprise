@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   POS_REQUEST_MAX_QUANTITY,
   REQUEST_STATUS_LABEL,
+  REQUEST_STATUS_VARIANT,
   REQUEST_TYPE_LABEL,
   approvalMeaning,
   describeRequestError,
@@ -167,8 +168,23 @@ describe('labels', () => {
     // otherwise ask for anything at all.
     expect(Object.keys(REQUEST_TYPE_LABEL)).toHaveLength(3)
     expect(REQUEST_TYPE_LABEL.new_product).toBe('New product')
-    expect(Object.keys(REQUEST_STATUS_LABEL)).toHaveLength(4)
+    // Five since Finance gained a way to hand a request back rather than only
+    // accept or refuse it.
+    expect(Object.keys(REQUEST_STATUS_LABEL)).toHaveLength(5)
     for (const label of Object.values(REQUEST_STATUS_LABEL)) expect(label).not.toMatch(/_/)
+  })
+
+  it('tells the branch what to DO about a returned request, not what was done', () => {
+    // "Returned" describes Finance's action; "Needs changes" describes the
+    // branch's, and only one of those is something they can act on.
+    expect(requestStatusLabel('returned')).toBe('Needs changes')
+    // Not destructive: nothing has been refused, there is work to do.
+    expect(REQUEST_STATUS_VARIANT.returned).toBe('warning')
+    expect(REQUEST_STATUS_VARIANT.declined).toBe('destructive')
+  })
+
+  it('calls a declined request rejected, now that returning is a different thing', () => {
+    expect(requestStatusLabel('declined')).toBe('Rejected')
   })
 
   it('has no label suggesting fulfilment, which does not exist yet', () => {

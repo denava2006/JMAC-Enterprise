@@ -482,13 +482,29 @@ insert into public.pos_branch_assignments (profile_id, branch_id, pos_role, crea
     if sqlerrm like 'FAIL%' then raise; end if;
     raise notice 'PASS  7d a second review of the same request is refused';
   end;
+  -- An approved request CAN now be rejected, and that is a deliberate change,
+  -- not a weakening. Before it, a request whose every purchase order came to
+  -- nothing -- declined on margin, cancelled, abandoned -- sat approved for
+  -- ever with no way to close it, because the only refusal available was one
+  -- that had to happen before acceptance.
+  --
+  -- What replaces "an approval cannot be reversed" is a better rule, held in
+  -- stock_request_return_reject_rls.sql: it cannot be reversed while any
+  -- purchase order still claims it. That is the invariant worth protecting --
+  -- a rejected request with a live order against it -- and this one only ever
+  -- approximated it by forbidding the whole transition.
   begin
-    perform public.decline_pos_request(req_stock, 'changed my mind');
-    raise exception 'FAIL  7h an approved request was then declined';
+    perform public.decline_pos_request(req_stock, 'ZZ procurement came to nothing');
+    raise notice 'PASS  7e an accepted demand can be closed once no order claims it';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'PASS  7e an approval cannot be reversed into a decline';
+    raise exception 'FAIL  7h an approved request with no live order could not be rejected: %', sqlerrm;
   end;
+
+  -- The resulting status is asserted in stock_request_return_reject_rls.sql,
+  -- which sets up a reader that may see the row. Here the caller is mid-test as
+  -- a reviewer and the table is not theirs to read directly, which is itself
+  -- the correct behaviour.
 
   ------------------------------- 8. a carry approval, and what it may create
   -- Back to the Administrator: carrying a product is a catalogue decision and

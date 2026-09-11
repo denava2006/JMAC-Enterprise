@@ -72,8 +72,12 @@ export const REQUEST_TYPE_DESCRIPTION: Record<PosRequestType, string> = {
 export const REQUEST_STATUS_LABEL: Record<PosRequestStatus, string> = {
   pending: 'Awaiting review',
   approved: 'Approved',
-  declined: 'Declined',
+  declined: 'Rejected',
   cancelled: 'Withdrawn',
+  // Said from the branch's side, as an instruction rather than a verdict:
+  // "Returned" describes what Finance did, "Needs changes" describes what the
+  // branch has to do about it, and only one of those is actionable.
+  returned: 'Needs changes',
 }
 
 export const REQUEST_STATUS_VARIANT: Record<PosRequestStatus, string> = {
@@ -81,6 +85,13 @@ export const REQUEST_STATUS_VARIANT: Record<PosRequestStatus, string> = {
   approved: 'success',
   declined: 'destructive',
   cancelled: 'secondary',
+  // Warning, not destructive. Nothing has been refused -- there is work to do.
+  returned: 'warning',
+}
+
+/** Whether the branch can still act on this request themselves. */
+export function isReturnedForChanges(status: PosRequestStatus): boolean {
+  return status === 'returned'
 }
 
 /** What an approval actually granted, said plainly. Shown next to an approved

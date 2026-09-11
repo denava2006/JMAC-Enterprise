@@ -32,6 +32,7 @@ const state: {
 }
 const asked: string[] = []
 const cancelled: string[] = []
+const resubmitted: { requestId: string; quantity?: number; reason?: string }[] = []
 
 function request(overrides: Partial<ManagerRequest> = {}): ManagerRequest {
   return {
@@ -96,6 +97,16 @@ vi.mock('@/hooks/usePosRequests', () => ({
   useCarryableProducts: () => ({ data: [], isLoading: false }),
   useCreateStockRequest: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateCarryRequest: () => ({ mutate: vi.fn(), isPending: false }),
+  useResubmitStockRequest: () => ({
+    mutate: (
+      input: { requestId: string; quantity?: number; reason?: string },
+      opts?: { onSuccess?: () => void }
+    ) => {
+      resubmitted.push(input)
+      opts?.onSuccess?.()
+    },
+    isPending: false,
+  }),
   useCancelRequest: () => ({
     mutate: ({ requestId, reason }: { requestId: string; reason: string }) =>
       cancelled.push(`${requestId}:${reason}`),
@@ -159,8 +170,63 @@ describe('what a manager sees', () => {
       request({ status: 'declined', review_note: 'Central warehouse is also short', reviewer_name: 'Administrator' }),
     ]
     show()
-    expect(screen.getByText('Declined')).toBeTruthy()
+    // "Rejected" now, because "returned" became a different and non-terminal
+    // thing. A branch reading "Declined" beside a request they were meant to
+    // correct would wait for nothing.
+    expect(screen.getByText('Rejected')).toBeTruthy()
     expect(screen.getByText('Central warehouse is also short')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /resubmit/i })).toBeNull()
+  })
+
+  describe('a request Finance sent back', () => {
+    const returned = () =>
+      request({
+        status: 'returned',
+        review_note: 'Supplier cost exceeds the branch selling price. Review the price or quantity.',
+        reviewer_name: 'Alice Reyes',
+        reviewed_at: '2026-10-05T02:00:00Z',
+      })
+
+    it('says what to do about it, who sent it back, why and when', () => {
+      state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+      state.rows = [returned()]
+      show()
+
+      expect(screen.getByText('Needs changes')).toBeTruthy()
+      expect(screen.getByText(/Supplier cost exceeds the branch selling price/)).toBeTruthy()
+      expect(screen.getByText(/Returned by Alice Reyes/)).toBeTruthy()
+      expect(screen.getByText(/Oct 5, 2026/)).toBeTruthy()
+    })
+
+    it('offers the correction, and resubmits the same request', () => {
+      state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+      state.rows = [returned()]
+      show()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Correct and resubmit' }))
+      fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '12' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Resubmit' }))
+
+      expect(resubmitted).toHaveLength(1)
+      // Same request id. The branch corrects one demand; it does not raise a
+      // second one that Finance then has to reconcile.
+      expect(resubmitted[0].requestId).toBe('r1')
+      expect(resubmitted[0].quantity).toBe(12)
+    })
+
+    it('does not let the branch change what the demand IS', () => {
+      // Branch and product are not fields here, and the server does not accept
+      // them either -- a different product is a different request.
+      state.assignments = [{ branchId: CAVITE, role: 'manager' }]
+      state.rows = [returned()]
+      show()
+      fireEvent.click(screen.getByRole('button', { name: 'Correct and resubmit' }))
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog.textContent ?? '').not.toMatch(/branch|product category/i)
+      expect(screen.queryByLabelText(/Product/)).toBeNull()
+      expect(screen.queryByLabelText(/Branch/)).toBeNull()
+    })
   })
 
   it('shows no cost, price, budget or supplier anywhere', () => {

@@ -12,12 +12,25 @@ import { formatMoney } from '@/lib/currency'
 import {
   DEMAND_STATE_LABEL,
   fulfillmentOf,
+  hasLivePurchaseOrder,
   useAcceptRestockDemand,
+  useDeclineRestockDemand,
   useProcurementDemand,
   usePurchaseOrders,
+  useReturnRestockDemand,
   type ProcurementDemand,
   type PurchaseOrder,
 } from '@/hooks/useProcurement'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { PurchaseOrderDetail } from '@/components/fms/PurchaseOrderDetail'
 import { PurchaseOrderBuilder } from '@/components/fms/PurchaseOrderBuilder'
 import type { ProcurementSourceRef } from '@/hooks/useProcurement'
@@ -42,6 +55,13 @@ export default function ProcurementPage() {
   const [scope, setScope] = React.useState<Scope>('demand')
   const [openOrder, setOpenOrder] = React.useState<string | null>(null)
   const [newOrderFor, setNewOrderFor] = React.useState<ProcurementSourceRef | null>(null)
+  const returnDemand = useReturnRestockDemand()
+  const declineDemand = useDeclineRestockDemand()
+  const [decision, setDecision] = React.useState<{
+    kind: 'return' | 'reject'
+    requestId: string
+    label: string
+  } | null>(null)
 
   // Preparation is the maker's, and the server agrees:
   // create_purchase_order_from_source refuses anybody who is not Finance Staff.
@@ -183,6 +203,20 @@ export default function ProcurementPage() {
                     label: d.reference ?? d.title ?? 'Request',
                   })
                 }
+                onReturn={() =>
+                  setDecision({
+                    kind: 'return',
+                    requestId: d.source_id,
+                    label: `${d.title ?? 'Request'} · ${d.branch_name ?? 'Branch'}`,
+                  })
+                }
+                onReject={() =>
+                  setDecision({
+                    kind: 'reject',
+                    requestId: d.source_id,
+                    label: `${d.title ?? 'Request'} · ${d.branch_name ?? 'Branch'}`,
+                  })
+                }
               />
             ))
           )}
@@ -213,7 +247,104 @@ export default function ProcurementPage() {
         orderId={openOrder}
         onOpenChange={(open) => !open && setOpenOrder(null)}
       />
+      <DemandDecisionDialog
+        decision={decision}
+        pending={returnDemand.isPending || declineDemand.isPending}
+        onOpenChange={(open) => !open && setDecision(null)}
+        onConfirm={(reason) => {
+          if (!decision) return
+          const done = { onSuccess: () => setDecision(null) }
+          if (decision.kind === 'return') {
+            returnDemand.mutate({ requestId: decision.requestId, reason }, done)
+          } else {
+            declineDemand.mutate({ requestId: decision.requestId, note: reason }, done)
+          }
+        }}
+      />
     </div>
+  )
+}
+
+/**
+ * Finance Staff's two ways of not procuring a stock request as it stands.
+ *
+ * One shell, because the shape of the decision is the same -- say why, then
+ * commit -- and two of these would be two places to keep the reason
+ * requirement. What differs is what the decision MEANS, and the copy and the
+ * button tone say so: returning is work handed back, rejecting is a door
+ * closed.
+ *
+ * A reason is mandatory in both, and it is mandatory in the database too. A
+ * request handed back with no explanation is one the branch has to guess about.
+ */
+function DemandDecisionDialog({
+  decision,
+  onOpenChange,
+  onConfirm,
+  pending,
+}: {
+  decision: { kind: 'return' | 'reject'; requestId: string; label: string } | null
+  onOpenChange: (open: boolean) => void
+  onConfirm: (reason: string) => void
+  pending: boolean
+}) {
+  const [reason, setReason] = React.useState('')
+
+  React.useEffect(() => {
+    if (decision) setReason('')
+  }, [decision])
+
+  if (!decision) return null
+  const returning = decision.kind === 'return'
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {returning ? 'Return stock request for changes' : 'Reject stock request'}
+          </DialogTitle>
+          <DialogDescription>
+            {returning
+              ? 'The POS Manager will be asked to update and resubmit this request.'
+              : 'This closes the request and Finance will not procure its remaining demand.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="demand-decision-reason">
+            Reason <span className="text-destructive">*</span>
+          </Label>
+          <Textarea
+            id="demand-decision-reason"
+            rows={3}
+            autoFocus
+            value={reason}
+            maxLength={500}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={
+              returning
+                ? 'Supplier cost exceeds the branch selling price. Please review the selling price or requested quantity before resubmitting.'
+                : 'This request duplicates an existing open request for the same branch and product.'
+            }
+          />
+          <p className="text-xs text-muted-foreground">{decision.label}</p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            variant={returning ? 'default' : 'destructive'}
+            disabled={!reason.trim() || pending}
+            onClick={() => onConfirm(reason.trim())}
+          >
+            {returning ? 'Return request' : 'Reject request'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -223,15 +354,20 @@ function DemandRow({
   accepting,
   onAccept,
   onCreate,
+  onReturn,
+  onReject,
 }: {
   demand: ProcurementDemand
   canPrepare: boolean
   accepting: boolean
   onAccept: () => void
   onCreate: () => void
+  onReturn: () => void
+  onReject: () => void
 }) {
   const isRestock = demand.source_kind === 'pos_restock'
   const awaitingReview = demand.demand_state === 'awaiting_finance_review'
+  const blockedByOrder = hasLivePurchaseOrder(demand.purchase_order_status)
 
   return (
     <Card>
@@ -255,18 +391,57 @@ function DemandRow({
         </div>
 
         {canPrepare && (
-          <div className="flex flex-wrap gap-2">
-            {/* Two different decisions, named differently on purpose: Finance
-                Staff say this should be bought; the Finance Manager commits the
-                company to buying it, on the order. */}
-            {isRestock && awaitingReview ? (
-              <Button size="sm" disabled={accepting} onClick={onAccept}>
-                {accepting ? 'Accepting…' : 'Accept for procurement'}
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" onClick={onCreate}>
-                Create purchase order
-              </Button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-wrap gap-2">
+              {/* Two different decisions, named differently on purpose: Finance
+                  Staff say this should be bought; the Finance Manager commits the
+                  company to buying it, on the order. */}
+              {isRestock && awaitingReview ? (
+                <Button size="sm" disabled={accepting} onClick={onAccept}>
+                  {accepting ? 'Accepting…' : 'Accept for procurement'}
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={onCreate}>
+                  Create purchase order
+                </Button>
+              )}
+
+              {/* The branch's demand, and Finance Staff's two ways of not
+                  procuring it as it stands. Only for a stock request: a general
+                  purchase request has its own lifecycle and is not a branch's
+                  to correct. Blocked while an order still claims the demand --
+                  a rejected request with a live order against it is the
+                  contradiction this whole guard exists to prevent. */}
+              {isRestock && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={blockedByOrder}
+                    onClick={onReturn}
+                  >
+                    Return for changes
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:bg-destructive/10"
+                    disabled={blockedByOrder}
+                    onClick={onReject}
+                  >
+                    Reject request
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {isRestock && blockedByOrder && (
+              // Said, not merely implied by a greyed-out button. A disabled
+              // control with no explanation is a dead end.
+              <p className="max-w-md text-right text-xs text-muted-foreground">
+                {demand.purchase_order_no ?? 'A purchase order'} is still active on this request.
+                Resolve that order before returning or rejecting it.
+              </p>
             )}
           </div>
         )}

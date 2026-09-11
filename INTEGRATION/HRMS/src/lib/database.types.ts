@@ -7126,6 +7126,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      pos_request_live_purchase_orders: {
+        Args: { _request_id: string }
+        Returns: number
+      }
       pos_request_ordered_quantity: {
         Args: { _request_id: string }
         Returns: number
@@ -7232,6 +7236,14 @@ export type Database = {
           p_reference_code: string
         }
         Returns: string
+      }
+      resubmit_pos_request: {
+        Args: { _quantity?: number; _reason?: string; _request_id: string }
+        Returns: undefined
+      }
+      return_pos_request: {
+        Args: { _reason: string; _request_id: string }
+        Returns: undefined
       }
       review_budget: {
         Args: { _approve: boolean; _budget_id: string; _note?: string }
@@ -7533,6 +7545,8 @@ export type Database = {
         | "stock_request_cancelled"
         | "stock_request_approved"
         | "stock_request_declined"
+        | "stock_request_returned"
+        | "stock_request_resubmitted"
       pos_movement_type: "receipt" | "adjustment_in" | "adjustment_out" | "sale"
       pos_payment_status:
         | "pending"
@@ -7542,7 +7556,12 @@ export type Database = {
         | "expired"
         | "cancelled"
       pos_product_status: "draft" | "active" | "archived"
-      pos_request_status: "pending" | "approved" | "declined" | "cancelled"
+      pos_request_status:
+        | "pending"
+        | "approved"
+        | "declined"
+        | "cancelled"
+        | "returned"
       pos_request_type: "restock" | "carry_existing_product" | "new_product"
       pos_role: "manager" | "cashier"
       pos_sale_status: "completed"
@@ -7779,6 +7798,8 @@ export const Constants = {
         "stock_request_cancelled",
         "stock_request_approved",
         "stock_request_declined",
+        "stock_request_returned",
+        "stock_request_resubmitted",
       ],
       pos_movement_type: ["receipt", "adjustment_in", "adjustment_out", "sale"],
       pos_payment_status: [
@@ -7790,7 +7811,13 @@ export const Constants = {
         "cancelled",
       ],
       pos_product_status: ["draft", "active", "archived"],
-      pos_request_status: ["pending", "approved", "declined", "cancelled"],
+      pos_request_status: [
+        "pending",
+        "approved",
+        "declined",
+        "cancelled",
+        "returned",
+      ],
       pos_request_type: ["restock", "carry_existing_product", "new_product"],
       pos_role: ["manager", "cashier"],
       pos_sale_status: ["completed"],

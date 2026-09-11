@@ -124,6 +124,34 @@ export function useCreateStockRequest() {
   })
 }
 
+/**
+ * The branch correcting a request Finance sent back.
+ *
+ * The same request, not a new one. Branch, product and type are not parameters
+ * -- the server does not accept them -- so a returned request cannot quietly
+ * become a different demand; a branch that needs something else raises
+ * something else. Quantity is what the return is usually about, and the server
+ * refuses to drop it below what has already been ordered.
+ */
+export function useResubmitStockRequest() {
+  const invalidate = useInvalidateRequests()
+  return useMutation({
+    mutationFn: async (input: { requestId: string; quantity?: number; reason?: string }) => {
+      const { error } = await supabase.rpc('resubmit_pos_request', {
+        _request_id: input.requestId,
+        _quantity: input.quantity ?? undefined,
+        _reason: input.reason ?? undefined,
+      })
+      if (error) throw new Error(describeRequestError(error))
+    },
+    onSuccess: () => {
+      invalidate()
+      toast.success('Resubmitted. Finance will review it again.')
+    },
+    onError: (error) => toast.error(error.message),
+  })
+}
+
 export function useCreateCarryRequest() {
   const invalidate = useInvalidateRequests()
   return useMutation({
