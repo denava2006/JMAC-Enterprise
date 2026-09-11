@@ -33,7 +33,7 @@ const SALE = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
 const RECEIPT_NO = 'OR-2026-0042'
 
 const branches: Branch[] = [
-  { id: BRANCH, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
+  { id: BRANCH, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, show_on_landing: false, image_path: null, display_order: 0, created_at: '', updated_at: '' },
 ]
 
 const catalogue: CatalogueRow[] = [

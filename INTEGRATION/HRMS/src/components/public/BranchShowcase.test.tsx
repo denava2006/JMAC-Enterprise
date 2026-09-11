@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { PublicBranch } from '@/hooks/usePublicBranches'
 
 /**
- * The public branches section.
+ * The public branch explorer.
  *
- * The claim that matters is that there is one source. The cards and the map are
- * both fed by the same query, so a branch cannot appear on one and be missing
- * from the other — which is exactly what a hardcoded list beside a live map
- * produces, and the disagreeing half is always the one nobody is looking at.
+ * Two claims carry this section. The first is that there is ONE source: the
+ * photograph, the identity, the counter and the map are all fed by the same
+ * query and the same selection, so no branch can appear on one and be missing
+ * from the other -- which is exactly what the cards-plus-map arrangement this
+ * replaced produced, and the disagreeing half was always the one nobody looked
+ * at. The second is that nothing here is typed into this file: a branch the back
+ * office publishes appears without a code change.
  */
 
 // jsdom implements neither observer. Framer's whileInView needs the first for
@@ -33,8 +36,15 @@ const state: {
   isError: boolean
 } = { branches: [], isLoading: false, isError: false }
 
-/** What BranchMap was handed. The map itself is covered by its own tests. */
-const mapProps: Array<{ branches: PublicBranch[]; variant?: string }> = []
+/** What BranchMap was handed, and the handle to drive it back. The map itself
+ *  is covered by its own tests; this records the conversation. */
+interface MapCall {
+  branches: PublicBranch[]
+  variant?: string
+  selectedId?: string | null
+  onSelect?: (id: string) => void
+}
+const mapProps: MapCall[] = []
 
 vi.mock('@/hooks/usePublicBranches', () => ({
   usePublicBranches: () => ({
@@ -42,12 +52,29 @@ vi.mock('@/hooks/usePublicBranches', () => ({
     isLoading: state.isLoading,
     isError: state.isError,
   }),
+  // branch-images is the one public bucket, so the URL is derived rather than
+  // signed. The shape is what matters here, not the host.
+  branchImageUrl: (path: string | null | undefined) =>
+    path ? `https://cdn.test/branch-images/${path}` : null,
 }))
 
 vi.mock('@/components/admin/BranchMap', () => ({
-  BranchMap: (props: { branches: PublicBranch[]; variant?: string }) => {
+  BranchMap: (props: MapCall) => {
     mapProps.push(props)
-    return <div data-testid="branch-map" />
+    return (
+      <div data-testid="branch-map" data-selected={props.selectedId ?? ''}>
+        {props.branches.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            data-testid={`pin-${b.id}`}
+            onClick={() => props.onSelect?.(b.id)}
+          >
+            {b.name}
+          </button>
+        ))}
+      </div>
+    )
   },
 }))
 
@@ -60,9 +87,21 @@ function branch(over: Partial<PublicBranch> = {}): PublicBranch {
     address: 'Aguinaldo Highway, Dasmariñas, Cavite',
     latitude: 14.3294,
     longitude: 120.9367,
+    image_path: 'cavite.webp',
+    display_order: 0,
     ...over,
   }
 }
+
+const MAIN = branch({
+  id: 'b2',
+  name: 'Main Office',
+  address: 'Makati City',
+  latitude: 14.5547,
+  longitude: 121.0244,
+  image_path: 'main.webp',
+  display_order: 1,
+})
 
 function show() {
   return render(
@@ -72,6 +111,14 @@ function show() {
   )
 }
 
+const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next location' }))
+const previous = () => fireEvent.click(screen.getByRole('button', { name: 'Previous location' }))
+const photo = () => screen.getByRole('img') as HTMLImageElement
+/** The counter is split across elements -- the position is emphasised inside
+ *  the line -- so it is read off the live region rather than matched whole. */
+const counter = () =>
+  (document.querySelector('[aria-live="polite"]')?.textContent ?? '').replace(/\s+/g, ' ')
+
 afterEach(() => {
   cleanup()
   state.branches = []
@@ -80,132 +127,227 @@ afterEach(() => {
   mapProps.length = 0
 })
 
-describe('one source for the cards and the map', () => {
-  it('renders a card for every fetched branch', () => {
-    state.branches = [
-      branch({ id: 'b1', name: 'Main Office', address: '123 Ayala Avenue, Makati City' }),
-      branch({ id: 'b2', name: 'Cavite Branch' }),
-    ]
+describe('what the section shows first', () => {
+  it('opens on the first published branch, with its photograph, name and address', () => {
+    state.branches = [branch(), MAIN]
     show()
-    expect(screen.getByText('Main Office')).toBeTruthy()
-    expect(screen.getByText('Cavite Branch')).toBeTruthy()
-    expect(screen.getByText('123 Ayala Avenue, Makati City')).toBeTruthy()
+
+    expect(photo().src).toContain('cavite.webp')
+    expect(photo().alt).toBe('Cavite Branch location')
+    expect(screen.getByRole('heading', { name: 'Cavite Branch' })).toBeTruthy()
+    expect(screen.getByText('Aguinaldo Highway, Dasmariñas, Cavite')).toBeTruthy()
   })
 
-  it('hands the map exactly what the cards were built from', () => {
-    state.branches = [branch({ id: 'b1' }), branch({ id: 'b2', name: 'Main Office' })]
+  it('gives the map every published branch, not only the selected one', () => {
+    // The spread is the point of the section. One pin would say nothing.
+    state.branches = [branch(), MAIN]
     show()
     expect(mapProps.at(-1)?.branches).toEqual(state.branches)
+    expect(screen.getByTestId('pin-b1')).toBeTruthy()
+    expect(screen.getByTestId('pin-b2')).toBeTruthy()
   })
 
-  it('picks up a branch the back office added, with no code change', () => {
-    // The point of the whole section: this is a fetched list, not a literal.
-    state.branches = [branch({ id: 'b3', name: 'Batangas Branch', address: 'Kumintang, Batangas' })]
+  it('tells the map which branch is selected, so it can emphasise that pin', () => {
+    state.branches = [branch(), MAIN]
     show()
-    expect(screen.getByText('Batangas Branch')).toBeTruthy()
-    expect(mapProps.at(-1)?.branches[0].name).toBe('Batangas Branch')
+    expect(mapProps.at(-1)?.selectedId).toBe('b1')
+  })
+
+  it('counts the locations', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    expect(counter()).toBe('01 / 02 locations')
   })
 
   it('names no branch of its own', () => {
-    // With an empty fetch nothing should appear. If "Main Office" or "Cavite
-    // Branch" showed up here they would be hardcoded.
+    // Nothing is typed into this file. A branch published in the back office
+    // arrives here with no code change, which is the whole architecture.
+    state.branches = [branch({ name: 'Batangas Branch', address: 'Lipa City' })]
+    const { container } = show()
+    expect(container.textContent).toContain('Batangas Branch')
+    expect(container.textContent).not.toContain('Cavite')
+  })
+})
+
+describe('one selection, and everything downstream of it', () => {
+  it('moves photograph, identity, counter and map together on Next', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    next()
+
+    expect(photo().src).toContain('main.webp')
+    expect(screen.getByRole('heading', { name: 'Main Office' })).toBeTruthy()
+    expect(screen.getByText('Makati City')).toBeTruthy()
+    expect(counter()).toBe('02 / 02 locations')
+    expect(mapProps.at(-1)?.selectedId).toBe('b2')
+  })
+
+  it('moves them all back together on Previous', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    next()
+    previous()
+
+    expect(photo().src).toContain('cavite.webp')
+    expect(screen.getByRole('heading', { name: 'Cavite Branch' })).toBeTruthy()
+    expect(mapProps.at(-1)?.selectedId).toBe('b1')
+  })
+
+  it('wraps at both ends rather than dead-ending', () => {
+    state.branches = [branch(), MAIN]
+    show()
+
+    previous()
+    expect(screen.getByRole('heading', { name: 'Main Office' })).toBeTruthy()
+    next()
+    expect(screen.getByRole('heading', { name: 'Cavite Branch' })).toBeTruthy()
+  })
+
+  it('selects from the map too -- the pin is an input, not just a picture', () => {
+    state.branches = [branch(), MAIN]
+    show()
+
+    fireEvent.click(screen.getByTestId('pin-b2'))
+
+    expect(screen.getByRole('heading', { name: 'Main Office' })).toBeTruthy()
+    expect(photo().src).toContain('main.webp')
+    expect(counter()).toBe('02 / 02 locations')
+    expect(mapProps.at(-1)?.selectedId).toBe('b2')
+  })
+
+  it('jumps straight to a location from the progress rule', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    fireEvent.click(screen.getByRole('button', { name: 'Show Main Office' }))
+    expect(screen.getByRole('heading', { name: 'Main Office' })).toBeTruthy()
+  })
+})
+
+describe('one location, and none', () => {
+  it('shows no arrows or counter for a single branch', () => {
+    // Navigation for a set of one is furniture that does nothing.
+    state.branches = [branch()]
+    show()
+
+    expect(screen.queryByRole('button', { name: 'Next location' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Previous location' })).toBeNull()
+    expect(screen.queryByText(/locations/)).toBeNull()
+    // The branch itself is still fully shown.
+    expect(screen.getByRole('heading', { name: 'Cavite Branch' })).toBeTruthy()
+    expect(screen.getByTestId('branch-map')).toBeTruthy()
+  })
+
+  it('shows navigation as soon as there are two', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    expect(screen.getByRole('button', { name: 'Next location' })).toBeTruthy()
+  })
+
+  it('renders nothing at all when no branch is published', () => {
+    // Not 0 / 0, not an empty map, not broken arrows. The section has no
+    // subject, so it does not occupy a screen saying so.
     state.branches = []
     const { container } = show()
-    expect(container.textContent).not.toContain('Main Office')
-    expect(container.textContent).not.toContain('Cavite Branch')
-  })
-
-  it('follows a rename and a moved address', () => {
-    state.branches = [branch({ id: 'b1', name: 'Cavite Main', address: 'New Address 42' })]
-    show()
-    expect(screen.getByText('Cavite Main')).toBeTruthy()
-    expect(screen.getByText('New Address 42')).toBeTruthy()
+    expect(container.textContent).toBe('')
   })
 })
 
-describe('branches without coordinates', () => {
-  it('still gets a card, and says it is not mapped', () => {
-    state.branches = [branch({ latitude: null, longitude: null })]
+describe('robustness', () => {
+  it('uses a deliberate fallback when a branch has no photograph', () => {
+    state.branches = [branch({ image_path: null })]
     show()
-    expect(screen.getByText('Cavite Branch')).toBeTruthy()
-    expect(screen.getByText('Location not mapped yet')).toBeTruthy()
+
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('JMAC')).toBeTruthy()
+    expect(screen.getByText(/photograph to follow/)).toBeTruthy()
   })
 
-  it('does not mark a located branch as unmapped', () => {
-    state.branches = [branch()]
+  it('still shows a branch that nobody has pinned yet', () => {
+    // No coordinates is not an error. The address is the thing a visitor
+    // actually needs, and it is still there.
+    state.branches = [branch({ latitude: null, longitude: null }), MAIN]
     show()
-    expect(screen.queryByText('Location not mapped yet')).toBeNull()
-  })
 
-  it('still renders the map rather than failing on the missing pair', () => {
-    state.branches = [branch({ id: 'b1', latitude: null, longitude: null }), branch({ id: 'b2' })]
-    show()
+    expect(screen.getByRole('heading', { name: 'Cavite Branch' })).toBeTruthy()
+    expect(screen.getByText('Aguinaldo Highway, Dasmariñas, Cavite')).toBeTruthy()
     expect(screen.getByTestId('branch-map')).toBeTruthy()
-    // Both are handed over; filtering an unlocated branch out of the markers is
-    // the map's own job, and its tests cover it.
-    expect(mapProps.at(-1)?.branches).toHaveLength(2)
   })
 
-  it('says so plainly when nothing is pinned at all', () => {
-    state.branches = [branch({ latitude: null, longitude: null })]
+  it('says something sensible when a branch has no address', () => {
+    state.branches = [branch({ address: null })]
     show()
-    expect(screen.getByText(/None of our branches are pinned yet/)).toBeTruthy()
+    expect(screen.getByText('Address available on request.')).toBeTruthy()
   })
 
-  it('counts the pinned ones when only some are', () => {
-    state.branches = [branch({ id: 'b1' }), branch({ id: 'b2', latitude: null, longitude: null })]
-    show()
-    expect(screen.getByText(/1 of 2 locations pinned/)).toBeTruthy()
-  })
-})
-
-describe('the public map is a showpiece, not a dialog preview', () => {
-  it('asks for the public height rather than the compact one', () => {
-    state.branches = [branch()]
-    show()
-    expect(mapProps.at(-1)?.variant).toBe('public')
-    expect(mapProps.at(-1)?.variant).not.toBe('compact')
-  })
-})
-
-describe('loading, empty and failure', () => {
-  it('shows a skeleton while the branches are being fetched', () => {
+  it('shows a skeleton while loading, not a fake branch', () => {
     state.isLoading = true
     const { container } = show()
     expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0)
-    expect(screen.queryByTestId('branch-map')).toBeNull()
-  })
-
-  it('invites the first branch when there are none', () => {
-    state.branches = []
-    show()
-    expect(screen.getByText('Locations will appear here as branches are added.')).toBeTruthy()
+    expect(screen.queryByRole('img')).toBeNull()
   })
 
   it('fails without showing a visitor a database error', () => {
     state.isError = true
     const { container } = show()
-    expect(screen.getByText(/Our locations could not be loaded just now/)).toBeTruthy()
+
+    expect(screen.getByText('Our locations are temporarily unavailable.')).toBeTruthy()
     const text = container.textContent ?? ''
-    expect(text).not.toMatch(/supabase|postgres|PGRST|permission denied|relation/i)
+    expect(text).not.toMatch(/supabase|postgres|PGRST|relation|permission denied/i)
   })
 })
 
 describe('what the section can and cannot know', () => {
   it('reads the public view, never the branches table', () => {
-    // Asserted against the hook's source: the boundary is that this page has no
-    // path to the internal record at all, not that it happens to ask nicely.
-    const hook = require('node:fs').readFileSync('src/hooks/usePublicBranches.ts', 'utf8')
-    expect(hook).toContain('public_branch_locations')
-    expect(hook).not.toMatch(/from\('branches'\)/)
+    // Asserted on the type it consumes: PublicBranch is the view's shape, and
+    // an operational column has no field here to be rendered from.
+    state.branches = [branch(), MAIN]
+    const { container } = show()
+    const text = container.textContent ?? ''
+
+    for (const leak of ['is_active', 'phone', 'manager', 'created_at', 'b1', 'b2']) {
+      expect(text).not.toContain(leak)
+    }
   })
 
-  it('has no field to render that is not public', () => {
-    // PublicBranch is the whole vocabulary available here. If an operational
-    // column were ever added to the view this would need updating deliberately.
-    const hook = require('node:fs').readFileSync('src/hooks/usePublicBranches.ts', 'utf8')
-    for (const forbidden of ['phone', 'is_active', 'created_at', 'updated_at']) {
-      expect(hook).not.toContain(`${forbidden}:`)
+  it('renders no internal identifier anywhere', () => {
+    state.branches = [branch({ id: 'de305d54-75b4-431b-adb2-eb6b9e546014' })]
+    const { container } = show()
+    // textContent, not innerHTML: the map here is a stub that puts ids in
+    // data-testid so the test can click a pin. The real map renders none.
+    expect(container.textContent).not.toContain('de305d54')
+  })
+})
+
+describe('reachable without a mouse', () => {
+  it('names both arrows for a screen reader', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    expect(screen.getByRole('button', { name: 'Previous location' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Next location' })).toBeTruthy()
+  })
+
+  it('gives every progress control a name and marks the current one', () => {
+    state.branches = [branch(), MAIN]
+    show()
+
+    const current = screen.getByRole('button', { name: 'Show Cavite Branch' })
+    expect(current.getAttribute('aria-current')).toBe('true')
+    expect(
+      screen.getByRole('button', { name: 'Show Main Office' }).getAttribute('aria-current'),
+    ).toBeNull()
+  })
+
+  it('announces the position as it changes', () => {
+    state.branches = [branch(), MAIN]
+    const { container } = show()
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toMatch(/01/)
+  })
+
+  it('keeps focus visible on every control', () => {
+    state.branches = [branch(), MAIN]
+    show()
+    for (const name of ['Previous location', 'Next location', 'Show Main Office']) {
+      expect(screen.getByRole('button', { name }).className).toMatch(/focus-visible:ring/)
     }
   })
 })

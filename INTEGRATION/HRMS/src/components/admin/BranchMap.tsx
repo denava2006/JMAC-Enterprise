@@ -39,17 +39,33 @@ export interface MappableBranch {
  * silently renders as a broken image. Drawing the pin as an inline SVG avoids
  * the asset question altogether and keeps it on the app's own accent colour.
  */
-const PIN = L.divIcon({
-  className: 'jmac-pin',
-  html: `<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+function pin(html: string, size: [number, number]) {
+  return L.divIcon({
+    className: 'jmac-pin',
+    html,
+    iconSize: size,
+    iconAnchor: [size[0] / 2, size[1]],
+    popupAnchor: [0, -(size[1] - 4)],
+  })
+}
+
+const PIN_SHAPE = (w: number, h: number) =>
+  `<svg width="${w}" height="${h}" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M13 0C5.82 0 0 5.82 0 13c0 9.2 11.6 20.2 12.1 20.6a1.3 1.3 0 0 0 1.8 0C14.4 33.2 26 22.2 26 13 26 5.82 20.18 0 13 0z"
           fill="currentColor"/>
     <circle cx="13" cy="12.7" r="4.8" fill="#fff"/>
-  </svg>`,
-  iconSize: [26, 34],
-  iconAnchor: [13, 34],
-  popupAnchor: [0, -30],
-})
+  </svg>`
+
+const PIN = pin(PIN_SHAPE(26, 34), [26, 34])
+
+/**
+ * The branch being looked at.
+ *
+ * Larger and on the accent, against the muted rest. Two differences rather than
+ * one: a size change survives being looked at by someone who cannot separate the
+ * two colours, which colour alone does not.
+ */
+const PIN_SELECTED = pin(PIN_SHAPE(34, 44), [34, 44])
 
 /**
  * Six decimal places is about a tenth of a metre, which is far finer than
@@ -105,6 +121,9 @@ export function BranchMap({
   variant = 'page',
   caption = true,
   onPick,
+  selectedId,
+  onSelect,
+  className,
 }: {
   branches: MappableBranch[]
   variant?: keyof typeof HEIGHT
@@ -116,6 +135,18 @@ export function BranchMap({
    * which is what both the Branches page and the public landing page want.
    */
   onPick?: (latitude: number, longitude: number) => void
+  /**
+   * Which branch the surrounding page is showing. The map emphasises its pin and
+   * moves to it; every other pin stays on screen, because the point of the
+   * section is that there are several and they are all JMAC.
+   */
+  selectedId?: string | null
+  /** Clicking a pin selects that branch. The map is an input as well as a
+   *  picture, and both directions feed the same single selection. */
+  onSelect?: (branchId: string) => void
+  /** The explorer sizes the map against the panel beside it rather than using
+   *  one of the fixed heights. */
+  className?: string
 }) {
   const holder = React.useRef<HTMLDivElement | null>(null)
   const map = React.useRef<L.Map | null>(null)
@@ -126,6 +157,8 @@ export function BranchMap({
   // them calling the current one without re-registering anything.
   const pick = React.useRef(onPick)
   pick.current = onPick
+  const select = React.useRef(onSelect)
+  select.current = onSelect
 
   const located = React.useMemo(
     () => branches.filter((b) => b.latitude != null && b.longitude != null),
@@ -183,8 +216,13 @@ export function BranchMap({
     const pinnable = !!pick.current
 
     for (const branch of located) {
+      const isSelected = !!selectedId && branch.id === selectedId
       const marker = L.marker([Number(branch.latitude), Number(branch.longitude)], {
-        icon: PIN,
+        icon: isSelected ? PIN_SELECTED : PIN,
+        // Above its neighbours, so a selected pin is never half-hidden behind
+        // one that happens to sit slightly south of it.
+        zIndexOffset: isSelected ? 1000 : 0,
+        opacity: selectedId && !isSelected ? 0.55 : 1,
         title: branch.name,
         alt: branch.name,
         draggable: pinnable,
@@ -201,6 +239,11 @@ export function BranchMap({
           const { lat, lng } = marker.getLatLng().wrap()
           pick.current?.(round6(lat), round6(lng))
         })
+      } else if (select.current) {
+        // Selecting is the whole interaction on the explorer, so the pin does
+        // that and nothing else -- a popup here would put the name in two
+        // places and make the first click ambiguous.
+        marker.on('click', () => select.current?.(branch.id))
       } else {
         // A popup on a draggable pin fights the drag: press-and-hold to move it
         // reads as a click and opens the bubble instead.
@@ -210,7 +253,7 @@ export function BranchMap({
       marker.addTo(layer.current)
     }
 
-  }, [located])
+  }, [located, selectedId])
 
   // Framing is keyed on the coordinates themselves, not on the array holding
   // them. In the branch dialog the preview list is rebuilt as somebody types
@@ -244,6 +287,35 @@ export function BranchMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame])
 
+  /**
+   * Moving to the branch being looked at.
+   *
+   * panTo, not fitBounds and not a zoom change: the surrounding section already
+   * says which branch this is, so the map's job is to bring it into view
+   * without throwing away the geographic context that makes the section mean
+   * anything. Snapping to street level on every arrow press would turn a map of
+   * a business into a sequence of unrelated close-ups.
+   *
+   * The zoom is only raised off the national default, never lowered, so the
+   * first selection settles the frame and later ones just slide it.
+   */
+  React.useEffect(() => {
+    if (!map.current || !selectedId) return
+    const branch = located.find((b) => b.id === selectedId)
+    if (!branch) return
+
+    const reduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    const target: [number, number] = [Number(branch.latitude), Number(branch.longitude)]
+    const zoom = Math.max(map.current.getZoom() ?? 0, located.length === 1 ? 15 : 11)
+
+    if (reduced) map.current.setView(target, zoom, { animate: false })
+    else map.current.flyTo(target, zoom, { duration: 0.7 })
+  }, [selectedId, located])
+
   const unlocated = branches.length - located.length
 
   return (
@@ -254,7 +326,7 @@ export function BranchMap({
         aria-label="Branch locations"
         className={cn(
           'w-full overflow-hidden rounded-lg border border-border bg-muted text-accent',
-          HEIGHT[variant],
+          className ?? HEIGHT[variant],
           // The important class. Leaflet gives its internal panes z-index 400
           // to 1000 -- tile pane, markers, popups, controls -- while the dialog
           // sits at z-50. Without a stacking context of its own the map paints
@@ -268,6 +340,7 @@ export function BranchMap({
           // Says the map is something you act on, before anybody clicks to
           // find out.
           onPick && '[&_.leaflet-container]:cursor-crosshair',
+          onSelect && '[&_.jmac-pin]:cursor-pointer',
         )}
       />
       {caption && (

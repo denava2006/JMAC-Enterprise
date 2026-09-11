@@ -27,6 +27,120 @@ import {
 } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { BranchMap } from '@/components/admin/BranchMap'
+import { Switch } from '@/components/ui/switch'
+import { branchImageUrl } from '@/hooks/usePublicBranches'
+import { useUploadBranchImage } from '@/hooks/useBranches'
+
+/**
+ * What a visitor to jmac.ph sees of this branch.
+ *
+ * Apart from the operational fields on purpose. Being active is what a branch
+ * DOES; appearing on the public page is a separate decision, and a warehouse, a
+ * site that has not opened, or a test record are all legitimately active and
+ * none of them is an address to send customers to. The switch defaults off for
+ * a new branch, so publishing is something somebody chose rather than something
+ * that happened.
+ */
+function PublicListingFields({
+  branchId,
+  showOnLanding,
+  onShowOnLanding,
+  imagePath,
+  onImagePath,
+  displayOrder,
+  onDisplayOrder,
+}: {
+  branchId: string | null
+  showOnLanding: boolean
+  onShowOnLanding: (value: boolean) => void
+  imagePath: string | null
+  onImagePath: (path: string | null) => void
+  displayOrder: string
+  onDisplayOrder: (value: string) => void
+}) {
+  const upload = useUploadBranchImage()
+  const preview = branchImageUrl(imagePath)
+
+  return (
+    <div className="flex flex-col gap-4 rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Label htmlFor="branch_public" className="text-sm">
+            Show on landing page
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Separate from active. A warehouse or an unopened site can be live in the system without
+            being a public address.
+          </p>
+        </div>
+        <Switch
+          id="branch_public"
+          checked={showOnLanding}
+          onCheckedChange={onShowOnLanding}
+          aria-label="Show this branch on the landing page"
+        />
+      </div>
+
+      {showOnLanding && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="branch_image">Branch photograph</Label>
+            {preview && (
+              <img
+                src={preview}
+                alt=""
+                className="h-28 w-full rounded-md border border-border object-cover"
+              />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="branch_image"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={!branchId || upload.isPending}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file && branchId) {
+                    upload.mutate(
+                      { branchId, file },
+                      { onSuccess: (path) => onImagePath(path) },
+                    )
+                  }
+                  e.target.value = ''
+                }}
+              />
+              {imagePath && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => onImagePath(null)}>
+                  Remove
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {branchId
+                ? 'A wide shot of the building or shopfront. PNG, JPEG or WebP, up to 5MB.'
+                : 'Save the branch first, then add its photograph.'}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="branch_order">Display order</Label>
+            <Input
+              id="branch_order"
+              type="number"
+              className="sm:w-32"
+              value={displayOrder}
+              onChange={(e) => onDisplayOrder(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Lowest first. Branches sharing a number are ordered by name.
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 import {
   useBranches,
   useWorkLocations,
@@ -55,6 +169,11 @@ export function BranchDialog({
   const [phone, setPhone] = React.useState('')
   const [latitude, setLatitude] = React.useState('')
   const [longitude, setLongitude] = React.useState('')
+  // Publishing. Deliberately separate from is_active: a warehouse or an
+  // unopened site is operationally real and not a public address.
+  const [showOnLanding, setShowOnLanding] = React.useState(false)
+  const [imagePath, setImagePath] = React.useState<string | null>(null)
+  const [displayOrder, setDisplayOrder] = React.useState('0')
 
   // What the map shows: the pair as typed, the moment it is a usable pair.
   // Built here rather than read back from the saved record so the pin follows
@@ -79,6 +198,9 @@ export function BranchDialog({
         latitude: lat,
         longitude: lng,
         is_active: true,
+        show_on_landing: showOnLanding,
+        image_path: imagePath,
+        display_order: Number(displayOrder) || 0,
         created_at: '',
         updated_at: '',
       },
@@ -93,6 +215,9 @@ export function BranchDialog({
       setPhone(branch?.phone ?? '')
       setLatitude(branch?.latitude != null ? String(branch.latitude) : '')
       setLongitude(branch?.longitude != null ? String(branch.longitude) : '')
+      setShowOnLanding(branch?.show_on_landing ?? false)
+      setImagePath(branch?.image_path ?? null)
+      setDisplayOrder(String(branch?.display_order ?? 0))
       setError(null)
     }
   }, [open, branch])
@@ -127,6 +252,9 @@ export function BranchDialog({
         phone: phone.trim() || undefined,
         latitude: lat === '' ? null : Number(lat),
         longitude: lng === '' ? null : Number(lng),
+        show_on_landing: showOnLanding,
+        image_path: imagePath,
+        display_order: Number(displayOrder) || 0,
       },
       { onSuccess: () => onOpenChange(false) }
     )
@@ -209,6 +337,20 @@ export function BranchDialog({
               surveyed coordinate, but read-only: the map is the input, and two
               editable copies of one fact is how they end up disagreeing.
               Clearing is a deliberate act rather than an empty text field. */}
+          {/* Publishing, kept apart from the operational fields above it.
+              Being active is what a branch DOES; appearing on the landing page
+              is a separate decision, and putting them side by side would invite
+              the assumption that one implies the other. */}
+          <PublicListingFields
+            branchId={branch?.id ?? null}
+            showOnLanding={showOnLanding}
+            onShowOnLanding={setShowOnLanding}
+            imagePath={imagePath}
+            onImagePath={setImagePath}
+            displayOrder={displayOrder}
+            onDisplayOrder={setDisplayOrder}
+          />
+
           <details className="rounded-lg border border-border px-3 py-2">
             <summary className="cursor-pointer text-xs text-muted-foreground">
               Coordinates

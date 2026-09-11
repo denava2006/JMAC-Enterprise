@@ -451,34 +451,43 @@ export type Database = {
         Row: {
           address: string | null
           created_at: string
+          display_order: number
           id: string
+          image_path: string | null
           is_active: boolean
           latitude: number | null
           longitude: number | null
           name: string
           phone: string | null
+          show_on_landing: boolean
           updated_at: string
         }
         Insert: {
           address?: string | null
           created_at?: string
+          display_order?: number
           id?: string
+          image_path?: string | null
           is_active?: boolean
           latitude?: number | null
           longitude?: number | null
           name: string
           phone?: string | null
+          show_on_landing?: boolean
           updated_at?: string
         }
         Update: {
           address?: string | null
           created_at?: string
+          display_order?: number
           id?: string
+          image_path?: string | null
           is_active?: boolean
           latitude?: number | null
           longitude?: number | null
           name?: string
           phone?: string | null
+          show_on_landing?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -5247,21 +5256,27 @@ export type Database = {
       public_branch_locations: {
         Row: {
           address: string | null
+          display_order: number | null
           id: string | null
+          image_path: string | null
           latitude: number | null
           longitude: number | null
           name: string | null
         }
         Insert: {
           address?: string | null
+          display_order?: number | null
           id?: string | null
+          image_path?: string | null
           latitude?: number | null
           longitude?: number | null
           name?: string | null
         }
         Update: {
           address?: string | null
+          display_order?: number | null
           id?: string | null
+          image_path?: string | null
           latitude?: number | null
           longitude?: number | null
           name?: string | null

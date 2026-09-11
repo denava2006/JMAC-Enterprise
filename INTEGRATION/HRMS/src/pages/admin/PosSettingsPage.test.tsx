@@ -13,9 +13,9 @@ import type { Fee } from '@/lib/posFees'
 const CAVITE = 'b1000000-0000-0000-0000-000000000002'
 
 const branches: Branch[] = [
-  { id: 'b1', name: 'Main Office', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
-  { id: CAVITE, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, created_at: '', updated_at: '' },
-  { id: 'b3', name: 'Closed Branch', address: null, phone: null, latitude: null, longitude: null, is_active: false, created_at: '', updated_at: '' },
+  { id: 'b1', name: 'Main Office', address: null, phone: null, latitude: null, longitude: null, is_active: true, show_on_landing: false, image_path: null, display_order: 0, created_at: '', updated_at: '' },
+  { id: CAVITE, name: 'Cavite Branch', address: null, phone: null, latitude: null, longitude: null, is_active: true, show_on_landing: false, image_path: null, display_order: 0, created_at: '', updated_at: '' },
+  { id: 'b3', name: 'Closed Branch', address: null, phone: null, latitude: null, longitude: null, is_active: false, show_on_landing: false, image_path: null, display_order: 0, created_at: '', updated_at: '' },
 ]
 
 const state: { settings: BranchPosSettings | null; branches: Branch[] } = {

@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Branch } from '@/hooks/useBranches'
 
@@ -30,6 +30,7 @@ vi.mock('@/components/admin/BranchMap', () => ({
 vi.mock('@/hooks/useBranches', () => ({
   useBranches: () => ({ data: [], isLoading: false }),
   useWorkLocations: () => ({ data: [], isLoading: false }),
+  useUploadBranchImage: () => ({ mutate: vi.fn(), isPending: false }),
   useSaveBranch: () => ({
     mutate: (values: Record<string, unknown>, opts?: { onSuccess?: () => void }) => {
       saved.push(values)
@@ -53,6 +54,9 @@ function branch(over: Partial<Branch> = {}): Branch {
     latitude: null,
     longitude: null,
     is_active: true,
+    show_on_landing: false,
+    image_path: null,
+    display_order: 0,
     created_at: '',
     updated_at: '',
     ...over,

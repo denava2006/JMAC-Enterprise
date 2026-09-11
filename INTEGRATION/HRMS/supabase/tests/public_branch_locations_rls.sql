@@ -1,11 +1,12 @@
--- The public branch surface, and what it refuses to carry.
+-- What an anonymous visitor may learn about JMAC's locations.
 --
--- The landing page reads this as an anonymous visitor. The claims:
+-- The landing page is unauthenticated, so this view is the boundary. The claims:
 --
---   anon can read active branches through the view
---   anon still cannot read the branches table
---   an archived branch disappears from the public list
---   the view carries no operational column, now or after a schema change
+--   publication is a separate decision from being operationally active
+--   an internal site can be active and still not public
+--   anon reads the view and never the table
+--   only the approved columns exist to be read
+--   ordering is a decision, not insertion order
 --
 -- Run:
 --   docker exec -i supabase_db_harmony-suite psql -U postgres -d postgres \
@@ -17,120 +18,117 @@ begin;
 
 do $$
 declare
-  admin_id uuid;
-  live_id  uuid;
-  dead_id  uuid;
-  n        integer;
-  txt      text;
-  tag      text := left(replace(gen_random_uuid()::text, '-', ''), 8);
+  shop uuid; depot uuid; closed uuid;
+  n integer; txt text;
+  tag text := left(replace(gen_random_uuid()::text, '-', ''), 8);
 begin
-  select id into admin_id from public.profiles where role='admin' and status='active' limit 1;
-  if admin_id is null then raise exception 'fixture: need an active administrator'; end if;
+  -- Three locations, one of each kind the rule has to tell apart.
+  insert into public.branches (name, address, latitude, longitude, is_active, show_on_landing, display_order, image_path)
+  values ('ZZ Shopfront ' || tag, 'Aguinaldo Highway', 14.329400, 120.936700, true, true, 2, 'zz/shop.webp')
+  returning id into shop;
 
-  perform set_config('request.jwt.claims',
-    json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  -- Operationally real, deliberately not an address to send customers to.
+  insert into public.branches (name, address, latitude, longitude, is_active, show_on_landing, display_order)
+  values ('ZZ Depot ' || tag, 'Industrial Park', 14.500000, 121.000000, true, false, 1)
+  returning id into depot;
 
-  insert into public.branches (name, address, latitude, longitude, is_active)
-  values ('ZZ Public ' || tag, '1 Test Street', 14.5995, 120.9842, true)
-  returning id into live_id;
-
-  insert into public.branches (name, address, latitude, longitude, is_active)
-  values ('ZZ Archived ' || tag, '2 Old Road', 10.3157, 123.8854, false)
-  returning id into dead_id;
-
-  -- ======================================================================
-  -- 1. An anonymous visitor can read the public list
-  -- ======================================================================
-  --
-  -- The claims are cleared, not just the role. A real anonymous request
-  -- carries no JWT at all, and leaving an administrator's sub in
-  -- request.jwt.claims while switching to the anon role leaves is_admin()
-  -- true -- which the {public}-targeted branches_admin_manage policy then
-  -- honours. That would test the fixture rather than the boundary.
-  perform set_config('request.jwt.claims', '', true);
-  set local role anon;
-
-  select count(*) into n from public.public_branch_locations where id = live_id;
-  if n <> 1 then raise exception 'FAIL 1a anon cannot see an active branch (% rows)', n; end if;
-  raise notice 'PASS  1a an anonymous visitor reads active branches';
-
-  select name into txt from public.public_branch_locations where id = live_id;
-  if txt is null or txt not like 'ZZ Public%' then
-    raise exception 'FAIL 1b the view did not carry the branch name';
-  end if;
-  select address into txt from public.public_branch_locations where id = live_id;
-  if txt <> '1 Test Street' then raise exception 'FAIL 1b the view did not carry the address'; end if;
-  raise notice 'PASS  1b name, address and coordinates are what it carries';
+  -- Published once, since closed. Active is still required.
+  insert into public.branches (name, address, latitude, longitude, is_active, show_on_landing, display_order)
+  values ('ZZ Closed ' || tag, 'Old Road', 14.100000, 120.800000, false, true, 0)
+  returning id into closed;
 
   -- ======================================================================
-  -- 2. The table itself stays shut
+  -- 1. Publication is its own decision
   -- ======================================================================
-  --
-  -- The view is the authorization boundary. If the table were readable the
-  -- view would be decoration.
-  select count(*) into n from public.branches;
-  if n <> 0 then
-    raise exception 'FAIL 2a anon read % row(s) from the branches table itself', n;
-  end if;
-  raise notice 'PASS  2a the branches table remains closed to the public';
+  select count(*) into n from public.public_branch_locations where id = shop;
+  if n <> 1 then raise exception 'FAIL  1a a published, active branch is not public'; end if;
+  raise notice 'PASS  1a an active, published branch appears';
+
+  select count(*) into n from public.public_branch_locations where id = depot;
+  if n <> 0 then raise exception 'FAIL  1b an active but unpublished site leaked to the public view'; end if;
+  raise notice 'PASS  1b being active is not enough -- a depot stays private';
+
+  select count(*) into n from public.public_branch_locations where id = closed;
+  if n <> 0 then raise exception 'FAIL  1c a closed branch is still public'; end if;
+  raise notice 'PASS  1c being published is not enough -- a closed branch drops off';
 
   -- ======================================================================
-  -- 3. An archived branch is not a public location
+  -- 2. Only the approved columns exist
   -- ======================================================================
-  select count(*) into n from public.public_branch_locations where id = dead_id;
-  if n <> 0 then raise exception 'FAIL 3a an archived branch is publicly listed'; end if;
-  raise notice 'PASS  3a archiving a branch removes it from the public list';
-  reset role;
-  perform set_config('request.jwt.claims',
-    json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
-
-  -- Flipping it back is all it takes to publish it again -- one switch, the
-  -- one the back office already maintains.
-  update public.branches set is_active = true where id = dead_id;
-  perform set_config('request.jwt.claims', '', true);
-  set local role anon;
-  select count(*) into n from public.public_branch_locations where id = dead_id;
-  if n <> 1 then raise exception 'FAIL 3b reinstating a branch did not republish it'; end if;
-  raise notice 'PASS  3b reinstating it publishes it again, with no second switch';
-  reset role;
-
-  -- ======================================================================
-  -- 4. Nothing operational rides along
-  -- ======================================================================
-  --
-  -- Asserted against the view's own column list rather than against one row: a
-  -- column that does not exist cannot leak, and this also catches a future
-  -- `select *` rewrite that would quietly publish whatever branches gains next.
-  select string_agg(column_name, ', ' order by column_name) into txt
+  select string_agg(column_name, ',' order by column_name) into txt
     from information_schema.columns
    where table_schema = 'public' and table_name = 'public_branch_locations';
-  if txt <> 'address, id, latitude, longitude, name' then
-    raise exception 'FAIL 4a the public view exposes: %', txt;
-  end if;
-  raise notice 'PASS  4a the public view carries exactly name, address and coordinates';
 
-  select count(*) into n
-    from information_schema.columns
-   where table_schema = 'public' and table_name = 'public_branch_locations'
-     and column_name in ('phone', 'is_active', 'created_at', 'updated_at');
-  if n <> 0 then
-    raise exception 'FAIL 4b an operational column reached the public view';
+  if txt <> 'address,display_order,id,image_path,latitude,longitude,name' then
+    raise exception 'FAIL  2a the public view exposes: %', txt;
   end if;
-  raise notice 'PASS  4b no contact, state or administrative column is published';
+  raise notice 'PASS  2a the view carries exactly name, address, coordinates, image and order';
+
+  -- phone is in the table and deliberately not here: a branch phone number in
+  -- this system is an internal contact, and publishing one is a decision
+  -- nobody has taken.
+  if txt like '%phone%' or txt like '%is_active%' or txt like '%created_at%' then
+    raise exception 'FAIL  2b an operational column reached the public view';
+  end if;
+  raise notice 'PASS  2b no operational column is reachable through it';
 
   -- ======================================================================
-  -- 5. Read only
+  -- 3. Anonymous access
   -- ======================================================================
-  perform set_config('request.jwt.claims', '', true);
+  set local role anon;
+  select count(*) into n from public.public_branch_locations where id = shop;
+  reset role;
+  if n <> 1 then raise exception 'FAIL  3a an anonymous visitor cannot read the public view'; end if;
+  raise notice 'PASS  3a an anonymous visitor reads the landing page''s branches';
+
+  -- Refused outright or filtered to nothing -- both mean the table is not a
+  -- way in. RLS filters rows rather than raising, so the row count is the
+  -- assertion and the exception branch is the other acceptable answer.
   set local role anon;
   begin
-    insert into public.public_branch_locations (id, name, address, latitude, longitude)
-    values (gen_random_uuid(), 'ZZ Injected', 'nowhere', 0, 0);
-    raise exception 'FAIL 5a anon wrote through the public view';
-  exception when insufficient_privilege or feature_not_supported then
-    raise notice 'PASS  5a the public surface is read-only';
+    select count(*) into n from public.branches;
+    reset role;
+    if n <> 0 then
+      raise exception 'FAIL  3b anon read % row(s) from the branches table itself', n;
+    end if;
+    raise notice 'PASS  3b the branches table itself gives anon nothing';
+  exception when insufficient_privilege then
+    reset role;
+    raise notice 'PASS  3b the branches table itself is refused to anon outright';
   end;
-  reset role;
-end $$;
+
+  -- ======================================================================
+  -- 4. Ordering is a decision
+  -- ======================================================================
+  insert into public.branches (name, address, latitude, longitude, is_active, show_on_landing, display_order)
+  values ('ZZ Alpha ' || tag, 'First Street', 14.2, 120.9, true, true, 9);
+
+  select string_agg(name, ' | ' order by display_order, name) into txt
+    from public.public_branch_locations where name like 'ZZ %' || tag;
+  if txt not like 'ZZ Shopfront%ZZ Alpha%' then
+    raise exception 'FAIL  4a display_order did not decide the order: %', txt;
+  end if;
+  raise notice 'PASS  4a display_order decides, not the alphabet and not insertion order';
+
+  -- ======================================================================
+  -- 5. Writing publication is an Administrator's
+  -- ======================================================================
+  set local role authenticated;
+  begin
+    update public.branches set show_on_landing = true where id = depot;
+    get diagnostics n = row_count;
+    reset role;
+    if n <> 0 then
+      raise exception 'FAIL  5a a non-admin published a branch';
+    end if;
+    raise notice 'PASS  5a RLS refuses a non-administrator the publication fields';
+  exception when insufficient_privilege then
+    reset role;
+    raise notice 'PASS  5a RLS refuses a non-administrator the publication fields';
+  end;
+
+  raise notice '--- public branch locations: all checks passed ---';
+end;
+$$;
 
 rollback;

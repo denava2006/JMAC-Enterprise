@@ -16,6 +16,14 @@ export interface Branch {
   latitude: number | null
   longitude: number | null
   is_active: boolean
+  /** Whether this location appears on the public landing page. Separate from
+   *  is_active on purpose: a warehouse or an unopened site is operationally
+   *  real and is not a public address. */
+  show_on_landing: boolean
+  /** Object path in the public branch-images bucket. */
+  image_path: string | null
+  /** Public ordering, lowest first, name breaking ties. */
+  display_order: number
   created_at: string
   updated_at: string
 }
@@ -65,6 +73,39 @@ function useInvalidate() {
   }
 }
 
+/**
+ * Putting a photograph of a branch where the public page can read it.
+ *
+ * branch-images is the one public bucket in this system. Everything else here
+ * holds somebody's documents and is read through a signed URL; a shopfront
+ * photograph is published on purpose, to visitors who are not logged in and
+ * cannot be, so public read is the honest posture and a signed link would only
+ * expire while somebody was looking at it.
+ *
+ * Write is not public. The bucket's policies admit an Administrator alone, and
+ * its own limits refuse anything that is not a reasonably sized image, so the
+ * browser sending the file is never the thing being trusted.
+ *
+ * Filed under the branch id and suffixed, so replacing a photograph does not
+ * leave the old one being served from a cached URL.
+ */
+export function useUploadBranchImage() {
+  return useMutation({
+    mutationFn: async ({ branchId, file }: { branchId: string; file: File }) => {
+      const extension = (file.name.split('.').pop() ?? 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase()
+      const path = `${branchId}/${Date.now()}.${extension || 'jpg'}`
+      const { error } = await supabase.storage.from('branch-images').upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+      })
+      if (error) throw error
+      return path
+    },
+    onError: (error: Error) => toast.error(error.message),
+    onSuccess: () => toast.success('Photograph uploaded. Save the branch to publish it.'),
+  })
+}
+
 export function useSaveBranch() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -75,6 +116,9 @@ export function useSaveBranch() {
       phone,
       latitude,
       longitude,
+      show_on_landing,
+      image_path,
+      display_order,
     }: {
       id?: string
       name: string
@@ -82,6 +126,9 @@ export function useSaveBranch() {
       phone?: string
       latitude?: number | null
       longitude?: number | null
+      show_on_landing?: boolean
+      image_path?: string | null
+      display_order?: number
     }) => {
       const payload = {
         name,
@@ -89,6 +136,9 @@ export function useSaveBranch() {
         phone: phone || null,
         latitude: latitude ?? null,
         longitude: longitude ?? null,
+        show_on_landing: show_on_landing ?? false,
+        image_path: image_path ?? null,
+        display_order: display_order ?? 0,
       }
       const { error } = id
         ? await supabase.from('branches').update(payload).eq('id', id)
