@@ -73,7 +73,7 @@ export function PosPaymentMethod({
                 ? // Teal earns its place here: this is the one control on the
                   // till whose state the cashier must be certain of before
                   // taking money.
-                  'border-accent bg-accent/10 text-accent shadow-[inset_0_0_0_1px_var(--color-accent)]'
+                  'border-accent bg-accent/10 text-teal-ink shadow-[inset_0_0_0_1px_var(--color-accent)]'
                 : 'border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground'
             )}
           >

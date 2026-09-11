@@ -162,7 +162,7 @@ export default function PayslipPrintPage() {
 
         <section className="flex items-center justify-between rounded-lg bg-accent/10 p-4">
           <span className="font-display text-lg font-bold text-foreground">Net Salary</span>
-          <span className="font-display text-lg font-bold text-accent">{formatMoney(Number(record.net_salary), currency)}</span>
+          <span className="font-display text-lg font-bold text-teal-ink">{formatMoney(Number(record.net_salary), currency)}</span>
         </section>
 
         <section className="mt-8 grid grid-cols-2 gap-10 text-sm">

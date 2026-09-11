@@ -166,7 +166,7 @@ function StepIndicator({ step }: { step: number }) {
             <div
               className={cn(
                 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-                i < step ? 'bg-accent text-accent-foreground' : i === step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                i < step ? 'bg-teal-2 text-accent-foreground' : i === step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
               )}
             >
               {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
@@ -564,7 +564,7 @@ export default function CreateEmployeePage() {
             ) : (
               <div className="flex flex-col gap-4">
                 {applicationId && (
-                  <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+                  <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-teal-ink">
                     <Sparkles className="h-4 w-4 shrink-0" />
                     <span>Personal information was imported from this applicant's job application. Review and correct anything that needs it.</span>
                   </div>
@@ -775,7 +775,7 @@ export default function CreateEmployeePage() {
             {step === 1 && (
               <div className="flex flex-col gap-4">
                 {applicationData?.latestOffer && (
-                  <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+                  <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-teal-ink">
                     <Sparkles className="h-4 w-4 shrink-0" />
                     <span>Department, position, and salary were imported from this applicant's accepted job offer. Review and correct anything that needs it.</span>
                   </div>

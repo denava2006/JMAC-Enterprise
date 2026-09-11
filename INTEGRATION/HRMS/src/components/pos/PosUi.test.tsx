@@ -250,7 +250,13 @@ describe('the register summary card', () => {
     const { container: money } = render(
       <PosSummaryCard label="Total taken" value="₱560.00" icon={Package} tone="accent" />
     )
-    expect(money.querySelector('p.text-accent')).toBeTruthy()
+    // teal-ink rather than the accent: the icon chip behind it keeps the brand
+    // teal, but the figure is 20px of readable text and #12a594 is 2.83:1 on a
+    // card -- under the 3:1 even large text needs.
+    expect(money.querySelector('p.text-teal-ink')).toBeTruthy()
+    expect(money.querySelector('p.text-accent')).toBeNull()
+    // The chip keeps the accent. That distinction is the whole point.
+    expect(money.querySelector('span.text-accent')).toBeTruthy()
 
     const { container: counted } = render(
       <PosSummaryCard label="Items sold" value={8} icon={Package} tone="secondary" />

@@ -125,7 +125,7 @@ function TakingsCard({
           {loading ? (
             <Skeleton className="mt-2 h-10 w-48" />
           ) : (
-            <p className="mt-1 font-display text-4xl font-bold leading-none tabular-nums text-accent">
+            <p className="mt-1 font-display text-4xl font-bold leading-none tabular-nums text-teal-ink">
               {peso(summary?.sales_collected ?? 0)}
             </p>
           )}

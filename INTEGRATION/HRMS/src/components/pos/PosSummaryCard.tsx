@@ -64,7 +64,7 @@ export function PosSummaryCard({
               // Only the takings figure is tinted. It is the number a cashier is
               // asked for at the end of a shift, and if all three were coloured
               // none of them would stand out.
-              tone === 'accent' ? 'text-accent' : 'text-foreground'
+              tone === 'accent' ? 'text-teal-ink' : 'text-foreground'
             )}
           >
             {value}

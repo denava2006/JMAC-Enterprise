@@ -99,9 +99,9 @@ function RequestStages({ status, type }: { status: RequestStatus; type: RequestT
             <span
               className={
                 done
-                  ? 'rounded-full bg-accent/15 px-2 py-0.5 font-medium text-accent'
+                  ? 'rounded-full bg-accent/15 px-2 py-0.5 font-medium text-teal-ink'
                   : active
-                    ? 'rounded-full bg-accent px-2 py-0.5 font-medium text-accent-foreground'
+                    ? 'rounded-full bg-teal-2 px-2 py-0.5 font-medium text-accent-foreground'
                     : 'rounded-full bg-muted px-2 py-0.5 text-muted-foreground'
               }
               aria-current={active ? 'step' : undefined}

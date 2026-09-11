@@ -617,8 +617,8 @@ export default function PosTillPage() {
                   // The second number a cashier says out loud, and the one they
                   // count into a hand. Teal, because it is the good outcome.
                   <div className="mt-0.5 flex items-baseline justify-between rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
-                    <span className="text-xs font-medium text-accent">Change due</span>
-                    <strong className="font-display text-xl font-bold leading-none tabular-nums text-accent">
+                    <span className="text-xs font-medium text-teal-ink">Change due</span>
+                    <strong className="font-display text-xl font-bold leading-none tabular-nums text-teal-ink">
                       {peso(change)}
                     </strong>
                   </div>

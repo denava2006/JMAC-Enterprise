@@ -195,7 +195,7 @@ function VendorDialog({
                     }
                     className={
                       on
-                        ? 'rounded-full border border-accent bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent transition-colors'
+                        ? 'rounded-full border border-accent bg-accent/10 px-2.5 py-1 text-xs font-medium text-teal-ink transition-colors'
                         : 'rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-accent/40 hover:text-foreground'
                     }
                   >

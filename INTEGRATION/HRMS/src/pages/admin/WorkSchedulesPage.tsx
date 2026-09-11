@@ -168,7 +168,7 @@ function ScheduleFormDialog({
                   className={cn(
                     'flex h-9 w-12 items-center justify-center rounded-md border text-sm font-medium transition-colors',
                     workingDays.includes(d.value)
-                      ? 'border-accent bg-accent/10 text-accent'
+                      ? 'border-accent bg-accent/10 text-teal-ink'
                       : 'border-input bg-card text-muted-foreground hover:bg-muted'
                   )}
                 >
